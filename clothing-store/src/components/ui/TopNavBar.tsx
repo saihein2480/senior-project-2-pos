@@ -43,8 +43,8 @@ export function TopNavBar({
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const languages = [
-    { code: "en", name: "English", flag: "🇺🇸" },
-    { code: "my", name: "Burmese", flag: "🇲🇲" },
+    { name: "English", flag: "🇺🇸", code: "EN" },
+    { name: "Burmese", flag: "🇲🇲", code: "MM" },
   ];
 
   const currencies = [
@@ -106,7 +106,6 @@ export function TopNavBar({
       <div className="px-4">
         <div className="flex justify-between items-center py-6">
           <div className="flex items-center">
-            {/* Mobile menu button */}
             <button
               onClick={() => onMenuToggle?.()}
               className="mr-3 p-2 rounded-md hover:bg-gray-100 md:hidden"
@@ -120,6 +119,15 @@ export function TopNavBar({
             </h1>
           </div>
           <div className="flex items-center space-x-6">
+              {/* Current Branch/Shop Display */}
+              <div className="flex items-center space-x-2 px-3 py-2 bg-white border rounded-full border-gray-300 ">
+                <Store className="w-4 h-4 text-gray-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  {businessSettings?.currentBranch === "No Branch"
+                    ? "No Branch"
+                    : businessSettings?.currentBranch || "Main Branch"}
+                </span>
+              </div>
             {/* Date Display */}
             <div className="text-sm text-gray-600">
               {new Date().toLocaleDateString("en-US", {
@@ -130,18 +138,9 @@ export function TopNavBar({
               })}
             </div>
 
-            {/* Current Branch/Shop Display */}
-            <div className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg">
-              <Store className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">
-                {businessSettings?.currentBranch === "No Branch"
-                  ? "No Branch"
-                  : businessSettings?.currentBranch || "Main Branch"}
-              </span>
-            </div>
 
             {/* Main Currency Title */}
-            <div className="flex items-center space-x-1 px-3 py-2 bg-white  border-gray-300 rounded-lg">
+            <div className="flex items-center space-x-1 px-3 py-2 bg-white border-gray-300 rounded-lg">
               <span className="text-sm font-semibold text-gray-800">
                 Main Currency:
               </span>
@@ -150,19 +149,20 @@ export function TopNavBar({
               </span>
             </div>
 
-            {/* Currency Selector */}
+            {/* Currency Selector (clean pill + simple dropdown) */}
             <div className="relative" ref={currencyDropdownRef}>
-              <div
-                className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+              <button
                 onClick={() =>
                   setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)
                 }
+                aria-haspopup="menu"
+                aria-expanded={isCurrencyDropdownOpen}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400  hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                <span className="text-sm font-medium text-gray-700">
-                  {
-                    currencies.find((curr) => curr.code === selectedCurrency)
-                      ?.symbol
-                  }{" "}
+                <span className="text-sm font-semibold text-gray-800">
+                  {currencies.find((c) => c.code === selectedCurrency)?.symbol}
+                </span>
+                <span className="text-xs text-gray-500">
                   {selectedCurrency}
                 </span>
                 <ChevronDown
@@ -170,48 +170,59 @@ export function TopNavBar({
                     isCurrencyDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
-              </div>
+              </button>
 
-              {/* Currency Dropdown */}
               {isCurrencyDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-                  {currencies.map((currency) => (
-                    <button
-                      key={currency.code}
-                      onClick={() =>
-                        handleCurrencyChange(currency.code as "THB" | "MMK")
-                      }
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex justify-between items-center ${
-                        selectedCurrency === currency.code
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      <div>
-                        <div className="font-medium">{currency.code}</div>
-                        <div className="text-xs text-gray-500">
-                          {currency.name}
+                <div
+                  role="menu"
+                  aria-orientation="vertical"
+                  className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
+                >
+                  {currencies.map((currency) => {
+                    const isSelected = selectedCurrency === currency.code;
+                    return (
+                      <button
+                        key={currency.code}
+                        role="menuitem"
+                        onClick={() =>
+                          handleCurrencyChange(currency.code as "THB" | "MMK")
+                        }
+                        className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                          isSelected
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex flex-col text-left">
+                          <span className="font-medium">{currency.code}</span>
+                          <span className="text-xs text-gray-500">
+                            {currency.name}
+                          </span>
                         </div>
-                      </div>
-                      <span className="text-lg">{currency.symbol}</span>
-                      {selectedCurrency === currency.code && (
-                        <span className="ml-auto text-blue-600">✓</span>
-                      )}
-                    </button>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{currency.symbol}</span>
+                          {/* {isSelected && (
+                            <span className="text-blue-600">✓</span>
+                          )} */}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Language Selector */}
+            {/* Language Selector (compact pill + dropdown) */}
             <div className="relative" ref={languageDropdownRef}>
-              <div
-                className="flex items-center space-x-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+              <button
+                title="language"
                 onClick={() =>
                   setIsLanguageDropdownOpen(!isLanguageDropdownOpen)
                 }
+                aria-haspopup="menu"
+                aria-expanded={isLanguageDropdownOpen}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                <Globe className="w-4 h-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">
                   {selectedLanguage}
                 </span>
@@ -220,28 +231,40 @@ export function TopNavBar({
                     isLanguageDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
-              </div>
+              </button>
 
-              {/* Language Dropdown */}
               {isLanguageDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-                  {languages.map((language) => (
-                    <button
-                      key={language.code}
-                      onClick={() => handleLanguageChange(language.name)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center space-x-3 ${
-                        selectedLanguage === language.name
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      <span className="text-lg">{language.flag}</span>
-                      <span>{language.name}</span>
-                      {selectedLanguage === language.name && (
-                        <span className="ml-auto text-blue-600">✓</span>
-                      )}
-                    </button>
-                  ))}
+                <div
+                  role="menu"
+                  aria-orientation="vertical"
+                  className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
+                >
+                  {languages.map((language) => {
+                    const isSelected = selectedLanguage === language.name;
+                    return (
+                      <button
+                        key={language.code}
+                        role="menuitem"
+                        onClick={() => handleLanguageChange(language.name)}
+                        className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
+                          isSelected
+                            ? "bg-blue-50 text-blue-700"
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{language.flag}</span>
+                          <div className="text-left">
+                            <div className="font-medium">{language.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {language.code}
+                            </div>
+                          </div>
+                        </div>
+                        {/* {isSelected && <span className="text-blue-600">✓</span>} */}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
