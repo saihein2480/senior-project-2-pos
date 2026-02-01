@@ -1342,16 +1342,53 @@ function OwnerHomeContent() {
                                   );
                                 }
 
-                                const cols = Math.max(
-                                  1,
-                                  Math.ceil(variants.length / 2),
-                                );
+                                // Show single row when up to `maxSingleRow` colors,
+                                // otherwise layout into a grid with 5 columns per row.
+                                const maxSingleRow = 5;
+                                if (variants.length <= maxSingleRow) {
+                                  return (
+                                    <div className="flex items-center gap-2 pr-4">
+                                      {variants.map((variant, index) => {
+                                        const variantId =
+                                          variant.id || `variant-${index}`;
+                                        const isSelected =
+                                          selectedColors[item.id] === variantId;
+                                        return (
+                                          <button
+                                            key={`${item.id}-${variantId}`}
+                                            onClick={() =>
+                                              handleColorSelect(
+                                                item.id,
+                                                variantId,
+                                              )
+                                            }
+                                            className={`relative w-6 h-6 rounded-full border-2 transition-all ${
+                                              isSelected
+                                                ? "border-blue-500 ring-2 ring-blue-200"
+                                                : "border-gray-300 hover:border-gray-400"
+                                            }`}
+                                            style={{
+                                              backgroundColor:
+                                                variant.colorCode,
+                                            }}
+                                            title={
+                                              isSelected
+                                                ? `${variant.color} (click to unselect)`
+                                                : variant.color
+                                            }
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
 
+                                // Grid with 5 columns; items will flow into additional rows as needed
                                 return (
                                   <div
-                                    className="grid gap-1"
+                                    className="inline-grid gap-2 items-center pr-4"
                                     style={{
-                                      gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                                      gridTemplateColumns: `repeat(5, auto)`,
                                     }}
                                   >
                                     {variants.map((variant, index) => {

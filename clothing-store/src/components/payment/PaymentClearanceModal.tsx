@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   User,
@@ -60,6 +60,7 @@ export function PaymentClearanceModal({
   const [isCalculatorMode, setIsCalculatorMode] = useState<boolean>(false);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const amountInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -69,6 +70,18 @@ export function PaymentClearanceModal({
       setIsCalculatorMode(false);
       setSelectedPaymentMethod("cash");
       setIsProcessing(false);
+      // Focus the amount input after modal opens
+      setTimeout(() => {
+        try {
+          if (amountInputRef.current) {
+            amountInputRef.current.focus();
+            const len = (amountInputRef.current.value || "").length;
+            amountInputRef.current.setSelectionRange(len, len);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 50);
     }
   }, [isOpen]);
 
@@ -477,6 +490,7 @@ export function PaymentClearanceModal({
               <input
                 type="number"
                 value={calculatorDisplay === "0" ? "" : calculatorDisplay}
+                ref={amountInputRef}
                 onChange={(e) => {
                   const value = e.target.value;
                   setCalculatorDisplay(value || "0");

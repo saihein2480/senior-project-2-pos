@@ -370,6 +370,9 @@ function NewStockContent() {
     "XL",
     "2XL",
     "3XL",
+    "4XL",
+    "5XL",
+    "6XL",
   ];
 
   const addSizeToVariant = (variantId: string, size: string) => {

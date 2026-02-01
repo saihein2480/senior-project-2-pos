@@ -1067,13 +1067,13 @@ function OwnerDashboardContent() {
                 {/* Key Performance Indicators */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {/* Total Revenue */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
                           Total Sales
                         </p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.totalRevenue)}
                         </p>
                       </div>
@@ -1081,13 +1081,13 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Total Profit */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
                           Total Profit
                         </p>
-                        <p className="text-3xl font-bold text-green-600">
+                        <p className="text-2xl font-bold text-green-600">
                           {formatPrice(stats.totalProfit)}
                         </p>
                       </div>
@@ -1095,13 +1095,13 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Total Orders */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
                           Total Orders
                         </p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-gray-900">
                           {stats.totalOrders}
                         </p>
                       </div>
@@ -1109,13 +1109,13 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Total Customers */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
                           Total Customers
                         </p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-2xl font-bold text-gray-900">
                           {stats.totalCustomers}
                         </p>
                       </div>
@@ -1129,7 +1129,7 @@ function OwnerDashboardContent() {
 
                 {/* Currency Specific Totals */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1142,7 +1142,7 @@ function OwnerDashboardContent() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1158,7 +1158,7 @@ function OwnerDashboardContent() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1171,7 +1171,7 @@ function OwnerDashboardContent() {
                     </div>
                   </div>
 
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1195,7 +1195,7 @@ function OwnerDashboardContent() {
                 {/* Secondary Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {/* Average Order Value */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1210,7 +1210,7 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Items Sold */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1225,7 +1225,7 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Total Products */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1240,7 +1240,7 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Low Stock Alert */}
-                  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1353,8 +1353,8 @@ function OwnerDashboardContent() {
                         <p className="text-sm font-medium text-gray-500">
                           Partial Refunds
                         </p>
-                        <p className="text-2xl font-bold text-indigo-600">
-                          {stats.partialRefunds}
+                        <p className="text-2xl font-bold te900xt-indigo-600">
+                          {stats.partialRefunds}900
                         </p>
                         <p className="text-xs text-gray-600">
                           {stats.totalOrders > 0

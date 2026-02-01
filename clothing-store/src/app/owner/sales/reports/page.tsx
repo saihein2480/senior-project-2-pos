@@ -75,6 +75,8 @@ interface ReportData {
     originalPriceMMK: number;
     netTHB: number;
     netMMK: number;
+    netSalesTHB?: number;
+    netSalesMMK?: number;
   }>;
   paymentMethodBreakdown: Array<{
     method: string;
@@ -294,6 +296,16 @@ function ReportsPageContent() {
     expenses: Expense[] = [],
     stocks: Stock[] = [],
   ): ReportData => {
+    // Normalize various currency labels to either 'THB' or 'MMK'
+    const normalizeCurrency = (c?: string) => {
+      if (!c) return "THB";
+      const s = String(c).trim().toUpperCase();
+      if (s === "MMK" || s === "KS" || s.includes("KYAT") || s === "K")
+        return "MMK";
+      if (s === "THB" || s.includes("BAHT") || s === "฿") return "THB";
+      if (s.startsWith("M")) return "MMK";
+      return "THB";
+    };
     // Filter for revenue-generating transactions (completed, partially refunded, and refunded)
     const revenueTransactions = transactions.filter(
       (t) =>
@@ -314,7 +326,7 @@ function ReportsPageContent() {
 
     // Calculate net revenue for transactions sold in MMK only
     const totalRevenueMMK = revenueTransactions
-      .filter((t) => (t.sellingCurrency || "THB").toUpperCase() === "MMK")
+      .filter((t) => normalizeCurrency(t.sellingCurrency) === "MMK")
       .reduce((sum, t) => {
         const refundedAmount =
           t.refunds?.reduce(
@@ -326,7 +338,7 @@ function ReportsPageContent() {
 
     // Calculate net revenue for transactions sold in THB only
     const totalRevenueTHB = revenueTransactions
-      .filter((t) => (t.sellingCurrency || "THB").toUpperCase() === "THB")
+      .filter((t) => normalizeCurrency(t.sellingCurrency) === "THB")
       .reduce((sum, t) => {
         const refundedAmount =
           t.refunds?.reduce(
@@ -397,7 +409,7 @@ function ReportsPageContent() {
         return itemTotal + (item.unitPrice - item.originalPrice) * netQty;
       }, 0);
 
-      const sellingCurrency = (t.sellingCurrency || "THB").toUpperCase();
+      const sellingCurrency = normalizeCurrency(t.sellingCurrency);
       if (sellingCurrency === "THB") totalProfitTHB += transactionProfit;
       else totalProfitMMK += transactionProfit;
     });
@@ -601,6 +613,9 @@ function ReportsPageContent() {
       if (!dailyStatusMap[dateKey]) return;
       if (!isRevenueStatus(transaction.status)) return;
 
+      const sellingCurrency = normalizeCurrency(transaction.sellingCurrency);
+      const exchangeRate = transaction.exchangeRate || 1;
+
       // Compute refunded quantities map for this transaction
       const refundedQuantities: { [itemIndex: number]: number } = {};
       if (transaction.refunds) {
@@ -615,20 +630,24 @@ function ReportsPageContent() {
       transaction.items.forEach((item, idx) => {
         const refundedQty = refundedQuantities[idx] || 0;
         const netQty = Math.max(0, item.quantity - refundedQty);
-        const profit = (item.unitPrice - item.originalPrice) * netQty;
-        const sellingCurrency = (
-          transaction.sellingCurrency || "THB"
-        ).toUpperCase();
-        const salesAmount = item.unitPrice * netQty;
-        const originalAmount = item.originalPrice * netQty;
+
+        // Item prices are always stored in THB (base currency)
+        const profitTHB = (item.unitPrice - item.originalPrice) * netQty;
+        const salesAmountTHB = item.unitPrice * netQty;
+        const originalAmountTHB = item.originalPrice * netQty;
+
+        // Add to the correct currency bucket based on transaction's selling currency
         if (sellingCurrency === "THB") {
-          dailyStatusMap[dateKey].profitTHB += profit;
-          dailyStatusMap[dateKey].totalSalesTHB += salesAmount;
-          dailyStatusMap[dateKey].originalPriceTHB += originalAmount;
+          dailyStatusMap[dateKey].profitTHB += profitTHB;
+          dailyStatusMap[dateKey].totalSalesTHB += salesAmountTHB;
+          dailyStatusMap[dateKey].originalPriceTHB += originalAmountTHB;
         } else {
-          dailyStatusMap[dateKey].profitMMK += profit;
-          dailyStatusMap[dateKey].totalSalesMMK += salesAmount;
-          dailyStatusMap[dateKey].originalPriceMMK += originalAmount;
+          // Convert THB amounts to MMK using the transaction's exchange rate
+          dailyStatusMap[dateKey].profitMMK += profitTHB * exchangeRate;
+          dailyStatusMap[dateKey].totalSalesMMK +=
+            salesAmountTHB * exchangeRate;
+          dailyStatusMap[dateKey].originalPriceMMK +=
+            originalAmountTHB * exchangeRate;
         }
       });
     });
@@ -637,9 +656,9 @@ function ReportsPageContent() {
     (expenses || []).forEach((exp: Expense) => {
       const dateKey = new Date(exp.date).toISOString().split("T")[0];
       if (!dailyStatusMap[dateKey]) return;
-      if (exp.currency === "THB")
-        dailyStatusMap[dateKey].expenseTHB += exp.amount || 0;
-      else if (exp.currency === "MMK")
+      const ec = normalizeCurrency(exp.currency as string | undefined);
+      if (ec === "THB") dailyStatusMap[dateKey].expenseTHB += exp.amount || 0;
+      else if (ec === "MMK")
         dailyStatusMap[dateKey].expenseMMK += exp.amount || 0;
     });
 
@@ -655,6 +674,9 @@ function ReportsPageContent() {
       originalPriceMMK: v.originalPriceMMK,
       netTHB: v.profitTHB - v.expenseTHB,
       netMMK: v.profitMMK - v.expenseMMK,
+      // Net Sales = Total Sales - Expense
+      netSalesTHB: v.totalSalesTHB - v.expenseTHB,
+      netSalesMMK: v.totalSalesMMK - v.expenseMMK,
     }));
 
     // Payment method breakdown
@@ -1401,6 +1423,9 @@ function ReportsPageContent() {
                         Expense
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Net Sales
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Net Profit
                       </th>
                     </tr>
@@ -1459,6 +1484,15 @@ function ReportsPageContent() {
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
                                 row.expenseMMK || 0,
+                                "MMK",
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{formatPrice(row.netSalesTHB || 0)}</div>
+                            <div className="text-xs text-gray-500">
+                              {SettingsService.formatPrice(
+                                row.netSalesMMK || 0,
                                 "MMK",
                               )}
                             </div>
