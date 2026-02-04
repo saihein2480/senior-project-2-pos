@@ -137,7 +137,7 @@ function StaffContent() {
       const data = await response.json();
       if (data.success) {
         setStaff(
-          staff.map((s) => (s.id === editingStaff.id ? editingStaff : s))
+          staff.map((s) => (s.id === editingStaff.id ? editingStaff : s)),
         );
         setShowEditModal(false);
         setEditingStaff(null);
@@ -169,12 +169,12 @@ function StaffContent() {
           staff.map((s) =>
             s.id === staffMember.id
               ? { ...s, isActive: !staffMember.isActive }
-              : s
-          )
+              : s,
+          ),
         );
         showAlert(
           "success",
-          `Staff ${!staffMember.isActive ? "activated" : "deactivated"}`
+          `Staff ${!staffMember.isActive ? "activated" : "deactivated"}`,
         );
       }
     } catch (error) {
@@ -330,11 +330,15 @@ function StaffContent() {
                         </td>
                       </tr>
                     ) : (
-                      currentStaff.map((member) => {
+                      currentStaff.map((member, idx) => {
                         const roleInfo = getRoleInfo(member.role);
+                        const rowKey =
+                          member.id ||
+                          member.email ||
+                          `staff-${startIndex + idx}`;
                         return (
                           <tr
-                            key={member.id}
+                            key={rowKey}
                             className="border-b hover:bg-gray-50"
                           >
                             <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -477,7 +481,7 @@ function StaffContent() {
                           title="Go to next page"
                           onClick={() =>
                             setCurrentPage(
-                              Math.min(totalPages, currentPage + 1)
+                              Math.min(totalPages, currentPage + 1),
                             )
                           }
                           disabled={currentPage === totalPages}

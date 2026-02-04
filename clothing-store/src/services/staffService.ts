@@ -24,7 +24,7 @@ interface CreateStaffData {
 }
 
 export const createStaffAccount = async (
-  data: CreateStaffData
+  data: CreateStaffData,
 ): Promise<User> => {
   try {
     if (!auth) {
@@ -38,7 +38,7 @@ export const createStaffAccount = async (
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       data.email,
-      data.password
+      data.password,
     );
 
     const userId = userCredential.user.uid;
@@ -90,7 +90,7 @@ export const getAllStaff = async (): Promise<User[]> => {
     // Query without orderBy to avoid composite index requirement
     const q = query(
       collection(db, USERS_COLLECTION),
-      where("role", "in", ["manager", "staff"])
+      where("role", "in", ["manager", "staff"]),
     );
 
     const querySnapshot = await getDocs(q);
@@ -112,7 +112,7 @@ export const getAllStaff = async (): Promise<User[]> => {
 
     // Sort in memory by createdAt descending
     return staffList.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
     );
   } catch (error) {
     console.error("Error getting staff:", error);
@@ -123,8 +123,8 @@ export const getAllStaff = async (): Promise<User[]> => {
 
 export const updateStaff = async (
   id: string,
-  updates: Partial<User>
-): Promise<void> => {
+  updates: Partial<User> & { currentBranch?: string },
+): Promise<User | null> => {
   try {
     if (!db) {
       throw new Error("Database not initialized");
@@ -138,13 +138,32 @@ export const updateStaff = async (
       updateData.displayName = updates.displayName;
     if (updates.role !== undefined) updateData.role = updates.role;
     if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+    if (updates.currentBranch !== undefined)
+      updateData.currentBranch = updates.currentBranch;
 
     await updateDoc(doc(db, USERS_COLLECTION, id), updateData);
+    // Return the updated user document
+    const updatedDoc = await getDoc(doc(db, USERS_COLLECTION, id));
+    if (!updatedDoc.exists()) return null;
+    const data = updatedDoc.data();
+    return {
+      uid: data.uid || updatedDoc.id,
+      email: data.email,
+      displayName: data.displayName,
+      role: data.role,
+      currentBranch: data.currentBranch,
+      isActive: data.isActive !== false,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+      createdBy: data.createdBy,
+    } as User;
   } catch (error) {
     console.error("Error updating staff:", error);
     throw error;
   }
 };
+
+// Change the return type of the function to Promise<User | null>
 
 export const deleteStaff = async (uid: string): Promise<void> => {
   try {

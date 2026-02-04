@@ -64,7 +64,7 @@ function CustomerPageContent() {
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(
-    null
+    null,
   );
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -129,7 +129,7 @@ function CustomerPageContent() {
 
         // Check if click is on the dropdown button
         const isDropdownButton = Object.values(buttonRefs.current).some(
-          (button) => button && button.contains(target)
+          (button) => button && button.contains(target),
         );
 
         // Check if click is inside the dropdown menu
@@ -208,7 +208,7 @@ function CustomerPageContent() {
         setSuccessMessage(
           `Customer "${
             deletingCustomer.displayName || deletingCustomer.email
-          }" has been deleted successfully.`
+          }" has been deleted successfully.`,
         );
 
         // Refresh the customer list
@@ -260,8 +260,8 @@ function CustomerPageContent() {
           // Update the customer in the list
           setCustomers((prev) =>
             prev.map((customer) =>
-              customer.uid === editingCustomer.uid ? result.data : customer
-            )
+              customer.uid === editingCustomer.uid ? result.data : customer,
+            ),
           );
 
           // Refresh stats to ensure accuracy
@@ -316,7 +316,7 @@ function CustomerPageContent() {
     (customer) =>
       customer.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+      customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Pagination calculations
@@ -336,7 +336,7 @@ function CustomerPageContent() {
   };
 
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <div className="flex h-screen bg-gray-50">
         <div className="hidden md:block">
           <Sidebar activeItem="customers" onItemClick={() => {}} />
@@ -369,7 +369,7 @@ function CustomerPageContent() {
                     Manage your customer database and relationships
                   </p>
                 </div>
-                <div className= "flex items-center space-x-3">
+                <div className="flex items-center space-x-3">
                   <Button
                     variant="outline"
                     onClick={handleRefresh}
@@ -571,7 +571,7 @@ function CustomerPageContent() {
                                           e.target as HTMLImageElement;
                                         target.style.display = "none";
                                         target.nextElementSibling?.classList.remove(
-                                          "hidden"
+                                          "hidden",
                                         );
                                       }}
                                     />
@@ -717,7 +717,7 @@ function CustomerPageContent() {
                           title="Go to next page"
                           onClick={() =>
                             setCurrentPage(
-                              Math.min(totalPages, currentPage + 1)
+                              Math.min(totalPages, currentPage + 1),
                             )
                           }
                           disabled={currentPage === totalPages}
@@ -752,7 +752,7 @@ function CustomerPageContent() {
               <button
                 onClick={() => {
                   const customer = customers.find(
-                    (c) => c.uid === openDropdown
+                    (c) => c.uid === openDropdown,
                   );
                   if (customer) handleEditCustomer(customer);
                 }}
@@ -764,7 +764,7 @@ function CustomerPageContent() {
               <button
                 onClick={() => {
                   const customer = customers.find(
-                    (c) => c.uid === openDropdown
+                    (c) => c.uid === openDropdown,
                   );
                   if (customer) handleDeleteCustomer(customer);
                 }}
@@ -775,7 +775,7 @@ function CustomerPageContent() {
               </button>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
 
       {/* Success Message */}

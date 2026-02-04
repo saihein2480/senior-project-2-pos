@@ -4,7 +4,7 @@ import {
   signOut,
   updateProfile,
   signInWithPopup,
-} from 'firebase/auth';
+} from "firebase/auth";
 import {
   doc,
   setDoc,
@@ -14,37 +14,48 @@ import {
   where,
   collection,
   getDocs,
-} from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured, googleProvider } from '@/lib/firebase';
-import { User, UserRole, LoginCredentials, RegisterCredentials } from '@/types/auth';
+} from "firebase/firestore";
+import { auth, db, isFirebaseConfigured, googleProvider } from "@/lib/firebase";
+import {
+  User,
+  UserRole,
+  LoginCredentials,
+  RegisterCredentials,
+} from "@/types/auth";
 
 class AuthService {
-  private readonly USERS_COLLECTION = 'users';
+  private readonly USERS_COLLECTION = "users";
 
   /**
    * Login user with email and password
    */
   async login(credentials: LoginCredentials, role: UserRole): Promise<User> {
     this.validateFirebaseConfig();
-    
+
     const { email, password } = credentials;
-    
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth!, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth!,
+        email,
+        password,
+      );
       const userData = await this.getUserData(userCredential.user.uid);
-      
+
       if (!userData) {
-        throw new Error('User data not found. Please contact support.');
+        throw new Error("User data not found. Please contact support.");
       }
 
       if (userData.role !== role) {
         await signOut(auth!);
-        throw new Error(`Access denied. This account is not registered as a ${role}.`);
+        throw new Error(
+          `Access denied. This account is not registered as a ${role}.`,
+        );
       }
 
       return userData;
     } catch (error) {
-      throw this.handleAuthError(error, 'Login failed');
+      throw this.handleAuthError(error, "Login failed");
     }
   }
 
@@ -63,7 +74,9 @@ class AuthService {
       if (userData) {
         if (userData.role !== role) {
           await signOut(auth!);
-          throw new Error(`Access denied. This account is not registered as a ${role}.`);
+          throw new Error(
+            `Access denied. This account is not registered as a ${role}.`,
+          );
         }
         return userData;
       }
@@ -72,7 +85,7 @@ class AuthService {
       userData = {
         uid: firebaseUser.uid,
         email: firebaseUser.email!,
-        displayName: firebaseUser.displayName || 'Google User',
+        displayName: firebaseUser.displayName || "Google User",
         role,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -81,7 +94,7 @@ class AuthService {
       await this.createUserDocument(userData);
       return userData;
     } catch (error) {
-      throw this.handleAuthError(error, 'Google sign-in failed');
+      throw this.handleAuthError(error, "Google sign-in failed");
     }
   }
 
@@ -90,16 +103,20 @@ class AuthService {
    */
   async register(credentials: RegisterCredentials): Promise<User> {
     this.validateFirebaseConfig();
-    
+
     const { email, password, displayName } = credentials;
 
     try {
       const existingUser = await this.checkUserExists(email);
       if (existingUser) {
-        throw new Error('An account with this email already exists.');
+        throw new Error("An account with this email already exists.");
       }
 
-      const userCredential = await createUserWithEmailAndPassword(auth!, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth!,
+        email,
+        password,
+      );
       const firebaseUser = userCredential.user;
 
       await updateProfile(firebaseUser, { displayName });
@@ -108,7 +125,7 @@ class AuthService {
         uid: firebaseUser.uid,
         email: firebaseUser.email!,
         displayName,
-        role: 'customer',
+        role: "customer",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -116,23 +133,31 @@ class AuthService {
       await this.createUserDocument(userData);
       return userData;
     } catch (error) {
-      throw this.handleAuthError(error, 'Registration failed');
+      throw this.handleAuthError(error, "Registration failed");
     }
   }
 
   /**
    * Create owner account (admin function)
    */
-  async createOwnerAccount(email: string, password: string, displayName: string): Promise<User> {
+  async createOwnerAccount(
+    email: string,
+    password: string,
+    displayName: string,
+  ): Promise<User> {
     this.validateFirebaseConfig();
 
     try {
       const existingUser = await this.checkUserExists(email);
       if (existingUser) {
-        throw new Error('An account with this email already exists.');
+        throw new Error("An account with this email already exists.");
       }
 
-      const userCredential = await createUserWithEmailAndPassword(auth!, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth!,
+        email,
+        password,
+      );
       const firebaseUser = userCredential.user;
 
       await updateProfile(firebaseUser, { displayName });
@@ -141,7 +166,7 @@ class AuthService {
         uid: firebaseUser.uid,
         email: firebaseUser.email!,
         displayName,
-        role: 'owner',
+        role: "owner",
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -149,7 +174,7 @@ class AuthService {
       await this.createUserDocument(userData);
       return userData;
     } catch (error) {
-      throw this.handleAuthError(error, 'Failed to create owner account');
+      throw this.handleAuthError(error, "Failed to create owner account");
     }
   }
 
@@ -160,12 +185,12 @@ class AuthService {
     if (!isFirebaseConfigured || !auth) {
       return;
     }
-    
+
     try {
       await signOut(auth);
     } catch (error) {
-      console.error('Logout error:', error);
-      throw new Error('Logout failed');
+      console.error("Logout error:", error);
+      throw new Error("Logout failed");
     }
   }
 
@@ -179,7 +204,7 @@ class AuthService {
 
     try {
       const userDoc = await getDoc(doc(db, this.USERS_COLLECTION, uid));
-      
+
       if (!userDoc.exists()) {
         return null;
       }
@@ -189,12 +214,13 @@ class AuthService {
         uid: data.uid,
         email: data.email,
         displayName: data.displayName,
+        currentBranch: data.currentBranch || undefined,
         role: data.role,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       };
     } catch (error) {
-      console.error('Error getting user data:', error);
+      console.error("Error getting user data:", error);
       return null;
     }
   }
@@ -204,7 +230,7 @@ class AuthService {
    */
   private validateFirebaseConfig(): void {
     if (!isFirebaseConfigured || !auth || !db) {
-      throw new Error('Firebase is not configured');
+      throw new Error("Firebase is not configured");
     }
   }
 
@@ -219,10 +245,10 @@ class AuthService {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-      
+
       await setDoc(userDocRef, docData);
     } catch (error) {
-      console.error('Error creating user document:', error);
+      console.error("Error creating user document:", error);
       throw this.handleFirestoreError(error);
     }
   }
@@ -234,12 +260,12 @@ class AuthService {
     try {
       const q = query(
         collection(db!, this.USERS_COLLECTION),
-        where('email', '==', email)
+        where("email", "==", email),
       );
       const querySnapshot = await getDocs(q);
       return !querySnapshot.empty;
     } catch (error) {
-      console.error('Error checking user existence:', error);
+      console.error("Error checking user existence:", error);
       return false;
     }
   }
@@ -248,12 +274,12 @@ class AuthService {
    * Handle authentication errors
    */
   private handleAuthError(error: unknown, defaultMessage: string): Error {
-    console.error('Auth error:', error);
-    
+    console.error("Auth error:", error);
+
     if (error instanceof Error) {
       return error;
     }
-    
+
     return new Error(`${defaultMessage}. Please try again.`);
   }
 
@@ -262,17 +288,23 @@ class AuthService {
    */
   private handleFirestoreError(error: unknown): Error {
     const firebaseError = error as { code?: string; message?: string };
-    
+
     switch (firebaseError?.code) {
-      case 'permission-denied':
-        return new Error('Permission denied. Please check Firestore security rules.');
-      case 'unavailable':
-        return new Error('Firestore service is currently unavailable. Please try again.');
+      case "permission-denied":
+        return new Error(
+          "Permission denied. Please check Firestore security rules.",
+        );
+      case "unavailable":
+        return new Error(
+          "Firestore service is currently unavailable. Please try again.",
+        );
       default:
-        if (firebaseError?.message?.includes('net::ERR_ABORTED')) {
-          return new Error('Network connection error. Please check your internet connection and try again.');
+        if (firebaseError?.message?.includes("net::ERR_ABORTED")) {
+          return new Error(
+            "Network connection error. Please check your internet connection and try again.",
+          );
         }
-        return new Error('Failed to create user profile. Please try again.');
+        return new Error("Failed to create user profile. Please try again.");
     }
   }
 }

@@ -1119,7 +1119,7 @@ function InventoryStocksContent() {
 
 export default function InventoryStocksPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <InventoryStocksContent />
     </ProtectedRoute>
   );

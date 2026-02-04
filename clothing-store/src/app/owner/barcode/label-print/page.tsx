@@ -1260,7 +1260,7 @@ const [savedSettings, setSavedSettings] = useState<LabelSettings | null>(null);
 
 export default function LabelPrintPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <LabelPrintContent />
     </ProtectedRoute>
   );

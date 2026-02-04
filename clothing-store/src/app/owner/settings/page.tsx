@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { ShopService } from "@/services/shopService";
@@ -31,6 +32,7 @@ interface BusinessSettings {
 }
 
 function OwnerSettingsContent() {
+  const { user } = useAuth();
   const { refreshCurrencySettings } = useCurrency();
   const { refreshSettings } = useSettings();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -75,6 +77,14 @@ function OwnerSettingsContent() {
 
         if (result.success && result.data) {
           setSettings((prev) => ({ ...prev, ...result.data }));
+
+          // For all users, load user-specific branch from localStorage
+          if (user?.uid) {
+            const userBranch = localStorage.getItem(`userBranch_${user.uid}`);
+            if (userBranch) {
+              setSettings((prev) => ({ ...prev, currentBranch: userBranch }));
+            }
+          }
         } else {
           setError(result.error || "Failed to load settings");
         }
@@ -95,7 +105,7 @@ function OwnerSettingsContent() {
     };
 
     fetchSettings();
-  }, []);
+  }, [user]);
 
   // When shops change, update currentBranch logic
   useEffect(() => {
@@ -153,7 +163,7 @@ function OwnerSettingsContent() {
 
   const handleInputChange = (
     field: keyof BusinessSettings,
-    value: string | number | boolean
+    value: string | number | boolean,
   ) => {
     setSettings((prev) => ({
       ...prev,
@@ -166,26 +176,42 @@ function OwnerSettingsContent() {
     setError("");
 
     try {
-      const response = await fetch("/api/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(settings),
-      });
+      // Save branch to localStorage for all users (user-specific)
+      if (user?.uid && settings.currentBranch) {
+        localStorage.setItem(`userBranch_${user.uid}`, settings.currentBranch);
+      }
 
-      const result = await response.json();
-
-      if (result.success) {
-        setSettings(result.data);
-        // Refresh currency context to reflect the new settings
-        await refreshCurrencySettings();
-        // Refresh settings context to reflect the new settings (including tax rate)
+      // Staff and Manager: Only save branch (already done above)
+      if (user?.role === "staff" || user?.role === "manager") {
+        // Refresh settings context to reflect the new branch
         await refreshSettings();
-        alert("Settings saved successfully!");
-      } else {
-        setError(result.error || "Failed to save settings");
-        alert("Failed to save settings: " + (result.error || "Unknown error"));
+        alert("Branch saved successfully!");
+      }
+      // Owner: Save all other settings globally (excluding currentBranch)
+      else {
+        const response = await fetch("/api/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(settings),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          setSettings(result.data);
+          // Refresh currency context to reflect the new settings
+          await refreshCurrencySettings();
+          // Refresh settings context to reflect the new settings (including tax rate)
+          await refreshSettings();
+          alert("Settings saved successfully!");
+        } else {
+          setError(result.error || "Failed to save settings");
+          alert(
+            "Failed to save settings: " + (result.error || "Unknown error"),
+          );
+        }
       }
     } catch (err) {
       console.error("Error saving settings:", err);
@@ -218,7 +244,7 @@ function OwnerSettingsContent() {
         } else {
           setError(result.error || "Failed to reset settings");
           alert(
-            "Failed to reset settings: " + (result.error || "Unknown error")
+            "Failed to reset settings: " + (result.error || "Unknown error"),
           );
         }
       } catch (err) {
@@ -307,105 +333,16 @@ function OwnerSettingsContent() {
             {/* Settings Content */}
             {!isLoadingData && (
               <div className="space-y-8">
-                {/* Business Information Section */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center mb-6">
-                    <Building2 className="h-5 w-5 text-blue-600 mr-2" />
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Business Information
-                    </h2>
-                  </div>
-
-                  <div className="space-y-6">
-                    {/* Logo Upload */}
-                    <div className="text-center">
-                      <h3 className="text-sm font-medium text-gray-900 mb-4">
-                        Business Logo
-                      </h3>
-                      <ImageUpload
-                        value={settings.businessLogo}
-                        onChange={(url) =>
-                          handleInputChange("businessLogo", url)
-                        }
-                        folder="pos-clothing-store/business-logos"
-                        className="mx-auto"
-                      />
+                {/* Staff-only: Show only Current Branch selector */}
+                {user?.role === "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Store className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Your Branch
+                      </h2>
                     </div>
-
-                    {/* Business Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input
-                        label="Business Name"
-                        value={settings.businessName}
-                        onChange={(e) =>
-                          handleInputChange("businessName", e.target.value)
-                        }
-                      />
-                      <Input
-                        label="Short Name (Optional)"
-                        value={settings.shortName}
-                        onChange={(e) =>
-                          handleInputChange("shortName", e.target.value)
-                        }
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-normal text-gray-900 mb-2">
-                          Default Currency
-                        </label>
-                        <div className="relative">
-                          <select
-                            title="DefaultCurrentcy"
-                            value={settings.defaultCurrency}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "defaultCurrency",
-                                e.target.value
-                              )
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
-                          >
-                            {currencies.map((currency) => (
-                              <option key={currency.code} value={currency.code}>
-                                {currency.symbol} {currency.code} —{" "}
-                                {currency.name}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                            <svg
-                              className="w-4 h-4 text-dark-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                      <Input
-                        label="Tax Rate (%) (e.g., 5 for 5%)"
-                        type="number"
-                        value={settings.taxRate}
-                        onChange={(e) =>
-                          handleInputChange(
-                            "taxRate",
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-normal text-gray-900 mb-2">
                           <Store className="inline h-4 w-4 mr-1 mb-1" />
@@ -420,7 +357,6 @@ function OwnerSettingsContent() {
                             }
                             className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
                           >
-                            {/* Show 'No Branch' if selected, or if there are no shops */}
                             {(settings.currentBranch === "No Branch" ||
                               noShops) && (
                               <option value="No Branch">No Branch</option>
@@ -448,207 +384,433 @@ function OwnerSettingsContent() {
                           </div>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          Select the branch for new transactions
+                          Select the branch for your transactions
                         </p>
                       </div>
                     </div>
+                  </div>
+                )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input
-                        label="Registered By"
-                        value={settings.registeredBy}
-                        onChange={(e) =>
-                          handleInputChange("registeredBy", e.target.value)
-                        }
-                      />
-                      <Input
-                        label="Registered At"
-                        type="date"
-                        value={settings.registeredAt}
-                        onChange={(e) =>
-                          handleInputChange("registeredAt", e.target.value)
-                        }
-                      />
+                {/* Staff: Show Tax Rate (Read-only) */}
+                {user?.role === "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Receipt className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Tax Rate
+                      </h2>
                     </div>
-                  </div>
-                </div>
-
-                {/* Invoice & Receipt Settings */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center mb-6">
-                    <Receipt className="h-5 w-5 text-blue-600 mr-2" />
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Invoice & Receipt Settings
-                    </h2>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          Show Business Logo on Invoice
-                        </h3>
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-900">
+                            Current Tax Rate
+                          </span>
+                          <span className="text-lg font-bold text-blue-600">
+                            {settings.taxRate}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Tax rate is applied to all transactions
+                        </p>
                       </div>
-                      <Toggle
-                        checked={settings.showBusinessLogoOnInvoice}
-                        onChange={(checked) =>
-                          handleInputChange(
-                            "showBusinessLogoOnInvoice",
-                            checked
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          Auto Print Receipt After Checkout
-                        </h3>
-                      </div>
-                      <Toggle
-                        checked={settings.autoPrintReceiptAfterCheckout}
-                        onChange={(checked) =>
-                          handleInputChange(
-                            "autoPrintReceiptAfterCheckout",
-                            checked
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Invoice Footer Message
-                      </label>
-                      <textarea
-                        value={settings.invoiceFooterMessage}
-                        onChange={(e) =>
-                          handleInputChange(
-                            "invoiceFooterMessage",
-                            e.target.value
-                          )
-                        }
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 text-gray-900"
-                        placeholder="Enter footer message for invoices"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        This message will appear at the bottom of customer
-                        invoices.
-                      </p>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* User Interface Preferences */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center mb-6">
-                    <User className="h-5 w-5 text-blue-600 mr-2" />
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      User Interface Preferences
-                    </h2>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          Enable Dark Mode (Coming Soon)
-                        </h3>
-                      </div>
-                      <Toggle
-                        checked={settings.enableDarkMode}
-                        onChange={(checked) =>
-                          handleInputChange("enableDarkMode", checked)
-                        }
-                        disabled={true}
-                      />
+                {/* Staff: Show Currency Rate (Read-only) */}
+                {user?.role === "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Currency Rate
+                      </h2>
                     </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          Enable Sound Effects (Coming Soon)
-                        </h3>
-                      </div>
-                      <Toggle
-                        checked={settings.enableSoundEffects}
-                        onChange={(checked) =>
-                          handleInputChange("enableSoundEffects", checked)
-                        }
-                        disabled={true}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Currency Rate */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center mb-6">
-                    <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      Currency Rate
-                    </h2>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          {getCurrencyRateDisplay().from} →{" "}
-                          {getCurrencyRateDisplay().to}
-                        </h3>
-                        <p className="text-xs text-gray-500 mt-1">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {getCurrencyRateDisplay().from} →{" "}
+                            {getCurrencyRateDisplay().to}
+                          </span>
+                          <span className="text-lg font-bold text-blue-600">
+                            {settings.currencyRate}
+                          </span>
+                        </div>
+                        {settings.currencyRate > 0 && (
+                          <p className="text-xs text-gray-500">
+                            1 {getCurrencyRateDisplay().fromSymbol} ={" "}
+                            {settings.currencyRate}{" "}
+                            {getCurrencyRateDisplay().toSymbol}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">
                           {getCurrencyRateDisplay().description}
                         </p>
                       </div>
-                      <div className="w-32">
+                    </div>
+                  </div>
+                )}
+
+                {/* Owner/Manager: Show full Business Information Section */}
+                {user?.role !== "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Building2 className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Business Information
+                      </h2>
+                    </div>
+
+                    <div className="space-y-6">
+                      {/* Logo Upload */}
+                      <div className="text-center">
+                        <h3 className="text-sm font-medium text-gray-900 mb-4">
+                          Business Logo
+                        </h3>
+                        <ImageUpload
+                          value={settings.businessLogo}
+                          onChange={(url) =>
+                            handleInputChange("businessLogo", url)
+                          }
+                          folder="pos-clothing-store/business-logos"
+                          className="mx-auto"
+                        />
+                      </div>
+
+                      {/* Business Details */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Input
+                          label="Business Name"
+                          value={settings.businessName}
+                          onChange={(e) =>
+                            handleInputChange("businessName", e.target.value)
+                          }
+                        />
+                        <Input
+                          label="Short Name (Optional)"
+                          value={settings.shortName}
+                          onChange={(e) =>
+                            handleInputChange("shortName", e.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-normal text-gray-900 mb-2">
+                            Default Currency
+                          </label>
+                          <div className="relative">
+                            <select
+                              title="DefaultCurrentcy"
+                              value={settings.defaultCurrency}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  "defaultCurrency",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
+                            >
+                              {currencies.map((currency) => (
+                                <option
+                                  key={currency.code}
+                                  value={currency.code}
+                                >
+                                  {currency.symbol} {currency.code} —{" "}
+                                  {currency.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                              <svg
+                                className="w-4 h-4 text-dark-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                        <Input
+                          label="Tax Rate (%) (e.g., 5 for 5%)"
                           type="number"
-                          step="0.01"
-                          min="0"
-                          value={settings.currencyRate}
+                          value={settings.taxRate}
                           onChange={(e) =>
                             handleInputChange(
-                              "currencyRate",
-                              parseFloat(e.target.value) || 0
+                              "taxRate",
+                              parseFloat(e.target.value) || 0,
                             )
                           }
-                          className="text-right"
-                          placeholder="0.00"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-normal text-gray-900 mb-2">
+                            <Store className="inline h-4 w-4 mr-1 mb-1" />
+                            Current Branch/Shop
+                          </label>
+                          <div className="relative">
+                            <select
+                              title="CurrentBranch"
+                              value={settings.currentBranch || "No Branch"}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  "currentBranch",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
+                            >
+                              {/* Show 'No Branch' if selected, or if there are no shops */}
+                              {(settings.currentBranch === "No Branch" ||
+                                noShops) && (
+                                <option value="No Branch">No Branch</option>
+                              )}
+                              {shops.map((shop) => (
+                                <option key={shop.id} value={shop.name}>
+                                  {shop.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                              <svg
+                                className="w-4 h-4 text-dark-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Select the branch for new transactions
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input
+                          label="Registered By"
+                          value={settings.registeredBy}
+                          onChange={(e) =>
+                            handleInputChange("registeredBy", e.target.value)
+                          }
+                        />
+                        <Input
+                          label="Registered At"
+                          type="date"
+                          value={settings.registeredAt}
+                          onChange={(e) =>
+                            handleInputChange("registeredAt", e.target.value)
+                          }
                         />
                       </div>
                     </div>
+                  </div>
+                )}
 
-                    {settings.currencyRate > 0 && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <p className="text-sm text-blue-800">
-                          <span className="font-medium">Exchange Rate:</span> 1{" "}
-                          {getCurrencyRateDisplay().fromSymbol} ={" "}
-                          {settings.currencyRate}{" "}
-                          {getCurrencyRateDisplay().toSymbol}
+                {/* Invoice & Receipt Settings - Owner/Manager only */}
+                {user?.role !== "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Receipt className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Invoice & Receipt Settings
+                      </h2>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            Show Business Logo on Invoice
+                          </h3>
+                        </div>
+                        <Toggle
+                          checked={settings.showBusinessLogoOnInvoice}
+                          onChange={(checked) =>
+                            handleInputChange(
+                              "showBusinessLogoOnInvoice",
+                              checked,
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            Auto Print Receipt After Checkout
+                          </h3>
+                        </div>
+                        <Toggle
+                          checked={settings.autoPrintReceiptAfterCheckout}
+                          onChange={(checked) =>
+                            handleInputChange(
+                              "autoPrintReceiptAfterCheckout",
+                              checked,
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Invoice Footer Message
+                        </label>
+                        <textarea
+                          value={settings.invoiceFooterMessage}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "invoiceFooterMessage",
+                              e.target.value,
+                            )
+                          }
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 text-gray-900"
+                          placeholder="Enter footer message for invoices"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          This message will appear at the bottom of customer
+                          invoices.
                         </p>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Action Buttons */}
+                {/* User Interface Preferences - Owner/Manager only */}
+                {user?.role !== "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <User className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        User Interface Preferences
+                      </h2>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            Enable Dark Mode (Coming Soon)
+                          </h3>
+                        </div>
+                        <Toggle
+                          checked={settings.enableDarkMode}
+                          onChange={(checked) =>
+                            handleInputChange("enableDarkMode", checked)
+                          }
+                          disabled={true}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            Enable Sound Effects (Coming Soon)
+                          </h3>
+                        </div>
+                        <Toggle
+                          checked={settings.enableSoundEffects}
+                          onChange={(checked) =>
+                            handleInputChange("enableSoundEffects", checked)
+                          }
+                          disabled={true}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Currency Rate - Owner/Manager only */}
+                {user?.role !== "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Currency Rate
+                      </h2>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            {getCurrencyRateDisplay().from} →{" "}
+                            {getCurrencyRateDisplay().to}
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {getCurrencyRateDisplay().description}
+                          </p>
+                        </div>
+                        <div className="w-32">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={settings.currencyRate}
+                            onChange={(e) =>
+                              handleInputChange(
+                                "currencyRate",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className="text-right"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+
+                      {settings.currencyRate > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm text-blue-800">
+                            <span className="font-medium">Exchange Rate:</span>{" "}
+                            1 {getCurrencyRateDisplay().fromSymbol} ={" "}
+                            {settings.currencyRate}{" "}
+                            {getCurrencyRateDisplay().toSymbol}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons - Save button for staff (branch only), full reset/save for owner/manager */}
                 <div className="flex justify-end space-x-4 pt-6">
-                  <Button
-                    variant="outline"
-                    onClick={handleReset}
-                    disabled={isLoading || isLoadingData}
-                  >
-                    Reset
-                  </Button>
+                  {user?.role !== "staff" && (
+                    <Button
+                      variant="outline"
+                      onClick={handleReset}
+                      disabled={isLoading || isLoadingData}
+                    >
+                      Reset
+                    </Button>
+                  )}
                   <Button
                     onClick={handleSaveSettings}
                     loading={isLoading}
                     disabled={isLoading || isLoadingData}
                   >
-                    Save Settings
+                    {user?.role === "staff" ? "Save Branch" : "Save Settings"}
                   </Button>
                 </div>
               </div>
@@ -662,7 +824,7 @@ function OwnerSettingsContent() {
 
 export default function OwnerSettingsPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <OwnerSettingsContent />
     </ProtectedRoute>
   );

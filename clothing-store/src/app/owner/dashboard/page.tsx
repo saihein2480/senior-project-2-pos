@@ -1837,7 +1837,7 @@ function OwnerDashboardContent() {
 
 export default function OwnerDashboardPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <OwnerDashboardContent />
     </ProtectedRoute>
   );

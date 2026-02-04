@@ -530,7 +530,6 @@ function PaymentsPageContent() {
                 Monitor and manage all payment transactions
               </p>
             </div> */}
-
             {/* Payment Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -611,7 +610,6 @@ function PaymentsPageContent() {
                 </div>
               </div>
             </div>
-
             Payment Methods Breakdown
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -675,7 +673,6 @@ function PaymentsPageContent() {
                 </div>
               </div>
             </div>
-
             {/* Transactions List
             <div className="bg-white rounded-lg shadow-sm border border-gray-200  mb-1">
               <div className="p-6 border-b border-gray-200">
@@ -684,7 +681,6 @@ function PaymentsPageContent() {
                 </h2>
               </div>
             </div> */}
-
             {/* Payment Methods Breakdown */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -779,7 +775,6 @@ function PaymentsPageContent() {
                 </div>
               </div>
             </div>
-
             {/* Filters and Search */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -955,7 +950,6 @@ function PaymentsPageContent() {
                 </button>
               </div>
             </div>
-
             {/* Payments Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
@@ -1156,7 +1150,7 @@ function PaymentsPageContent() {
 
 export default function PaymentsPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <PaymentsPageContent />
     </ProtectedRoute>
   );

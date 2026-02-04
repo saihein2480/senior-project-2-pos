@@ -5,6 +5,7 @@ export interface User {
   email: string;
   displayName?: string;
   role: UserRole;
+  currentBranch?: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy?: string; // ID of the owner who created this account

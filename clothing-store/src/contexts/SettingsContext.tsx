@@ -8,6 +8,7 @@ import React, {
   ReactNode,
 } from "react";
 import { SettingsService, BusinessSettings } from "@/services/settingsService";
+import { useAuth } from "./AuthContext";
 
 interface SettingsContextType {
   taxRate: number;
@@ -17,7 +18,7 @@ interface SettingsContextType {
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export function useSettings() {
@@ -33,6 +34,7 @@ interface SettingsProviderProps {
 }
 
 export function SettingsProvider({ children }: SettingsProviderProps) {
+  const { user } = useAuth();
   const [taxRate, setTaxRate] = useState<number>(0);
   const [businessSettings, setBusinessSettings] =
     useState<BusinessSettings | null>(null);
@@ -45,7 +47,18 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       const settings = await SettingsService.getBusinessSettings();
       if (settings) {
         setTaxRate(settings.taxRate || 0);
-        setBusinessSettings(settings);
+
+        // For all users, override currentBranch with user-specific branch from localStorage
+        if (user?.uid) {
+          const userBranch = localStorage.getItem(`userBranch_${user.uid}`);
+          if (userBranch) {
+            setBusinessSettings({ ...settings, currentBranch: userBranch });
+          } else {
+            setBusinessSettings(settings);
+          }
+        } else {
+          setBusinessSettings(settings);
+        }
       }
     } catch (error) {
       console.error("Error loading settings:", error);
@@ -68,7 +81,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     return () => {
       window.removeEventListener("refreshSettings", handler);
     };
-  }, []);
+  }, [user]);
 
   const value: SettingsContextType = {
     taxRate,

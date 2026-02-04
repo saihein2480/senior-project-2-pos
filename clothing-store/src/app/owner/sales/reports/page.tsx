@@ -2205,7 +2205,7 @@ function ReportsPageContent() {
 
 export default function ReportsPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute>
       <ReportsPageContent />
     </ProtectedRoute>
   );

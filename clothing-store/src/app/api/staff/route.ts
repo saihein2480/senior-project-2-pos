@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     console.error("Error in GET /api/staff:", error);
     return NextResponse.json(
       { success: false, error: "Failed to fetch staff" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -27,21 +27,21 @@ export async function POST(request: NextRequest) {
     if (!email || !password || !displayName || !role) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (password.length < 6) {
       return NextResponse.json(
         { success: false, error: "Password must be at least 6 characters" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!["staff", "manager"].includes(role)) {
       return NextResponse.json(
         { success: false, error: "Invalid role" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
             ? error.message
             : "Failed to create staff account",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -77,17 +77,17 @@ export async function PUT(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { success: false, error: "ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    await updateStaff(id, body);
-    return NextResponse.json({ success: true });
+    const updated = await updateStaff(id, body);
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error("Error in PUT /api/staff:", error);
     return NextResponse.json(
       { success: false, error: "Failed to update staff" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -100,7 +100,7 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { success: false, error: "ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -109,9 +109,8 @@ export async function DELETE(request: NextRequest) {
 
     // Delete from Firebase Authentication
     try {
-      const { adminAuth, isAdminInitialized } = await import(
-        "@/lib/firebase-admin"
-      );
+      const { adminAuth, isAdminInitialized } =
+        await import("@/lib/firebase-admin");
 
       if (isAdminInitialized && adminAuth) {
         try {
@@ -127,7 +126,7 @@ export async function DELETE(request: NextRequest) {
           ) {
             console.log(
               "User not found in Firebase Auth (already deleted):",
-              id
+              id,
             );
           } else {
             console.error("Error deleting from Firebase Auth:", authError);
@@ -135,7 +134,7 @@ export async function DELETE(request: NextRequest) {
         }
       } else {
         console.warn(
-          "Firebase Admin not initialized. User deleted from Firestore only."
+          "Firebase Admin not initialized. User deleted from Firestore only.",
         );
       }
     } catch (authError) {
@@ -148,7 +147,7 @@ export async function DELETE(request: NextRequest) {
     console.error("Error in DELETE /api/staff:", error);
     return NextResponse.json(
       { success: false, error: "Failed to delete staff" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

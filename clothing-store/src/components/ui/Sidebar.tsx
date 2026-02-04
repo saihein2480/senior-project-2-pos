@@ -79,7 +79,7 @@ const menuItems: MenuItem[] = [
     id: "inventory",
     label: "Inventory",
     icon: "Package",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "staff"],
     children: [
       {
         id: "stocks",
@@ -93,7 +93,7 @@ const menuItems: MenuItem[] = [
         label: "Customers",
         icon: "Users",
         href: "/owner/inventory/customers",
-        roles: ["owner", "manager"],
+        roles: ["owner", "manager", "staff"],
       },
     ],
   },
@@ -167,7 +167,7 @@ const menuItems: MenuItem[] = [
     label: "Settings",
     icon: "Settings",
     href: "/owner/settings",
-    roles: ["owner"], // Only owner
+    roles: ["owner", "manager", "staff"], // All roles can access
   },
 ];
 
