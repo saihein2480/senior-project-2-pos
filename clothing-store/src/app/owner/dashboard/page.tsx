@@ -1063,7 +1063,6 @@ function OwnerDashboardContent() {
               </div>
             ) : (
               <>
-                
                 {/* Key Performance Indicators */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {/* Total Revenue */}
@@ -1254,7 +1253,7 @@ function OwnerDashboardContent() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div>
                   <hr className="text-gray-300 p-3"></hr>
                 </div>

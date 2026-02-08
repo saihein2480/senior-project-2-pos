@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   X,
   User,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { SelectedCustomer } from "@/types/cart";
 import { CartItem } from "@/types/cart";
 import { transactionService } from "@/services/transactionService";
@@ -51,8 +53,10 @@ export function PaymentClearanceModal({
   total,
   currency,
 }: PaymentClearanceModalProps) {
+  const router = useRouter();
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
     useCurrency();
+  const { user } = useAuth();
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("cash");
   const [amountPaid, setAmountPaid] = useState<number>(0);
@@ -60,6 +64,9 @@ export function PaymentClearanceModal({
   const [isCalculatorMode, setIsCalculatorMode] = useState<boolean>(false);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [showReceipt, setShowReceipt] = useState<boolean>(false);
+  const [receiptData, setReceiptData] = useState<any>(null);
+  const [receiptSize, setReceiptSize] = useState<"58mm" | "80mm">("80mm");
   const amountInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset state when modal opens
@@ -70,6 +77,8 @@ export function PaymentClearanceModal({
       setIsCalculatorMode(false);
       setSelectedPaymentMethod("cash");
       setIsProcessing(false);
+      setShowReceipt(false);
+      setReceiptData(null);
       // Focus the amount input after modal opens
       setTimeout(() => {
         try {
@@ -248,12 +257,30 @@ export function PaymentClearanceModal({
         recordedTransactionId,
       );
 
-      onPaymentComplete({
-        method: selectedPaymentMethod,
+      // Prepare receipt data and show receipt
+      setReceiptData({
+        transactionId,
+        recordedTransactionId,
+        customer,
+        items,
+        subtotal,
+        tax,
+        discount,
+        total,
         amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
         change: selectedPaymentMethod === "cash" ? change : 0,
-        discount,
+        paymentMethod: selectedPaymentMethod,
+        timestamp: new Date().toISOString(),
+        branchName: currentBranch,
+        businessName: settings?.businessName || "Shop",
+        sellingCurrency: selectedCurrency,
+        exchangeRate: currentExchangeRate,
+        sellingTotal: sellingTotal,
+        cashierRole: user?.role
+          ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+          : "Staff",
       });
+      setShowReceipt(true);
       setIsProcessing(false);
     } catch (error) {
       setIsProcessing(false);
@@ -293,7 +320,506 @@ export function PaymentClearanceModal({
     return now.toLocaleDateString("en-US", options);
   };
 
+  const handlePrintReceipt = () => {
+    if (!receiptData) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to print the receipt");
+      return;
+    }
+
+    const width = receiptSize === "58mm" ? "58mm" : "80mm";
+    const fontSize = receiptSize === "58mm" ? "10px" : "12px";
+    const titleSize = receiptSize === "58mm" ? "14px" : "16px";
+
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Receipt - ${receiptData.transactionId}</title>
+          <style>
+            @media print {
+              @page {
+                size: ${width} auto;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              width: ${width};
+              margin: 0 auto;
+              padding: 8px;
+              font-size: ${fontSize};
+              line-height: 1.4;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 10px;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 8px;
+            }
+            .title {
+              font-size: ${titleSize};
+              font-weight: bold;
+              margin-bottom: 4px;
+            }
+            .branch {
+              font-size: ${fontSize};
+              margin-bottom: 2px;
+            }
+            .datetime {
+              font-size: ${fontSize};
+              margin-top: 4px;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin: 2px 0;
+            }
+            .items {
+              margin: 10px 0;
+              border-top: 1px dashed #000;
+              border-bottom: 1px dashed #000;
+              padding: 8px 0;
+            }
+            .item {
+              margin: 4px 0;
+            }
+            .item-name {
+              font-weight: bold;
+            }
+            .item-details {
+              font-size: ${fontSize === "10px" ? "9px" : "11px"};
+              color: #333;
+              margin-left: 4px;
+            }
+            .item-line {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 2px;
+            }
+            .totals {
+              margin-top: 10px;
+            }
+            .total-line {
+              display: flex;
+              justify-content: space-between;
+              margin: 4px 0;
+            }
+            .grand-total {
+              font-weight: bold;
+              font-size: ${fontSize === "10px" ? "12px" : "14px"};
+              border-top: 1px solid #000;
+              border-bottom: 1px solid #000;
+              padding: 6px 0;
+              margin: 6px 0;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 10px;
+              border-top: 1px dashed #000;
+              padding-top: 8px;
+            }
+            .thank-you {
+              font-weight: bold;
+              margin: 4px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">${receiptData.businessName || "RECEIPT"}</div>
+            <div class="branch">${receiptData.branchName || "Main Branch"}</div>
+            <div class="datetime">${new Date(receiptData.timestamp).toLocaleString()}</div>
+            <div style="margin-top: 4px;">Trans: ${receiptData.transactionId}</div>
+          </div>
+
+          ${
+            receiptData.customer
+              ? `
+          <div class="info-row">
+            <span>Customer:</span>
+            <span>${receiptData.customer.name}</span>
+          </div>
+          ${
+            receiptData.customer.phone
+              ? `
+          <div class="info-row">
+            <span>Phone:</span>
+            <span>${receiptData.customer.phone}</span>
+          </div>
+          `
+              : ""
+          }
+          `
+              : ""
+          }
+
+          <div class="info-row">
+            <span>Cashier:</span>
+            <span>${receiptData.cashierRole || "Staff"}</span>
+          </div>
+
+          <div class="items">
+            ${receiptData.items
+              .map(
+                (item: any) => `
+              <div class="item">
+                <div class="item-name">${item.groupName} ${detectColorName(item.selectedColor) || item.selectedColor || ""} - ${item.selectedSize || ""}</div>
+                <div class="item-line">
+                  <span>${item.quantity} x ${formatPrice(item.unitPrice)}</span>
+                  <span>${formatPrice(item.unitPrice * item.quantity)}</span>
+                </div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+
+          <div class="totals">
+            <div class="total-line">
+              <span>Subtotal:</span>
+              <span>${formatPrice(receiptData.subtotal)}</span>
+            </div>
+            ${
+              receiptData.discount > 0
+                ? `
+            <div class="total-line">
+              <span>Discount:</span>
+              <span>-${formatPrice(receiptData.discount)}</span>
+            </div>
+            `
+                : ""
+            }
+            <div class="total-line">
+              <span>Tax:</span>
+              <span>${formatPrice(receiptData.tax)}</span>
+            </div>
+            <div class="total-line grand-total">
+              <span>TOTAL:</span>
+              <span>${formatPrice(receiptData.total)}</span>
+            </div>
+            ${
+              receiptData.sellingCurrency !== defaultCurrency
+                ? `
+            <div class="total-line">
+              <span>Paid (${receiptData.sellingCurrency}):</span>
+              <span>${SettingsService.formatCurrency(receiptData.sellingTotal, receiptData.sellingCurrency)}</span>
+            </div>
+            `
+                : ""
+            }
+            ${
+              receiptData.paymentMethod === "cash"
+                ? `
+            <div class="total-line">
+              <span>Paid:</span>
+              <span>${formatPrice(receiptData.amountPaid)}</span>
+            </div>
+            <div class="total-line">
+              <span>Change:</span>
+              <span>${formatPrice(receiptData.change)}</span>
+            </div>
+            `
+                : ""
+            }
+            <div class="total-line">
+              <span>Payment:</span>
+              <span>${receiptData.paymentMethod.toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <div class="thank-you">Thank You!</div>
+            <div>Please come again</div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+      // Complete payment after printing
+      onPaymentComplete({
+        method: selectedPaymentMethod,
+        amountPaid: receiptData.amountPaid,
+        change: receiptData.change,
+        discount: receiptData.discount,
+      });
+      // Navigate to home page
+      router.push("/owner/home");
+    }, 250);
+  };
+
   if (!isOpen) return null;
+
+  // Show receipt modal if receipt data is available
+  if (showReceipt && receiptData) {
+    return (
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-[95vw] sm:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl max-h-[95vh] flex flex-col">
+          {/* Receipt Header */}
+          <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 flex-shrink-0">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+              Payment Complete
+            </h2>
+            <button
+              onClick={() => {
+                onPaymentComplete({
+                  method: selectedPaymentMethod,
+                  amountPaid: receiptData.amountPaid,
+                  change: receiptData.change,
+                  discount: receiptData.discount,
+                });
+                router.push("/owner/home");
+              }}
+              className="text-gray-600 hover:text-gray-800 transition-colors p-1 rounded-full hover:bg-gray-200"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Receipt Size Selector */}
+          <div className="px-4 py-2 border-b border-gray-200">
+            <label className="block text-xs font-medium text-gray-900 mb-1.5">
+              Receipt Paper Size
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReceiptSize("58mm")}
+                className={`flex-1 px-3 py-1.5 rounded border transition-colors text-xs ${
+                  receiptSize === "58mm"
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-gray-300 hover:border-gray-400 text-gray-900 bg-white"
+                }`}
+              >
+                <div className="font-semibold">58mm</div>
+              </button>
+              <button
+                onClick={() => setReceiptSize("80mm")}
+                className={`flex-1 px-3 py-1.5 rounded border transition-colors text-xs ${
+                  receiptSize === "80mm"
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-gray-300 hover:border-gray-400 text-gray-900 bg-white"
+                }`}
+              >
+                <div className="font-semibold">80mm</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Receipt Preview */}
+          <div className="p-3 sm:p-4 flex-1 flex flex-col overflow-hidden">
+            <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 text-center flex-shrink-0">
+              Receipt Preview
+            </div>
+
+            {/* Thermal Receipt Preview */}
+            <div className="bg-gray-100 border-2 border-gray-300 rounded-lg shadow-sm flex-1 overflow-y-auto p-2">
+              <div
+                className={`mx-auto bg-white ${
+                  receiptSize === "58mm"
+                    ? "w-[220px] sm:w-[240px] lg:w-[260px]"
+                    : "w-[300px] sm:w-[320px] lg:w-[360px]"
+                } p-3 text-black`}
+                style={{ fontFamily: '"Courier New", monospace' }}
+              >
+                {/* Header */}
+                <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                  <div
+                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-sm" : "text-base"}`}
+                  >
+                    {receiptData.businessName || "RECEIPT"}
+                  </div>
+                  <div
+                    className={`text-black ${receiptSize === "58mm" ? "text-xs" : "text-sm"} mt-1`}
+                  >
+                    {receiptData.branchName || "Main Branch"}
+                  </div>
+                  <div
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                  >
+                    {new Date(receiptData.timestamp).toLocaleString()}
+                  </div>
+                  <div
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                  >
+                    Trans: {receiptData.transactionId}
+                  </div>
+                </div>
+
+                {/* Customer Info */}
+                {receiptData.customer && (
+                  <>
+                    <div
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                    >
+                      <span>Customer:</span>
+                      <span>{receiptData.customer.name}</span>
+                    </div>
+                    {receiptData.customer.phone && (
+                      <div
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                      >
+                        <span>Phone:</span>
+                        <span>{receiptData.customer.phone}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div
+                  className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-2`}
+                >
+                  <span>Cashier:</span>
+                  <span>{receiptData.cashierRole || "Staff"}</span>
+                </div>
+
+                {/* Items */}
+                <div className="border-t border-b border-dashed border-black py-2 my-2">
+                  {receiptData.items.map((item: any, index: number) => (
+                    <div key={index} className="mb-2">
+                      <div
+                        className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                      >
+                        {item.groupName}{" "}
+                        {detectColorName(item.selectedColor) ||
+                          item.selectedColor}{" "}
+                        - {item.selectedSize}
+                      </div>
+                      <div
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                      >
+                        <span>
+                          {item.quantity} x {formatPrice(item.unitPrice)}
+                        </span>
+                        <span>
+                          {formatPrice(item.unitPrice * item.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals */}
+                <div className="mt-2">
+                  <div
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                  >
+                    <span>Subtotal:</span>
+                    <span>{formatPrice(receiptData.subtotal)}</span>
+                  </div>
+                  {receiptData.discount > 0 && (
+                    <div
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                    >
+                      <span>Discount:</span>
+                      <span>-{formatPrice(receiptData.discount)}</span>
+                    </div>
+                  )}
+                  <div
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                  >
+                    <span>Tax:</span>
+                    <span>{formatPrice(receiptData.tax)}</span>
+                  </div>
+                  <div
+                    className={`flex justify-between font-bold text-black border-t border-b border-black py-2 my-2 ${receiptSize === "58mm" ? "text-xs" : "text-sm"}`}
+                  >
+                    <span>TOTAL:</span>
+                    <span>{formatPrice(receiptData.total)}</span>
+                  </div>
+                  {receiptData.sellingCurrency !== defaultCurrency && (
+                    <div
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                    >
+                      <span>Paid ({receiptData.sellingCurrency}):</span>
+                      <span>
+                        {SettingsService.formatCurrency(
+                          receiptData.sellingTotal,
+                          receiptData.sellingCurrency,
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {receiptData.paymentMethod === "cash" && (
+                    <>
+                      <div
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                      >
+                        <span>Paid:</span>
+                        <span>{formatPrice(receiptData.amountPaid)}</span>
+                      </div>
+                      <div
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                      >
+                        <span>Change:</span>
+                        <span>{formatPrice(receiptData.change)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                  >
+                    <span>Payment:</span>
+                    <span>{receiptData.paymentMethod.toUpperCase()}</span>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="text-center border-t border-dashed border-black pt-2 mt-2">
+                  <div
+                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                  >
+                    Thank You!
+                  </div>
+                  <div
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                  >
+                    Please come again
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-3 flex-shrink-0">
+              <button
+                onClick={handlePrintReceipt}
+                className="flex-1 bg-blue-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                <span className="text-white">Print Receipt</span>
+              </button>
+              <button
+                onClick={() => {
+                  onPaymentComplete({
+                    method: selectedPaymentMethod,
+                    amountPaid: receiptData.amountPaid,
+                    change: receiptData.change,
+                    discount: receiptData.discount,
+                  });
+                  router.push("/owner/home");
+                }}
+                className="flex-1 bg-gray-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                <span className="text-white">Skip Print</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">

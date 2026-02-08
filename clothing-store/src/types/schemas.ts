@@ -28,7 +28,7 @@ export const registerSchema = z
       .min(6, "Password must be at least 6 characters")
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+        "Password must contain at least one uppercase letter, one lowercase letter, and one number",
       ),
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
@@ -79,6 +79,7 @@ export interface ClothingInventoryItem {
     id: string;
     color: string;
     colorCode: string;
+    barcode: string;
     image?: string;
     sizeQuantities: { size: string; quantity: number }[];
   }[];

@@ -673,6 +673,34 @@ function EditStockContent() {
     setIsLoading(true);
 
     try {
+      // Auto-generate barcodes for variants that don't have one
+      const variantsWithBarcodes = colorVariants.map((variant, index) => {
+        if (!variant.barcode || variant.barcode.trim() === "") {
+          // Generate unique barcode for this variant using index to ensure uniqueness
+          const countryCode = "885"; // Thailand country code
+          const manufacturerCode = "1001";
+          const timestamp = Date.now().toString();
+          const variantNumber = (index + 1).toString().padStart(2, "0"); // Add variant index
+          const productCode = (timestamp.slice(-3) + variantNumber).slice(0, 5);
+          const first12Digits = countryCode + manufacturerCode + productCode;
+
+          // Calculate EAN-13 check digit
+          let sum = 0;
+          for (let i = 0; i < 12; i++) {
+            const digit = parseInt(first12Digits[i]);
+            sum += i % 2 === 0 ? digit : digit * 3;
+          }
+          const checkDigit = (10 - (sum % 10)) % 10;
+          const generatedBarcode = first12Digits + checkDigit.toString();
+
+          return {
+            ...variant,
+            barcode: generatedBarcode,
+          };
+        }
+        return variant;
+      });
+
       // First, update the current stock
       const stockData: CreateStockRequest = {
         groupName: groupName.trim(),
@@ -687,7 +715,7 @@ function EditStockContent() {
           minQuantity: tier.minQuantity,
           price: tier.price,
         })),
-        colorVariants: colorVariants.map((variant) => ({
+        colorVariants: variantsWithBarcodes.map((variant) => ({
           color: variant.color,
           colorCode: variant.colorCode,
           barcode: variant.barcode,

@@ -52,7 +52,7 @@ function InventoryStocksContent() {
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState<StockGroupDisplay | null>(
-    null
+    null,
   );
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -171,7 +171,7 @@ function InventoryStocksContent() {
         // Transform API data using the display service with currency
         const transformedGroups = StockDisplayService.transformStocksForDisplay(
           stocksData.data,
-          currency
+          currency,
         );
         setStockGroups(transformedGroups);
       } catch (err) {
@@ -195,9 +195,9 @@ function InventoryStocksContent() {
         (variant) =>
           variant.color.toLowerCase().includes(searchTerm.toLowerCase()) ||
           variant.sizes.some((size) =>
-            size.size.toLowerCase().includes(searchTerm.toLowerCase())
+            size.size.toLowerCase().includes(searchTerm.toLowerCase()),
           ) ||
-          variant.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
+          variant.barcode?.toLowerCase().includes(searchTerm.toLowerCase()),
       );
 
     // Shop filter
@@ -306,15 +306,15 @@ function InventoryStocksContent() {
           group.unitPrice || 0,
           variant.barcode || "",
           group.formattedReleaseDate || group.releaseDate || "",
-        ])
-      )
+        ]),
+      ),
     );
 
     // Create CSV content
     const csvContent = [
       headers.join(","),
       ...rows.map((row) =>
-        row.map((cell) => `"${cell.toString().replace(/"/g, '""')}"`).join(",")
+        row.map((cell) => `"${cell.toString().replace(/"/g, '""')}"`).join(","),
       ),
     ].join("\n");
 
@@ -325,7 +325,7 @@ function InventoryStocksContent() {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `inventory-stocks-${new Date().toISOString().split("T")[0]}.csv`
+      `inventory-stocks-${new Date().toISOString().split("T")[0]}.csv`,
     );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
@@ -358,7 +358,7 @@ function InventoryStocksContent() {
     try {
       console.log(
         "Making DELETE request to:",
-        `/api/stocks/${deletingGroup.groupId}`
+        `/api/stocks/${deletingGroup.groupId}`,
       );
       const response = await fetch(`/api/stocks/${deletingGroup.groupId}`, {
         method: "DELETE",
@@ -373,12 +373,12 @@ function InventoryStocksContent() {
 
       // Remove the deleted group from the state
       setStockGroups((prevGroups) =>
-        prevGroups.filter((group) => group.groupId !== deletingGroup.groupId)
+        prevGroups.filter((group) => group.groupId !== deletingGroup.groupId),
       );
 
       // Show success message
       setSuccessMessage(
-        `Stock group "${deletingGroup.groupName}" has been deleted successfully.`
+        `Stock group "${deletingGroup.groupName}" has been deleted successfully.`,
       );
 
       // Close modal
@@ -390,7 +390,7 @@ function InventoryStocksContent() {
     } catch (error) {
       console.error("Error deleting stock:", error);
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete stock item"
+        error instanceof Error ? error.message : "Failed to delete stock item",
       );
     } finally {
       setIsDeleting(false);
@@ -905,19 +905,19 @@ function InventoryStocksContent() {
                                                         sizeInfo.quantity > 10
                                                           ? "bg-green-100 text-green-700"
                                                           : sizeInfo.quantity >
-                                                            0
-                                                          ? "bg-yellow-100 text-yellow-700"
-                                                          : "bg-red-100 text-red-700"
+                                                              0
+                                                            ? "bg-yellow-100 text-yellow-700"
+                                                            : "bg-red-100 text-red-700"
                                                       }`}
                                                     >
                                                       {sizeInfo.quantity}
                                                     </span>
                                                   </div>
-                                                )
+                                                ),
                                               )}
                                             </div>
                                           </div>
-                                        )
+                                        ),
                                       )}
                                     </div>
                                   </div>

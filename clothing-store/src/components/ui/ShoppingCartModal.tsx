@@ -441,19 +441,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     setIsPaymentModalOpen(false);
     onClose();
 
-    // Show success message and navigate to transactions page
-    alert(
-      `Payment completed successfully!\n\nTransaction ID: ${
-        paymentData.transactionId
-      }\nTotal: ${formatPrice(
-        paymentData.total,
-      )}\n\nRedirecting to transactions page...`,
-    );
-
-    // Navigate to transactions page after a short delay
-    setTimeout(() => {
-      router.push("/owner/sales/transactions");
-    }, 1500);
+    // Navigation is now handled by PaymentClearanceModal
   };
 
   // Calculate subtotal using discounted prices when available
