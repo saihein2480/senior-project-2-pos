@@ -10,6 +10,19 @@ import { db, isFirebaseConfigured } from "@/lib/firebase";
 const COLLECTION_NAME = "business_settings";
 const SETTINGS_DOC_ID = "main"; // Single document for business settings
 
+export type ReceiptPaperSize =
+  | "44mm"
+  | "57mm"
+  | "58mm"
+  | "69mm"
+  | "76mm"
+  | "78mm"
+  | "80mm"
+  | "82.5mm"
+  | "112mm"
+  | "114mm"
+  | "210mm";
+
 export interface BusinessSettings {
   businessName: string;
   shortName: string;
@@ -21,6 +34,7 @@ export interface BusinessSettings {
   showBusinessLogoOnInvoice: boolean;
   autoPrintReceiptAfterCheckout: boolean;
   invoiceFooterMessage: string;
+  receiptPaperSize: ReceiptPaperSize;
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
@@ -64,6 +78,7 @@ export class SettingsService {
           autoPrintReceiptAfterCheckout:
             data.autoPrintReceiptAfterCheckout ?? true,
           invoiceFooterMessage: data.invoiceFooterMessage || "",
+          receiptPaperSize: data.receiptPaperSize || "80mm",
           enableDarkMode: data.enableDarkMode ?? false,
           enableSoundEffects: data.enableSoundEffects ?? false,
           currencyRate: data.currencyRate || 0,
@@ -83,7 +98,7 @@ export class SettingsService {
   }
 
   static async saveBusinessSettings(
-    settings: Omit<BusinessSettings, "createdAt" | "updatedAt">
+    settings: Omit<BusinessSettings, "createdAt" | "updatedAt">,
   ): Promise<BusinessSettings> {
     if (!db || !isFirebaseConfigured) {
       throw new Error("Firebase is not configured");
@@ -171,7 +186,7 @@ export class SettingsService {
     fromCurrency: "THB" | "MMK",
     toCurrency: "THB" | "MMK",
     exchangeRate: number,
-    defaultCurrency: "THB" | "MMK" = "THB"
+    defaultCurrency: "THB" | "MMK" = "THB",
   ): number {
     if (fromCurrency === toCurrency) {
       return amount;

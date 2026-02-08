@@ -5,7 +5,7 @@ export async function PATCH(request: NextRequest) {
     if (!body || typeof body.currentBranch !== "string") {
       return NextResponse.json(
         { success: false, error: "currentBranch is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     // Get current settings
@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest) {
     if (!current) {
       return NextResponse.json(
         { success: false, error: "No business settings found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
     // Update only currentBranch
@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest) {
         error:
           error instanceof Error ? error.message : "Failed to update settings",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
           showBusinessLogoOnInvoice: true,
           autoPrintReceiptAfterCheckout: true,
           invoiceFooterMessage: "",
+          receiptPaperSize: "80mm",
           enableDarkMode: false,
           enableSoundEffects: false,
           currencyRate: 0,
@@ -112,6 +113,21 @@ export async function POST(request: NextRequest) {
           ? body.autoPrintReceiptAfterCheckout
           : true,
       invoiceFooterMessage: body.invoiceFooterMessage || "",
+      receiptPaperSize: [
+        "44mm",
+        "57mm",
+        "58mm",
+        "69mm",
+        "76mm",
+        "78mm",
+        "80mm",
+        "82.5mm",
+        "112mm",
+        "114mm",
+        "210mm",
+      ].includes(body.receiptPaperSize)
+        ? body.receiptPaperSize
+        : "80mm",
       enableDarkMode:
         typeof body.enableDarkMode === "boolean" ? body.enableDarkMode : false,
       enableSoundEffects:
@@ -123,9 +139,8 @@ export async function POST(request: NextRequest) {
       currentBranch: body.currentBranch || "Main Branch",
     };
 
-    const savedSettings = await SettingsService.saveBusinessSettings(
-      settingsData
-    );
+    const savedSettings =
+      await SettingsService.saveBusinessSettings(settingsData);
 
     const response: SettingsResponse = {
       success: true,

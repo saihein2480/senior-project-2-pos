@@ -14,6 +14,19 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { ShopService } from "@/services/shopService";
 import { Building2, Receipt, User, DollarSign, Store } from "lucide-react";
 
+type ReceiptPaperSize =
+  | "44mm"
+  | "57mm"
+  | "58mm"
+  | "69mm"
+  | "76mm"
+  | "78mm"
+  | "80mm"
+  | "82.5mm"
+  | "112mm"
+  | "114mm"
+  | "210mm";
+
 interface BusinessSettings {
   businessName: string;
   shortName: string;
@@ -25,6 +38,7 @@ interface BusinessSettings {
   showBusinessLogoOnInvoice: boolean;
   autoPrintReceiptAfterCheckout: boolean;
   invoiceFooterMessage: string;
+  receiptPaperSize: ReceiptPaperSize;
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
@@ -58,6 +72,7 @@ function OwnerSettingsContent() {
     showBusinessLogoOnInvoice: true,
     autoPrintReceiptAfterCheckout: true,
     invoiceFooterMessage: "",
+    receiptPaperSize: "80mm",
     enableDarkMode: false,
     enableSoundEffects: false,
     currencyRate: 0,
@@ -691,6 +706,42 @@ function OwnerSettingsContent() {
                         <p className="text-xs text-gray-500 mt-1">
                           This message will appear at the bottom of customer
                           invoices.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Receipt Paper Size
+                        </label>
+                        <select
+                          title="ReceiptPaperSize"
+                          value={settings.receiptPaperSize}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "receiptPaperSize",
+                              e.target.value as ReceiptPaperSize,
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-gray-900"
+                        >
+                          <option value="44mm">44mm (1.73&quot;)</option>
+                          <option value="57mm">57mm (2.24&quot;)</option>
+                          <option value="58mm">58mm (2.28&quot;)</option>
+                          <option value="69mm">69mm (2.72&quot;)</option>
+                          <option value="76mm">76mm (2.99&quot;)</option>
+                          <option value="78mm">78mm (3.07&quot;)</option>
+                          <option value="80mm">
+                            80mm (3.15&quot;) - Standard
+                          </option>
+                          <option value="82.5mm">82.5mm (3.25&quot;)</option>
+                          <option value="112mm">112mm (4.41&quot;)</option>
+                          <option value="114mm">114mm (4.49&quot;)</option>
+                          <option value="210mm">
+                            210mm (8.27&quot;) - A4 Width
+                          </option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Default paper size for thermal receipt printing.
                         </p>
                       </div>
                     </div>

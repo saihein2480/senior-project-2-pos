@@ -6,20 +6,31 @@ import {
   X,
   User,
   CreditCard,
-  Smartphone,
   Wallet,
   QrCode,
   Eye,
   Truck,
 } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SelectedCustomer } from "@/types/cart";
 import { CartItem } from "@/types/cart";
 import { transactionService } from "@/services/transactionService";
 import { SettingsService } from "@/services/settingsService";
 import { detectColorName } from "@/lib/colorUtils";
+
+type ReceiptPaperSize =
+  | "44mm"
+  | "57mm"
+  | "58mm"
+  | "69mm"
+  | "76mm"
+  | "78mm"
+  | "80mm"
+  | "82.5mm"
+  | "112mm"
+  | "114mm"
+  | "210mm";
 
 interface PaymentClearanceModalProps {
   isOpen: boolean;
@@ -36,7 +47,6 @@ interface PaymentClearanceModalProps {
   discount: number;
   tax: number;
   total: number;
-  currency: string;
 }
 
 type PaymentMethod = "cash" | "scan" | "wallet" | "cod";
@@ -51,7 +61,6 @@ export function PaymentClearanceModal({
   discount,
   tax,
   total,
-  currency,
 }: PaymentClearanceModalProps) {
   const router = useRouter();
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
@@ -61,20 +70,74 @@ export function PaymentClearanceModal({
     useState<PaymentMethod>("cash");
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [calculatorDisplay, setCalculatorDisplay] = useState<string>("0");
-  const [isCalculatorMode, setIsCalculatorMode] = useState<boolean>(false);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showReceipt, setShowReceipt] = useState<boolean>(false);
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [receiptSize, setReceiptSize] = useState<"58mm" | "80mm">("80mm");
+  const [receiptData, setReceiptData] = useState<{
+    transactionId: string;
+    customer: SelectedCustomer | null;
+    items: CartItem[];
+    subtotal: number;
+    tax: number;
+    discount: number;
+    total: number;
+    amountPaid: number;
+    change: number;
+    paymentMethod: PaymentMethod;
+    timestamp: string;
+    branchName: string;
+    businessName: string;
+    invoiceFooterMessage: string;
+    showBusinessLogo: boolean;
+    businessLogo: string;
+    sellingCurrency: string;
+    exchangeRate: number;
+    sellingTotal: number;
+    cashierRole: string;
+  } | null>(null);
+  const [receiptSize, setReceiptSize] = useState<ReceiptPaperSize>("80mm");
   const amountInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Get receipt width in pixels based on paper size
+  const getReceiptWidth = (size: ReceiptPaperSize): string => {
+    const widthMap: Record<ReceiptPaperSize, string> = {
+      "44mm": "w-[165px] sm:w-[180px] lg:w-[210px] xl:w-[230px] 2xl:w-[250px]",
+      "57mm": "w-[215px] sm:w-[230px] lg:w-[260px] xl:w-[285px] 2xl:w-[310px]",
+      "58mm": "w-[220px] sm:w-[240px] lg:w-[270px] xl:w-[300px] 2xl:w-[330px]",
+      "69mm": "w-[260px] sm:w-[280px] lg:w-[320px] xl:w-[355px] 2xl:w-[390px]",
+      "76mm": "w-[287px] sm:w-[310px] lg:w-[355px] xl:w-[395px] 2xl:w-[435px]",
+      "78mm": "w-[295px] sm:w-[318px] lg:w-[365px] xl:w-[405px] 2xl:w-[450px]",
+      "80mm": "w-[300px] sm:w-[320px] lg:w-[370px] xl:w-[420px] 2xl:w-[470px]",
+      "82.5mm":
+        "w-[310px] sm:w-[335px] lg:w-[385px] xl:w-[435px] 2xl:w-[490px]",
+      "112mm": "w-[422px] sm:w-[455px] lg:w-[525px] xl:w-[595px] 2xl:w-[665px]",
+      "114mm": "w-[430px] sm:w-[465px] lg:w-[535px] xl:w-[605px] 2xl:w-[680px]",
+      "210mm":
+        "w-full max-w-[650px] lg:max-w-[750px] xl:max-w-[850px] 2xl:max-w-[950px]",
+    };
+    return widthMap[size] || widthMap["80mm"];
+  };
+
+  // Load default receipt paper size from settings
+  useEffect(() => {
+    const loadReceiptSettings = async () => {
+      try {
+        const settings = await SettingsService.getBusinessSettings();
+        if (settings?.receiptPaperSize) {
+          setReceiptSize(settings.receiptPaperSize);
+        }
+      } catch (error) {
+        console.error("Error loading receipt settings:", error);
+      }
+    };
+    loadReceiptSettings();
+  }, []);
 
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setAmountPaid(0);
       setCalculatorDisplay("0");
-      setIsCalculatorMode(false);
       setSelectedPaymentMethod("cash");
       setIsProcessing(false);
       setShowReceipt(false);
@@ -87,7 +150,7 @@ export function PaymentClearanceModal({
             const len = (amountInputRef.current.value || "").length;
             amountInputRef.current.setSelectionRange(len, len);
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }, 50);
@@ -111,7 +174,6 @@ export function PaymentClearanceModal({
     if (value === "Clear") {
       setCalculatorDisplay("0");
       setAmountPaid(0);
-      setIsCalculatorMode(false);
       return;
     }
 
@@ -138,7 +200,6 @@ export function PaymentClearanceModal({
 
     // Handle numbers
     if (!isNaN(parseInt(value))) {
-      setIsCalculatorMode(true);
       const newDisplay =
         calculatorDisplay === "0" ? value : calculatorDisplay + value;
       setCalculatorDisplay(newDisplay);
@@ -154,7 +215,7 @@ export function PaymentClearanceModal({
     }
     try {
       return detectColorName(hex) || hex;
-    } catch (e) {
+    } catch {
       return hex;
     }
   };
@@ -163,7 +224,6 @@ export function PaymentClearanceModal({
     const newAmount = amountPaid + amount;
     setAmountPaid(newAmount);
     setCalculatorDisplay(newAmount.toString());
-    setIsCalculatorMode(false);
   };
 
   const handlePayNow = async () => {
@@ -184,34 +244,15 @@ export function PaymentClearanceModal({
     try {
       // Generate sequential transaction ID (TXN-0000000000001 format)
       const transactionId = await transactionService.generateTransactionId();
-      const paymentData = {
-        customer,
-        items,
-        subtotal,
-        tax,
-        discount,
-        total,
-        amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
-        change: selectedPaymentMethod === "cash" ? change : 0,
-        paymentMethod: selectedPaymentMethod,
-        timestamp: new Date().toISOString(),
-        transactionId,
-      };
-
-      console.log("Payment completed:", { transactionId, total });
-      console.log("Attempting to record transaction with data:", paymentData);
 
       // Get selling currency data using proper conversion
-      // Calculate the actual exchange rate for display
       let currentExchangeRate: number;
       let sellingTotal: number;
 
       if (selectedCurrency === defaultCurrency) {
-        // Same currency, no conversion needed
         currentExchangeRate = 1;
         sellingTotal = total;
       } else {
-        // Different currency, use SettingsService for proper conversion
         sellingTotal = SettingsService.convertPrice(
           total,
           defaultCurrency,
@@ -219,48 +260,16 @@ export function PaymentClearanceModal({
           currencyRate,
           defaultCurrency,
         );
-
-        // Calculate the effective exchange rate for display
         currentExchangeRate = sellingTotal / total;
       }
-
-      // Determine transaction status based on payment method
-      const transactionStatus =
-        selectedPaymentMethod === "cod" ? "pending" : "completed";
 
       // Get current branch from settings
       const settings = await SettingsService.getBusinessSettings();
       const currentBranch = settings?.currentBranch || "Main Branch";
 
-      // Record transaction in database
-      const recordedTransactionId = await transactionService.recordTransaction({
-        transactionId,
-        customer,
-        items,
-        subtotal,
-        tax,
-        discount,
-        total,
-        amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
-        change: selectedPaymentMethod === "cash" ? change : 0,
-        paymentMethod: selectedPaymentMethod,
-        timestamp: new Date().toISOString(),
-        status: transactionStatus,
-        branchName: currentBranch,
-        sellingCurrency: selectedCurrency,
-        exchangeRate: currentExchangeRate,
-        sellingTotal: sellingTotal,
-      });
-
-      console.log(
-        "Transaction recorded successfully with ID:",
-        recordedTransactionId,
-      );
-
-      // Prepare receipt data and show receipt
+      // Prepare receipt data and show receipt preview (NO database write yet)
       setReceiptData({
         transactionId,
-        recordedTransactionId,
         customer,
         items,
         subtotal,
@@ -273,6 +282,9 @@ export function PaymentClearanceModal({
         timestamp: new Date().toISOString(),
         branchName: currentBranch,
         businessName: settings?.businessName || "Shop",
+        invoiceFooterMessage: settings?.invoiceFooterMessage || "",
+        showBusinessLogo: settings?.showBusinessLogoOnInvoice ?? true,
+        businessLogo: settings?.businessLogo || "",
         sellingCurrency: selectedCurrency,
         exchangeRate: currentExchangeRate,
         sellingTotal: sellingTotal,
@@ -284,22 +296,65 @@ export function PaymentClearanceModal({
       setIsProcessing(false);
     } catch (error) {
       setIsProcessing(false);
-      console.error("Error recording transaction:", error);
-      console.error("Error details:", {
-        message: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        transactionData: {
-          customer,
-          items: items?.length || 0,
-          subtotal,
-          tax,
-          discount,
-          total,
-          paymentMethod: selectedPaymentMethod,
-        },
-      });
+      console.error("Error preparing receipt:", error);
       alert(
-        `Error processing payment: ${
+        `Error preparing receipt: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }. Please try again.`,
+      );
+    }
+  };
+
+  // Function to confirm and record the payment (called by Print/Skip buttons)
+  const handleConfirmPayment = async () => {
+    if (!receiptData || isProcessing) return;
+
+    setIsProcessing(true);
+
+    try {
+      // Determine transaction status based on payment method
+      const transactionStatus =
+        selectedPaymentMethod === "cod" ? "pending" : "completed";
+
+      // Record transaction in database
+      const recordedTransactionId = await transactionService.recordTransaction({
+        transactionId: receiptData.transactionId,
+        customer,
+        items,
+        subtotal,
+        tax,
+        discount,
+        total,
+        amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
+        change: selectedPaymentMethod === "cash" ? change : 0,
+        paymentMethod: selectedPaymentMethod,
+        timestamp: new Date().toISOString(),
+        status: transactionStatus,
+        branchName: receiptData.branchName,
+        sellingCurrency: selectedCurrency,
+        exchangeRate: receiptData.exchangeRate,
+        sellingTotal: receiptData.sellingTotal,
+      });
+
+      console.log(
+        "Transaction recorded successfully with ID:",
+        recordedTransactionId,
+      );
+
+      // Complete payment (clear cart, etc.)
+      onPaymentComplete({
+        method: selectedPaymentMethod,
+        amountPaid: receiptData.amountPaid,
+        change: receiptData.change,
+        discount: receiptData.discount,
+      });
+
+      setIsProcessing(false);
+    } catch (error) {
+      setIsProcessing(false);
+      console.error("Error recording transaction:", error);
+      alert(
+        `Error recording transaction: ${
           error instanceof Error ? error.message : "Unknown error"
         }. Please try again.`,
       );
@@ -320,7 +375,7 @@ export function PaymentClearanceModal({
     return now.toLocaleDateString("en-US", options);
   };
 
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     if (!receiptData) return;
 
     const printWindow = window.open("", "_blank");
@@ -329,9 +384,74 @@ export function PaymentClearanceModal({
       return;
     }
 
-    const width = receiptSize === "58mm" ? "58mm" : "80mm";
-    const fontSize = receiptSize === "58mm" ? "10px" : "12px";
-    const titleSize = receiptSize === "58mm" ? "14px" : "16px";
+    // Dynamic sizing based on paper size
+    const getPrintSizes = (size: ReceiptPaperSize) => {
+      switch (size) {
+        case "44mm":
+          return {
+            width: "44mm",
+            fontSize: "9px",
+            titleSize: "13px",
+            detailSize: "8px",
+          };
+        case "57mm":
+        case "58mm":
+          return {
+            width: size,
+            fontSize: "10px",
+            titleSize: "14px",
+            detailSize: "9px",
+          };
+        case "69mm":
+          return {
+            width: "69mm",
+            fontSize: "11px",
+            titleSize: "15px",
+            detailSize: "10px",
+          };
+        case "76mm":
+        case "78mm":
+          return {
+            width: size,
+            fontSize: "11px",
+            titleSize: "15px",
+            detailSize: "10px",
+          };
+        case "80mm":
+        case "82.5mm":
+          return {
+            width: size,
+            fontSize: "12px",
+            titleSize: "16px",
+            detailSize: "11px",
+          };
+        case "112mm":
+        case "114mm":
+          return {
+            width: size,
+            fontSize: "14px",
+            titleSize: "18px",
+            detailSize: "12px",
+          };
+        case "210mm":
+          return {
+            width: "210mm",
+            fontSize: "16px",
+            titleSize: "20px",
+            detailSize: "14px",
+          };
+        default:
+          return {
+            width: "80mm",
+            fontSize: "12px",
+            titleSize: "16px",
+            detailSize: "11px",
+          };
+      }
+    };
+
+    const { width, fontSize, titleSize, detailSize } =
+      getPrintSizes(receiptSize);
 
     const receiptHTML = `
       <!DOCTYPE html>
@@ -395,7 +515,7 @@ export function PaymentClearanceModal({
               font-weight: bold;
             }
             .item-details {
-              font-size: ${fontSize === "10px" ? "9px" : "11px"};
+              font-size: ${detailSize};
               color: #333;
               margin-left: 4px;
             }
@@ -414,7 +534,7 @@ export function PaymentClearanceModal({
             }
             .grand-total {
               font-weight: bold;
-              font-size: ${fontSize === "10px" ? "12px" : "14px"};
+              font-size: ${titleSize};
               border-top: 1px solid #000;
               border-bottom: 1px solid #000;
               padding: 6px 0;
@@ -445,18 +565,8 @@ export function PaymentClearanceModal({
               ? `
           <div class="info-row">
             <span>Customer:</span>
-            <span>${receiptData.customer.name}</span>
+            <span>${receiptData.customer.displayName || receiptData.customer.email}</span>
           </div>
-          ${
-            receiptData.customer.phone
-              ? `
-          <div class="info-row">
-            <span>Phone:</span>
-            <span>${receiptData.customer.phone}</span>
-          </div>
-          `
-              : ""
-          }
           `
               : ""
           }
@@ -469,9 +579,9 @@ export function PaymentClearanceModal({
           <div class="items">
             ${receiptData.items
               .map(
-                (item: any) => `
+                (item) => `
               <div class="item">
-                <div class="item-name">${item.groupName} ${detectColorName(item.selectedColor) || item.selectedColor || ""} - ${item.selectedSize || ""}</div>
+                <div class="item-name">${item.groupName} ${item.selectedColor ? detectColorName(item.selectedColor) || item.selectedColor : ""} - ${item.selectedSize || ""}</div>
                 <div class="item-line">
                   <span>${item.quantity} x ${formatPrice(item.unitPrice)}</span>
                   <span>${formatPrice(item.unitPrice * item.quantity)}</span>
@@ -510,7 +620,7 @@ export function PaymentClearanceModal({
                 ? `
             <div class="total-line">
               <span>Paid (${receiptData.sellingCurrency}):</span>
-              <span>${SettingsService.formatCurrency(receiptData.sellingTotal, receiptData.sellingCurrency)}</span>
+              <span>${formatPrice(receiptData.sellingTotal)}</span>
             </div>
             `
                 : ""
@@ -538,6 +648,11 @@ export function PaymentClearanceModal({
           <div class="footer">
             <div class="thank-you">Thank You!</div>
             <div>Please come again</div>
+            ${
+              receiptData.invoiceFooterMessage
+                ? `<div style="margin-top: 8px; font-size: ${detailSize}; text-align: center;">${receiptData.invoiceFooterMessage}</div>`
+                : ""
+            }
           </div>
         </body>
       </html>
@@ -546,16 +661,14 @@ export function PaymentClearanceModal({
     printWindow.document.write(receiptHTML);
     printWindow.document.close();
     printWindow.focus();
+
+    // First confirm payment (record transaction)
+    await handleConfirmPayment();
+
+    // Then print
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
-      // Complete payment after printing
-      onPaymentComplete({
-        method: selectedPaymentMethod,
-        amountPaid: receiptData.amountPaid,
-        change: receiptData.change,
-        discount: receiptData.discount,
-      });
       // Navigate to home page
       router.push("/owner/home");
     }, 250);
@@ -566,22 +679,20 @@ export function PaymentClearanceModal({
   // Show receipt modal if receipt data is available
   if (showReceipt && receiptData) {
     return (
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-[95vw] sm:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl max-h-[95vh] flex flex-col">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6">
+        <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col">
           {/* Receipt Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 flex-shrink-0">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-gray-200 flex-shrink-0">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
               Payment Complete
             </h2>
             <button
+              title="Cancel Payment"
               onClick={() => {
-                onPaymentComplete({
-                  method: selectedPaymentMethod,
-                  amountPaid: receiptData.amountPaid,
-                  change: receiptData.change,
-                  discount: receiptData.discount,
-                });
-                router.push("/owner/home");
+                // Cancel payment - just close without recording transaction
+                setShowReceipt(false);
+                setReceiptData(null);
+                setIsProcessing(false);
               }}
               className="text-gray-600 hover:text-gray-800 transition-colors p-1 rounded-full hover:bg-gray-200"
             >
@@ -589,70 +700,33 @@ export function PaymentClearanceModal({
             </button>
           </div>
 
-          {/* Receipt Size Selector */}
-          <div className="px-4 py-2 border-b border-gray-200">
-            <label className="block text-xs font-medium text-gray-900 mb-1.5">
-              Receipt Paper Size
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setReceiptSize("58mm")}
-                className={`flex-1 px-3 py-1.5 rounded border transition-colors text-xs ${
-                  receiptSize === "58mm"
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-gray-300 hover:border-gray-400 text-gray-900 bg-white"
-                }`}
-              >
-                <div className="font-semibold">58mm</div>
-              </button>
-              <button
-                onClick={() => setReceiptSize("80mm")}
-                className={`flex-1 px-3 py-1.5 rounded border transition-colors text-xs ${
-                  receiptSize === "80mm"
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-gray-300 hover:border-gray-400 text-gray-900 bg-white"
-                }`}
-              >
-                <div className="font-semibold">80mm</div>
-              </button>
-            </div>
-          </div>
-
           {/* Receipt Preview */}
-          <div className="p-3 sm:p-4 flex-1 flex flex-col overflow-hidden">
-            <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 text-center flex-shrink-0">
-              Receipt Preview
-            </div>
-
+          <div className="p-3 sm:p-4 lg:p-6 flex-1 flex flex-col overflow-hidden">
             {/* Thermal Receipt Preview */}
-            <div className="bg-gray-100 border-2 border-gray-300 rounded-lg shadow-sm flex-1 overflow-y-auto p-2">
+            <div className="bg-gray-100 border-2 border-gray-300 rounded-lg shadow-sm flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
               <div
-                className={`mx-auto bg-white ${
-                  receiptSize === "58mm"
-                    ? "w-[220px] sm:w-[240px] lg:w-[260px]"
-                    : "w-[300px] sm:w-[320px] lg:w-[360px]"
-                } p-3 text-black`}
+                className={`mx-auto bg-white ${getReceiptWidth(receiptSize)} p-3 sm:p-4 lg:p-5 xl:p-6 text-black`}
                 style={{ fontFamily: '"Courier New", monospace' }}
               >
                 {/* Header */}
                 <div className="text-center border-b border-dashed border-black pb-2 mb-2">
                   <div
-                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-sm" : "text-base"}`}
+                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-sm lg:text-base xl:text-lg" : "text-base lg:text-lg xl:text-xl"}`}
                   >
                     {receiptData.businessName || "RECEIPT"}
                   </div>
                   <div
-                    className={`text-black ${receiptSize === "58mm" ? "text-xs" : "text-sm"} mt-1`}
+                    className={`text-black ${receiptSize === "58mm" ? "text-xs lg:text-sm xl:text-base" : "text-sm lg:text-base xl:text-lg"} mt-1`}
                   >
                     {receiptData.branchName || "Main Branch"}
                   </div>
                   <div
-                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
                   >
                     {new Date(receiptData.timestamp).toLocaleString()}
                   </div>
                   <div
-                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
                   >
                     Trans: {receiptData.transactionId}
                   </div>
@@ -662,24 +736,16 @@ export function PaymentClearanceModal({
                 {receiptData.customer && (
                   <>
                     <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                     >
                       <span>Customer:</span>
-                      <span>{receiptData.customer.name}</span>
+                      <span>{receiptData.customer.displayName || receiptData.customer.email}</span>
                     </div>
-                    {receiptData.customer.phone && (
-                      <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
-                      >
-                        <span>Phone:</span>
-                        <span>{receiptData.customer.phone}</span>
-                      </div>
-                    )}
                   </>
                 )}
 
                 <div
-                  className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-2`}
+                  className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-2`}
                 >
                   <span>Cashier:</span>
                   <span>{receiptData.cashierRole || "Staff"}</span>
@@ -687,18 +753,20 @@ export function PaymentClearanceModal({
 
                 {/* Items */}
                 <div className="border-t border-b border-dashed border-black py-2 my-2">
-                  {receiptData.items.map((item: any, index: number) => (
+                  {receiptData.items.map((item, index: number) => (
                     <div key={index} className="mb-2">
                       <div
-                        className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                        className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                       >
                         {item.groupName}{" "}
-                        {detectColorName(item.selectedColor) ||
-                          item.selectedColor}{" "}
+                        {item.selectedColor
+                          ? detectColorName(item.selectedColor) ||
+                            item.selectedColor
+                          : ""}{" "}
                         - {item.selectedSize}
                       </div>
                       <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mt-1`}
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
                       >
                         <span>
                           {item.quantity} x {formatPrice(item.unitPrice)}
@@ -714,54 +782,51 @@ export function PaymentClearanceModal({
                 {/* Totals */}
                 <div className="mt-2">
                   <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                   >
                     <span>Subtotal:</span>
                     <span>{formatPrice(receiptData.subtotal)}</span>
                   </div>
                   {receiptData.discount > 0 && (
                     <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                     >
                       <span>Discount:</span>
                       <span>-{formatPrice(receiptData.discount)}</span>
                     </div>
                   )}
                   <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                   >
                     <span>Tax:</span>
                     <span>{formatPrice(receiptData.tax)}</span>
                   </div>
                   <div
-                    className={`flex justify-between font-bold text-black border-t border-b border-black py-2 my-2 ${receiptSize === "58mm" ? "text-xs" : "text-sm"}`}
+                    className={`flex justify-between font-bold text-black border-t border-b border-black py-2 my-2 ${receiptSize === "58mm" ? "text-xs lg:text-sm xl:text-base" : "text-sm lg:text-base xl:text-lg"}`}
                   >
                     <span>TOTAL:</span>
                     <span>{formatPrice(receiptData.total)}</span>
                   </div>
                   {receiptData.sellingCurrency !== defaultCurrency && (
                     <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                     >
                       <span>Paid ({receiptData.sellingCurrency}):</span>
                       <span>
-                        {SettingsService.formatCurrency(
-                          receiptData.sellingTotal,
-                          receiptData.sellingCurrency,
-                        )}
+                        {formatPrice(receiptData.sellingTotal)}
                       </span>
                     </div>
                   )}
                   {receiptData.paymentMethod === "cash" && (
                     <>
                       <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                       >
                         <span>Paid:</span>
                         <span>{formatPrice(receiptData.amountPaid)}</span>
                       </div>
                       <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"} mb-1`}
+                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                       >
                         <span>Change:</span>
                         <span>{formatPrice(receiptData.change)}</span>
@@ -769,7 +834,7 @@ export function PaymentClearanceModal({
                     </>
                   )}
                   <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                   >
                     <span>Payment:</span>
                     <span>{receiptData.paymentMethod.toUpperCase()}</span>
@@ -779,38 +844,40 @@ export function PaymentClearanceModal({
                 {/* Footer */}
                 <div className="text-center border-t border-dashed border-black pt-2 mt-2">
                   <div
-                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                    className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                   >
                     Thank You!
                   </div>
                   <div
-                    className={`text-black ${receiptSize === "58mm" ? "text-[10px]" : "text-xs"}`}
+                    className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                   >
                     Please come again
                   </div>
+                  {receiptData.invoiceFooterMessage && (
+                    <div
+                      className={`text-black mt-2 ${receiptSize === "58mm" ? "text-[9px] lg:text-[10px] xl:text-xs" : "text-[10px] lg:text-xs xl:text-sm"}`}
+                    >
+                      {receiptData.invoiceFooterMessage}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2 pt-3 flex-shrink-0">
+            <div className="flex gap-2 sm:gap-3 lg:gap-4 pt-3 lg:pt-4 flex-shrink-0">
               <button
                 onClick={handlePrintReceipt}
-                className="flex-1 bg-blue-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+                className="flex-1 bg-blue-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-blue-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
               >
                 <span className="text-white">Print Receipt</span>
               </button>
               <button
-                onClick={() => {
-                  onPaymentComplete({
-                    method: selectedPaymentMethod,
-                    amountPaid: receiptData.amountPaid,
-                    change: receiptData.change,
-                    discount: receiptData.discount,
-                  });
+                onClick={async () => {
+                  await handleConfirmPayment();
                   router.push("/owner/home");
                 }}
-                className="flex-1 bg-gray-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium shadow-sm"
+                className="flex-1 bg-gray-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-gray-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
               >
                 <span className="text-white">Skip Print</span>
               </button>
@@ -856,6 +923,7 @@ export function PaymentClearanceModal({
             <div className="flex items-center space-x-3 mb-3">
               <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
                 {customer?.customerImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     className="h-8 w-8 rounded-full object-cover"
                     src={customer.customerImage}
@@ -1021,7 +1089,6 @@ export function PaymentClearanceModal({
                   const value = e.target.value;
                   setCalculatorDisplay(value || "0");
                   setAmountPaid(parseFloat(value) || 0);
-                  setIsCalculatorMode(true);
                 }}
                 placeholder="0"
                 className="w-full text-xl font-bold text-gray-900 bg-transparent text-right border-none outline-none"

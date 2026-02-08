@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { SettingsService } from "@/services/settingsService";
@@ -10,7 +9,6 @@ import {
   X,
   Minus,
   Plus,
-  Settings,
   ShoppingCart,
   Eye,
   User,
@@ -27,12 +25,10 @@ interface ShoppingCartModalProps {
 }
 
 export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
-  const router = useRouter();
   const {
     cart,
     updateQuantity,
     removeFromCart,
-    clearCart,
     completePurchase,
     applyGroupDiscount,
     applyVariantDiscount,
@@ -49,7 +45,6 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const [discountAmount, setDiscountAmount] = React.useState<string>("");
   const [cartDiscountPercent, setCartDiscountPercent] =
     React.useState<number>(0);
-  const [isBigViewOpen, setIsBigViewOpen] = React.useState<boolean>(false);
 
   // Shop name mapping
   const [shopNames, setShopNames] = React.useState<Record<string, string>>({});
@@ -135,8 +130,6 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      // Automatically open big view when cart is opened
-      setIsBigViewOpen(true);
 
       // Fetch shop names
       const fetchShops = async () => {
@@ -157,8 +150,6 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       fetchShops();
     } else {
       document.body.style.overflow = "unset";
-      // Reset big view when cart is closed
-      setIsBigViewOpen(false);
     }
 
     // Cleanup function to restore scrolling when component unmounts
@@ -203,6 +194,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       );
       setGroupDiscountAmount(existingDiscount);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroupForDiscount, cart.items]);
 
   React.useEffect(() => {
@@ -212,13 +204,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       );
       setVariantDiscountAmount(existingDiscount);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVariantForDiscount, cart.items]);
 
   if (!isOpen) return null;
-
-  const handleQuantityChange = (itemId: string, newQuantity: number) => {
-    updateQuantity(itemId, newQuantity);
-  };
 
   const handleApplyDiscount = () => {
     const value = parseFloat(discountAmount) || 0;
@@ -399,7 +388,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     }
     try {
       return detectColorName(hex) || hex;
-    } catch (e) {
+    } catch {
       return hex;
     }
   };
@@ -511,14 +500,6 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   // Convert base amounts to display (selected) currency for correct fixed-amount behavior
   const displaySubtotal = SettingsService.convertPrice(
     subtotal,
-    defaultCurrency as "THB" | "MMK",
-    selectedCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
-
-  const displayOriginalSubtotal = SettingsService.convertPrice(
-    originalSubtotal,
     defaultCurrency as "THB" | "MMK",
     selectedCurrency as "THB" | "MMK",
     currencyRate,
@@ -731,7 +712,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                       }
                                       try {
                                         return detectColorName(hex) || hex;
-                                      } catch (e) {
+                                      } catch {
                                         return hex;
                                       }
                                     })()}
@@ -1145,6 +1126,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             <div className="flex items-center space-x-3">
               <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
                 {getSelectedCustomer()?.customerImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     className="h-8 w-8 rounded-full object-cover"
                     src={getSelectedCustomer()?.customerImage}
@@ -1673,7 +1655,6 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         discount={discountForPayment}
         tax={taxForPayment}
         total={grandTotalForPayment}
-        currency={selectedCurrency}
       />
     </div>
   );
