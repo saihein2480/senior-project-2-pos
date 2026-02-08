@@ -2,15 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import {
-  X,
-  User,
-  CreditCard,
-  Wallet,
-  QrCode,
-  Eye,
-  Truck,
-} from "lucide-react";
+import { X, User, CreditCard, Wallet, QrCode, Eye, Truck } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SelectedCustomer } from "@/types/cart";
@@ -739,7 +731,10 @@ export function PaymentClearanceModal({
                       className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                     >
                       <span>Customer:</span>
-                      <span>{receiptData.customer.displayName || receiptData.customer.email}</span>
+                      <span>
+                        {receiptData.customer.displayName ||
+                          receiptData.customer.email}
+                      </span>
                     </div>
                   </>
                 )}
@@ -812,9 +807,7 @@ export function PaymentClearanceModal({
                       className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
                     >
                       <span>Paid ({receiptData.sellingCurrency}):</span>
-                      <span>
-                        {formatPrice(receiptData.sellingTotal)}
-                      </span>
+                      <span>{formatPrice(receiptData.sellingTotal)}</span>
                     </div>
                   )}
                   {receiptData.paymentMethod === "cash" && (

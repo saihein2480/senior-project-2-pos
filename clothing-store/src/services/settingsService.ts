@@ -145,6 +145,7 @@ export class SettingsService {
       showBusinessLogoOnInvoice: true,
       autoPrintReceiptAfterCheckout: true,
       invoiceFooterMessage: "",
+      receiptPaperSize: "80mm",
       enableDarkMode: false,
       enableSoundEffects: false,
       currencyRate: 0,

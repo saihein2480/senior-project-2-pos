@@ -9,15 +9,12 @@ import { useState, useEffect, useRef } from "react";
 import { 
   Plus, 
   QrCode, 
-  Camera, 
   RefreshCw,
   Save,
   X,
   Scan,
-  Package,
   AlertCircle,
-  CheckCircle,
-  Upload
+  CheckCircle
 } from "lucide-react";
 import { ClothingInventoryItem } from "@/types/schemas";
 import { InventoryService } from "@/services/InventoryService";
@@ -215,10 +212,11 @@ function NewStockContent() {
         colors: formData.colors,
         image: formData.imageUrl,
         wholesaleTiers: [],
-        colorVariants: formData.colors.length > 0 ? formData.colors.map(color => ({
+        colorVariants: formData.colors.length > 0 ? formData.colors.map((color, index) => ({
           id: crypto.randomUUID(),
           color,
           colorCode: '',
+          barcode: `${formData.barcode.trim()}-C${index + 1}`,
           sizeQuantities: formData.sizes.map(size => ({
             size,
             quantity: formData.quantity / formData.sizes.length
@@ -266,6 +264,7 @@ function NewStockContent() {
         stopBarcodeScanning();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
