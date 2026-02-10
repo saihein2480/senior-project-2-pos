@@ -940,6 +940,10 @@ class TransactionService {
    * This permanently removes the transaction from the database
    */
   async deleteTransaction(transactionId: string): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
     try {
       const transactionRef = doc(db, this.collectionName, transactionId);
       const transactionDoc = await getDoc(transactionRef);
