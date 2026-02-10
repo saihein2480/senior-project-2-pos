@@ -9,8 +9,8 @@ import {
   LogOut,
   ChevronDown,
   ShoppingCart,
-  Globe,
   Store,
+  User,
   Menu,
 } from "lucide-react";
 import { ShoppingCartModal } from "./ShoppingCartModal";
@@ -104,7 +104,7 @@ export function TopNavBar({
   return (
     <header className="sticky top-0 z-10 bg-white shadow border-b border-gray-200">
       <div className="px-4">
-        <div className="flex justify-between items-center py-6">
+        <div className="flex justify-between items-center py-6 px-6">
           <div className="flex items-center">
             <button
               onClick={() => onMenuToggle?.()}
@@ -114,20 +114,20 @@ export function TopNavBar({
               <Menu className="w-6 h-6 text-gray-700" />
             </button>
 
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-semibold text-gray-900">
               {user?.displayName || user?.email || "Owner"}
             </h1>
           </div>
           <div className="flex items-center space-x-6">
-              {/* Current Branch/Shop Display */}
-              <div className="flex items-center space-x-2 px-3 py-2 bg-white border rounded-full border-gray-300 ">
-                <Store className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">
-                  {businessSettings?.currentBranch === "No Branch"
-                    ? "No Branch"
-                    : businessSettings?.currentBranch || "Main Branch"}
-                </span>
-              </div>
+            {/* Current Branch/Shop Display */}
+            <div className="flex items-center space-x-2 px-3 py-2 bg-white border rounded-full border-gray-300 ">
+              <Store className="w-4 h-4 text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">
+                {businessSettings?.currentBranch === "No Branch"
+                  ? "No Branch"
+                  : businessSettings?.currentBranch || "Main Branch"}
+              </span>
+            </div>
             {/* Date Display */}
             <div className="text-sm text-gray-600">
               {new Date().toLocaleDateString("en-US", {
@@ -138,13 +138,10 @@ export function TopNavBar({
               })}
             </div>
 
-
             {/* Main Currency Title */}
             <div className="flex items-center space-x-1 px-3 py-2 bg-white border-gray-300 rounded-lg">
-              <span className="text-sm font-semibold text-gray-800">
-                Main Currency:
-              </span>
-              <span className="text-sm font-bold text-blue-900">
+              <span className="text-sm text-gray-600">Main Currency:</span>
+              <span className="text-sm  text-gray-800">
                 {getCurrencySymbol(defaultCurrency)} {defaultCurrency}
               </span>
             </div>
@@ -157,12 +154,12 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isCurrencyDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400  hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400  hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
               >
                 <span className="text-sm font-semibold text-gray-800">
                   {currencies.find((c) => c.code === selectedCurrency)?.symbol}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-gray-900">
                   {selectedCurrency}
                 </span>
                 <ChevronDown
@@ -189,7 +186,7 @@ export function TopNavBar({
                         }
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-blue-50 text-blue-700"
+                            ? "bg-blue-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -221,7 +218,7 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isLanguageDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
               >
                 <span className="text-sm font-medium text-gray-700">
                   {selectedLanguage}
@@ -248,7 +245,7 @@ export function TopNavBar({
                         onClick={() => handleLanguageChange(language.name)}
                         className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-blue-50 text-blue-700"
+                            ? "bg-blue-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -288,19 +285,11 @@ export function TopNavBar({
               <button
                 onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
                 className="flex items-center space-x-2 focus:outline-none"
+                aria-label="User menu"
               >
-                <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center hover:from-blue-500 hover:to-blue-700 transition-colors">
-                  <span className="text-white text-xl font-medium">
-                    {(user?.displayName || user?.email || "U")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </span>
+                <div className="w-11 h-11 rounded-full border border-gray-300 bg-gray-100 flex items-center justify-center text-gray-700">
+                  <User className="w-5 h-5" />
                 </div>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 transition-transform ${
-                    isProfileDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
               </button>
 
               {/* Dropdown Menu */}

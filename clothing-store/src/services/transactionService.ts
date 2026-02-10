@@ -11,6 +11,7 @@ import {
   runTransaction,
   getDoc,
   setDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { SelectedCustomer, CartItem } from "@/types/cart";
@@ -932,6 +933,51 @@ class TransactionService {
       console.error("Error rejecting transaction:", error);
       throw new Error("Failed to reject transaction");
     }
+  }
+
+  /**
+   * Delete a transaction by ID
+   * This permanently removes the transaction from the database
+   */
+  async deleteTransaction(transactionId: string): Promise<void> {
+    try {
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      const transactionDoc = await getDoc(transactionRef);
+
+      if (!transactionDoc.exists()) {
+        throw new Error("Transaction not found");
+      }
+
+      // Permanently delete the transaction document
+      await deleteDoc(transactionRef);
+
+      console.log("Transaction deleted successfully:", transactionId);
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      throw new Error("Failed to delete transaction");
+    }
+  }
+
+  /**
+   * Bulk delete multiple transactions
+   */
+  async deleteTransactions(
+    transactionIds: string[],
+  ): Promise<{ successCount: number; failCount: number }> {
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const transactionId of transactionIds) {
+      try {
+        await this.deleteTransaction(transactionId);
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to delete transaction ${transactionId}:`, error);
+        failCount++;
+      }
+    }
+
+    return { successCount, failCount };
   }
 }
 

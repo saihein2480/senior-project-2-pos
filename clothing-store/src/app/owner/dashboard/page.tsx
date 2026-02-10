@@ -1070,7 +1070,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Sales
+                          Total Sales (฿ / Ks)
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.totalRevenue)}
@@ -1084,7 +1084,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Profit
+                          Total Profit 
                         </p>
                         <p className="text-2xl font-bold text-green-600">
                           {formatPrice(stats.totalProfit)}
@@ -1134,28 +1134,14 @@ function OwnerDashboardContent() {
                         <p className="text-sm font-medium text-gray-500">
                           Total Sales (฿)
                         </p>
-                        <p className="text-2xl font-bold text-green-600">
+                        <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.totalRevenueTHB || 0)}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          Total Sale (Ks)
-                        </p>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {SettingsService.formatPrice(
-                            stats.totalRevenueMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  
 
                   <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
@@ -1174,9 +1160,25 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
+                          Total Sale (Ks)
+                        </p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {SettingsService.formatPrice(
+                            stats.totalRevenueMMK || 0,
+                            "MMK",
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6  shadow-sm border border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">
                           Total Expense (Ks)
                         </p>
-                        <p className="text-2xl font-bold text-purple-600">
+                        <p className="text-2xl font-bold text-red-600">
                           {SettingsService.formatPrice(
                             stats.totalExpenseMMK || 0,
                             "MMK",
@@ -1352,8 +1354,8 @@ function OwnerDashboardContent() {
                         <p className="text-sm font-medium text-gray-500">
                           Partial Refunds
                         </p>
-                        <p className="text-2xl font-bold te900xt-indigo-600">
-                          {stats.partialRefunds}900
+                        <p className="text-2xl font-bold text-indigo-600">
+                          {stats.partialRefunds}
                         </p>
                         <p className="text-xs text-gray-600">
                           {stats.totalOrders > 0

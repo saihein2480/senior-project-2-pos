@@ -271,11 +271,32 @@ function OwnerHomeContent() {
               return variant;
             }) || [];
 
-          await StockService.updateStock(itemId, {
-            colorVariants: updatedColorVariants.map((variant) => ({
-              ...variant,
+          // Filter out undefined values to avoid Firebase errors
+          const cleanedColorVariants = updatedColorVariants.map((variant) => {
+            const cleaned: {
+              id: string;
+              color: string;
+              colorCode: string;
+              barcode: string;
+              sizeQuantities: { size: string; quantity: number }[];
+              image?: string;
+            } = {
+              id: variant.id,
+              color: variant.color,
+              colorCode: variant.colorCode,
               barcode: (variant as { barcode?: string }).barcode || "",
-            })),
+              sizeQuantities: variant.sizeQuantities,
+            };
+            // Only include image if it's defined
+            const variantImage = (variant as { image?: string }).image;
+            if (variantImage !== undefined) {
+              cleaned.image = variantImage;
+            }
+            return cleaned;
+          });
+
+          await StockService.updateStock(itemId, {
+            colorVariants: cleanedColorVariants,
           });
         }
       } catch (error) {
@@ -348,11 +369,32 @@ function OwnerHomeContent() {
               return variant;
             }) || [];
 
-          await StockService.updateStock(itemId, {
-            colorVariants: updatedColorVariants.map((variant) => ({
-              ...variant,
+          // Filter out undefined values to avoid Firebase errors
+          const cleanedColorVariants = updatedColorVariants.map((variant) => {
+            const cleaned: {
+              id: string;
+              color: string;
+              colorCode: string;
+              barcode: string;
+              sizeQuantities: { size: string; quantity: number }[];
+              image?: string;
+            } = {
+              id: variant.id,
+              color: variant.color,
+              colorCode: variant.colorCode,
               barcode: (variant as { barcode?: string }).barcode || "",
-            })),
+              sizeQuantities: variant.sizeQuantities,
+            };
+            // Only include image if it's defined
+            const variantImage = (variant as { image?: string }).image;
+            if (variantImage !== undefined) {
+              cleaned.image = variantImage;
+            }
+            return cleaned;
+          });
+
+          await StockService.updateStock(itemId, {
+            colorVariants: cleanedColorVariants,
           });
         }
       } catch (error) {
@@ -946,7 +988,7 @@ function OwnerHomeContent() {
                         placeholder="Search items, groups, IDs..."
                         value={searchTerm}
                         onChange={handleSearchChange}
-                        className="pl-10 pr-4 py-2 w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 focus:bg-white transition-colors"
+                        className="pl-10 pr-4 py-2 w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
                       />
                       <svg
                         className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"
@@ -969,12 +1011,12 @@ function OwnerHomeContent() {
                         onClick={() =>
                           setShowFilterDropdown(!showFilterDropdown)
                         }
-                        className="flex items-center px-4 py-2 border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                        className="flex items-center px-4 py-2 border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
                       >
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
                         {hasActiveFilters && (
-                          <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                          <span className="ml-2 px-1.5 py-0.5 bg-gray-600 text-white text-xs rounded-full">
                             {
                               [
                                 selectedCategory !== "all",
@@ -995,7 +1037,7 @@ function OwnerHomeContent() {
                             {hasActiveFilters && (
                               <button
                                 onClick={clearFilters}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                className="text-xs text-red-600 hover:text-red-800 font-medium"
                               >
                                 Clear all
                               </button>
@@ -1088,90 +1130,148 @@ function OwnerHomeContent() {
 
                   {/* Pagination */}
                   <div className="flex items-center space-x-2">
-                    <button
-                      title="Go to previous page"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.max(prev - 1, 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 19l-7-7 7-7"
-                        />
-                      </svg>
-                    </button>
-
-                    {/* Page Numbers */}
-                    {[...Array(Math.min(totalPages, 5))].map((_, index) => {
-                      const pageNumber = index + 1;
-                      return (
+                    {/* Page Numbers - improved layout */}
+                    <div className="flex items-center justify-center space-x-2 w-full">
+                      <div className="flex items-center space-x-2">
                         <button
-                          key={pageNumber}
-                          onClick={() => setCurrentPage(pageNumber)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === pageNumber
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                          }`}
+                          title="First page"
+                          onClick={() => setCurrentPage(1)}
+                          disabled={currentPage === 1}
+                          className="px-2 py-1 rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                         >
-                          {pageNumber}
+                          First
                         </button>
-                      );
-                    })}
 
-                    {totalPages > 5 && (
-                      <>
-                        <span className="px-2 text-gray-500">...</span>
                         <button
+                          title="Previous page"
+                          onClick={() =>
+                            setCurrentPage((p) => Math.max(p - 1, 1))
+                          }
+                          disabled={currentPage === 1}
+                          className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 19l-7-7 7-7"
+                            />
+                          </svg>
+                        </button>
+
+                        {(() => {
+                          const maxButtons = 5;
+                          let start = Math.max(
+                            1,
+                            currentPage - Math.floor(maxButtons / 2),
+                          );
+                          const end = Math.min(
+                            totalPages,
+                            start + maxButtons - 1,
+                          );
+                          if (end - start + 1 < maxButtons) {
+                            start = Math.max(1, end - maxButtons + 1);
+                          }
+                          const pages: number[] = [];
+                          for (let p = start; p <= end; p++) pages.push(p);
+
+                          return (
+                            <>
+                              {start > 1 && (
+                                <>
+                                  <button
+                                    onClick={() => setCurrentPage(1)}
+                                    className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  >
+                                    1
+                                  </button>
+                                  <span className="px-2 text-gray-500">
+                                    ...
+                                  </span>
+                                </>
+                              )}
+
+                              {pages.map((pageNumber) => (
+                                <button
+                                  key={pageNumber}
+                                  onClick={() => setCurrentPage(pageNumber)}
+                                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                    currentPage === pageNumber
+                                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  {pageNumber}
+                                </button>
+                              ))}
+
+                              {end < totalPages && (
+                                <>
+                                  <span className="px-2 text-gray-500">
+                                    ...
+                                  </span>
+                                  <button
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  >
+                                    {totalPages}
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
+
+                        <button
+                          title="Next page"
+                          onClick={() =>
+                            setCurrentPage((prev) =>
+                              Math.min(prev + 1, totalPages),
+                            )
+                          }
+                          disabled={currentPage === totalPages}
+                          className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </button>
+
+                        <button
+                          title="Last page"
                           onClick={() => setCurrentPage(totalPages)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === totalPages
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                          }`}
+                          disabled={currentPage === totalPages}
+                          className="px-2 py-1 rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                         >
-                          {totalPages}
+                          Last
                         </button>
-                      </>
-                    )}
+                      </div>
 
-                    <button
-                      title="Go to next page"
-                      onClick={() =>
-                        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                      }
-                      disabled={currentPage === totalPages}
-                      className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </button>
+                      <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Clothing Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                   {isLoading || shopsLoading ? (
                     // Loading state
                     Array.from({ length: 12 }).map((_, index) => (
@@ -1343,8 +1443,8 @@ function OwnerHomeContent() {
                                 }
 
                                 // Show single row when up to `maxSingleRow` colors,
-                                // otherwise layout into a grid with 5 columns per row.
-                                const maxSingleRow = 5;
+                                // otherwise layout into a grid with responsive columns per row.
+                                const maxSingleRow = 7;
                                 if (variants.length <= maxSingleRow) {
                                   return (
                                     <div className="flex items-center gap-2 pr-4">
@@ -1383,14 +1483,9 @@ function OwnerHomeContent() {
                                   );
                                 }
 
-                                // Grid with 5 columns; items will flow into additional rows as needed
+                                // Grid with responsive columns: 3 (sm) -> 4 (md) -> 5 (lg) -> 6 (xl) -> 7 (2xl)
                                 return (
-                                  <div
-                                    className="inline-grid gap-2 items-center pr-4"
-                                    style={{
-                                      gridTemplateColumns: `repeat(5, auto)`,
-                                    }}
-                                  >
+                                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7 gap-2 pr-4">
                                     {variants.map((variant, index) => {
                                       const variantId =
                                         variant.id || `variant-${index}`;

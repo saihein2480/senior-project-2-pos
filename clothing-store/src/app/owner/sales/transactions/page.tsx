@@ -28,6 +28,7 @@ import {
   Truck,
   ChevronLeft,
   ChevronRight,
+  Trash,
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
 
@@ -74,6 +75,7 @@ export default function TransactionsPage() {
   );
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
   const [isProcessingCancel, setIsProcessingCancel] = useState(false);
+  const [isProcessingDelete, setIsProcessingDelete] = useState(false);
 
   const isProbablyId = (s?: string) => !!s && /(^cv|[-_].+-)/.test(s);
 
@@ -651,15 +653,13 @@ export default function TransactionsPage() {
     );
   };
 
-  // Select/deselect all COD transactions
+  // Select/deselect all transactions
   const toggleSelectAll = () => {
-    const codTransactions = filteredTransactions.filter(
-      (t) => t.paymentMethod === "cod" && t.status === "pending",
-    );
-    if (selectedTransactions.length === codTransactions.length) {
+    const allTransactionIds = filteredTransactions.map((t) => t.id!);
+    if (selectedTransactions.length === allTransactionIds.length) {
       setSelectedTransactions([]);
     } else {
-      setSelectedTransactions(codTransactions.map((t) => t.id!));
+      setSelectedTransactions(allTransactionIds);
     }
   };
 
@@ -760,6 +760,42 @@ export default function TransactionsPage() {
     } catch (error) {
       console.error("Error in bulk cancel:", error);
       alert("An error occurred during bulk cancellation.");
+    }
+  };
+
+  // Bulk delete selected transactions
+  const handleBulkDelete = async () => {
+    if (selectedTransactions.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete ${selectedTransactions.length} transaction(s)?\n\nThis action cannot be undone and will remove the transactions from the database.`,
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessingDelete(true);
+    try {
+      const result =
+        await transactionService.deleteTransactions(selectedTransactions);
+
+      if (result.successCount > 0) {
+        alert(
+          `Successfully deleted ${result.successCount} transaction(s).${
+            result.failCount > 0
+              ? `\nFailed to delete ${result.failCount} transaction(s).`
+              : ""
+          }`,
+        );
+        setSelectedTransactions([]);
+        loadTransactions();
+      } else {
+        alert("Failed to delete any transactions. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error in bulk delete:", error);
+      alert("An error occurred during bulk delete operation.");
+    } finally {
+      setIsProcessingDelete(false);
     }
   };
 
@@ -917,7 +953,7 @@ export default function TransactionsPage() {
                 <h3 className="text-sm font-medium text-gray-500">
                   Total Sales
                 </h3>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-gray-900">
                   {formatPrice(calculateNetRevenue(revenueTransactions))}
                 </p>
               </div>
@@ -925,13 +961,13 @@ export default function TransactionsPage() {
                 <h3 className="text-sm font-medium text-gray-500">
                   Total Profit
                 </h3>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-green-600">
                   {formatPrice(calculateTotalProfit(revenueTransactions))}
                 </p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">Completed</h3>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-green-600">
                   {completedTransactionsCount}
                 </p>
               </div>
@@ -939,7 +975,7 @@ export default function TransactionsPage() {
                 <h3 className="text-sm font-medium text-gray-500">
                   Total Sales (฿)
                 </h3>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-gray-900">
                   {formatPrice(calculateNetRevenue(revenueTransactionsTHB))}
                 </p>
               </div>
@@ -947,44 +983,11 @@ export default function TransactionsPage() {
                 <h3 className="text-sm font-medium text-gray-500">
                   Total Sales (Ks)
                 </h3>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-2xl font-bold text-gray-900">
                   {formatInMMK(calculateNetRevenue(revenueTransactionsMMK))}
                 </p>
               </div>
             </div>
-
-            {/* Bulk Actions Bar */}
-            {selectedTransactions.length > 0 && (
-              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-blue-900">
-                    {selectedTransactions.length} transaction(s) selected
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleBulkApprove}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white  hover:bg-green-700 transition-colors text-sm font-medium"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve Selected
-                  </button>
-                  <button
-                    onClick={handleBulkCancel}
-                    className="flex items-center px-4 py-2 bg-red-600 text-white  hover:bg-red-700 transition-colors text-sm font-medium"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel Checkout Selected
-                  </button>
-                  <button
-                    onClick={() => setSelectedTransactions([])}
-                    className="px-4 py-2 bg-gray-200 text-gray-700  hover:bg-gray-300 transition-colors text-sm font-medium"
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Filters and Search */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -1162,6 +1165,56 @@ export default function TransactionsPage() {
               </div>
             </div>
 
+            {/* Bulk Actions Bar */}
+            {selectedTransactions.length > 0 && (
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-blue-900">
+                    {selectedTransactions.length} transaction(s) selected
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleBulkApprove}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white  hover:bg-green-700 transition-colors text-sm font-medium"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Approve Selected
+                  </button>
+                  <button
+                    onClick={handleBulkCancel}
+                    className="flex items-center px-4 py-2 bg-red-600 text-white  hover:bg-red-700 transition-colors text-sm font-medium"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel Checkout Selected
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isProcessingDelete}
+                    className="flex items-center px-4 py-2 bg-red-700 text-white  hover:bg-red-800 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isProcessingDelete ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash className="h-4 w-4 mr-2" />
+                        Delete Selected
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setSelectedTransactions([])}
+                    className="px-4 py-2 bg-gray-200 text-gray-700  hover:bg-gray-300 transition-colors text-sm font-medium"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Transactions Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
@@ -1182,28 +1235,13 @@ export default function TransactionsPage() {
                           <input
                             type="checkbox"
                             checked={
-                              filteredTransactions.filter(
-                                (t) =>
-                                  t.paymentMethod === "cod" &&
-                                  t.status === "pending",
-                              ).length > 0 &&
+                              filteredTransactions.length > 0 &&
                               selectedTransactions.length ===
-                                filteredTransactions.filter(
-                                  (t) =>
-                                    t.paymentMethod === "cod" &&
-                                    t.status === "pending",
-                                ).length
+                                filteredTransactions.length
                             }
                             onChange={toggleSelectAll}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                            disabled={
-                              filteredTransactions.filter(
-                                (t) =>
-                                  t.paymentMethod === "cod" &&
-                                  t.status === "pending",
-                              ).length === 0
-                            }
-                            aria-label="Select all COD transactions"
+                            aria-label="Select all transactions"
                           />
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1258,22 +1296,17 @@ export default function TransactionsPage() {
                         return (
                           <tr key={transaction.id} className={rowClass}>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              {transaction.paymentMethod === "cod" &&
-                              transaction.status === "pending" ? (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedTransactions.includes(
-                                    transaction.id!,
-                                  )}
-                                  onChange={() =>
-                                    toggleSelectTransaction(transaction.id!)
-                                  }
-                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                                  aria-label={`Select transaction ${transaction.transactionId}`}
-                                />
-                              ) : (
-                                <div className="h-4 w-4"></div>
-                              )}
+                              <input
+                                type="checkbox"
+                                checked={selectedTransactions.includes(
+                                  transaction.id!,
+                                )}
+                                onChange={() =>
+                                  toggleSelectTransaction(transaction.id!)
+                                }
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                aria-label={`Select transaction ${transaction.transactionId}`}
+                              />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {transaction.transactionId}
