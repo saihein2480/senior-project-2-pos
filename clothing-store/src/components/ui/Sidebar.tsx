@@ -446,11 +446,11 @@ export function Sidebar({
               <img
                 src={businessLogo}
                 alt="Business Logo"
-                className="w-8 h-8 object-cover rounded"
+                className="w-10 h-10 object-contain rounded"
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <Store className="w-8 h-8 text-purple-600" />
+              <Store className="w-10 h-10 text-purple-600" />
             )}
           </div>
         ) : (
@@ -459,11 +459,11 @@ export function Sidebar({
               <img
                 src={businessLogo}
                 alt="Business Logo"
-                className="w-8 h-8 object-cover rounded mr-3"
+                className="w-12 h-12 object-contain rounded mr-3"
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <Store className="w-8 h-8 text-purple-600 mr-3" />
+              <Store className="w-12 h-12 text-purple-600 mr-3" />
             )}
             <div className="flex-1">
               <h1 className="text-lg font-bold text-gray-900">

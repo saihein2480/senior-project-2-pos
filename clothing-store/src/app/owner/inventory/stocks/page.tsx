@@ -56,6 +56,10 @@ function InventoryStocksContent() {
   );
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Multi-select state
+  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  const [isProcessingBulkDelete, setIsProcessingBulkDelete] = useState(false);
+
   // Success/Error feedback state
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -404,6 +408,73 @@ function InventoryStocksContent() {
     setDeleteError(null);
   };
 
+  // Toggle select single stock
+  const toggleSelectStock = (stockId: string) => {
+    setSelectedStocks((prev) =>
+      prev.includes(stockId)
+        ? prev.filter((id) => id !== stockId)
+        : [...prev, stockId],
+    );
+  };
+
+  // Toggle select all stocks
+  const toggleSelectAll = () => {
+    if (selectedStocks.length === currentGroups.length) {
+      setSelectedStocks([]);
+    } else {
+      setSelectedStocks(currentGroups.map((group) => group.groupId));
+    }
+  };
+
+  // Bulk delete selected stocks
+  const handleBulkDelete = async () => {
+    if (selectedStocks.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete ${selectedStocks.length} stock item(s)?\n\nThis action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessingBulkDelete(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const stockId of selectedStocks) {
+      try {
+        const response = await fetch(`/api/stocks/${stockId}`, {
+          method: "DELETE",
+        });
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    // Remove deleted stocks from state
+    if (successCount > 0) {
+      setStockGroups((prevGroups) =>
+        prevGroups.filter((group) => !selectedStocks.includes(group.groupId)),
+      );
+      setSelectedStocks([]);
+      setSuccessMessage(
+        `Successfully deleted ${successCount} stock item(s).${
+          failCount > 0 ? ` Failed to delete ${failCount} item(s).` : ""
+        }`,
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } else {
+      alert("Failed to delete any stock items. Please try again.");
+    }
+
+    setIsProcessingBulkDelete(false);
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       <div className="hidden md:block">
@@ -628,6 +699,42 @@ function InventoryStocksContent() {
               </div>
             </div>
 
+            {/* Bulk Actions Bar */}
+            {selectedStocks.length > 0 && (
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-blue-900">
+                    {selectedStocks.length} stock item(s) selected
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isProcessingBulkDelete}
+                    className="flex items-center px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isProcessingBulkDelete ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Selected
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setSelectedStocks([])}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-medium"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Stock Groups Display */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               {isLoading ? (
@@ -663,6 +770,21 @@ function InventoryStocksContent() {
                   <table className="min-w-full divide-y divide-gray-300">
                     <thead className="bg-gray-50">
                       <tr>
+                        <th
+                          scope="col"
+                          className="py-3.5 pl-4 pr-3 w-12 sm:pl-6"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              currentGroups.length > 0 &&
+                              selectedStocks.length === currentGroups.length
+                            }
+                            onChange={toggleSelectAll}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                            aria-label="Select all stocks"
+                          />
+                        </th>
                         <th
                           scope="col"
                           className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
@@ -717,6 +839,18 @@ function InventoryStocksContent() {
                       {currentGroups.map((group) => (
                         <Fragment key={group.groupId}>
                           <tr className="hover:bg-gray-50 transition-colors">
+                            {/* Checkbox Column */}
+                            <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
+                              <input
+                                type="checkbox"
+                                checked={selectedStocks.includes(group.groupId)}
+                                onChange={() =>
+                                  toggleSelectStock(group.groupId)
+                                }
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                aria-label={`Select ${group.groupName}`}
+                              />
+                            </td>
                             {/* Product Column */}
                             <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
                               <div className="flex items-center space-x-3">

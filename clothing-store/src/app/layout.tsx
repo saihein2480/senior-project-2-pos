@@ -6,6 +6,7 @@ import { CartProvider } from "@/contexts/CartContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { InstallPrompt } from "@/components/ui/InstallPrompt";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,6 +16,18 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ClothingStore POS",
   description: "A modern point-of-sale system for clothing stores",
+  manifest: "/manifest.json",
+  themeColor: "#3b82f6",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ClothingStore POS",
+  },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+  },
 };
 
 export default function RootLayout({
@@ -35,6 +48,7 @@ export default function RootLayout({
             </CurrencyProvider>
           </SettingsProvider>
         </AuthProvider>
+        <InstallPrompt />
         <SpeedInsights />
       </body>
     </html>

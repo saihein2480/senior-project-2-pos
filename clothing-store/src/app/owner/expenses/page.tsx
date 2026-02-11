@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ExpenseCategory, Expense } from "@/types/expense";
+import { Trash2 } from "lucide-react";
 
 function ExpensesContent() {
   const [activeMenuItem, setActiveMenuItem] = useState("expenses");
@@ -29,7 +30,7 @@ function ExpensesContent() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [amount, setAmount] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState<"THB" | "MMK">(
-    "THB"
+    "THB",
   );
 
   // Modal states
@@ -45,6 +46,10 @@ function ExpensesContent() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
+
+  // Multi-select state
+  const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
+  const [isProcessingBulkDelete, setIsProcessingBulkDelete] = useState(false);
 
   const fetchData = React.useCallback(async () => {
     try {
@@ -194,6 +199,74 @@ function ExpensesContent() {
     }
   };
 
+  // Toggle select single expense
+  const toggleSelectExpense = (expenseId: string) => {
+    setSelectedExpenses((prev) =>
+      prev.includes(expenseId)
+        ? prev.filter((id) => id !== expenseId)
+        : [...prev, expenseId],
+    );
+  };
+
+  // Toggle select all expenses
+  const toggleSelectAll = () => {
+    if (selectedExpenses.length === paginatedExpenses.length) {
+      setSelectedExpenses([]);
+    } else {
+      setSelectedExpenses(paginatedExpenses.map((expense) => expense.id));
+    }
+  };
+
+  // Bulk delete selected expenses
+  const handleBulkDelete = async () => {
+    if (selectedExpenses.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete ${selectedExpenses.length} expense(s)?\n\nThis action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessingBulkDelete(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const expenseId of selectedExpenses) {
+      try {
+        const response = await fetch(`/api/expenses?id=${expenseId}`, {
+          method: "DELETE",
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    // Remove deleted expenses from state
+    if (successCount > 0) {
+      setExpenses((prevExpenses) =>
+        prevExpenses.filter(
+          (expense) => !selectedExpenses.includes(expense.id),
+        ),
+      );
+      setSelectedExpenses([]);
+      showAlert(
+        "success",
+        `Successfully deleted ${successCount} expense(s).${failCount > 0 ? ` Failed to delete ${failCount} item(s).` : ""}`,
+      );
+    } else {
+      showAlert("error", "Failed to delete any expenses. Please try again.");
+    }
+
+    setIsProcessingBulkDelete(false);
+  };
+
   const handleEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
     setShowEditModal(true);
@@ -265,7 +338,7 @@ function ExpensesContent() {
   const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage);
   const paginatedExpenses = filteredExpenses.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   // Calculate totals by currency
@@ -278,7 +351,7 @@ function ExpensesContent() {
       }
       return acc;
     },
-    { THB: 0, MMK: 0 }
+    { THB: 0, MMK: 0 },
   );
 
   // Reset to page 1 when filters change
@@ -600,10 +673,59 @@ function ExpensesContent() {
                   </div>
                 )}
 
+                {/* Bulk Actions Bar */}
+                {selectedExpenses.length > 0 && (
+                  <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-blue-900">
+                        {selectedExpenses.length} expense(s) selected
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleBulkDelete}
+                        disabled={isProcessingBulkDelete}
+                        className="flex items-center px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isProcessingBulkDelete ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Selected
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setSelectedExpenses([])}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-medium"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-gray-100 border-b">
+                        <th className="px-4 py-3 w-12">
+                          <input
+                            type="checkbox"
+                            checked={
+                              paginatedExpenses.length > 0 &&
+                              selectedExpenses.length ===
+                                paginatedExpenses.length
+                            }
+                            onChange={toggleSelectAll}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                            aria-label="Select all expenses"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
                           Image
                         </th>
@@ -631,7 +753,7 @@ function ExpensesContent() {
                       {filteredExpenses.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={8}
                             className="px-4 py-8 text-center text-gray-500"
                           >
                             {expenses.length === 0
@@ -645,6 +767,15 @@ function ExpensesContent() {
                             key={expense.id}
                             className="border-b hover:bg-gray-50"
                           >
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedExpenses.includes(expense.id)}
+                                onChange={() => toggleSelectExpense(expense.id)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                aria-label={`Select expense ${expense.id}`}
+                              />
+                            </td>
                             <td className="px-4 py-3 text-sm">
                               {expense.imageUrl ? (
                                 <a
@@ -710,7 +841,7 @@ function ExpensesContent() {
                       Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
                       {Math.min(
                         currentPage * itemsPerPage,
-                        filteredExpenses.length
+                        filteredExpenses.length,
                       )}{" "}
                       of {filteredExpenses.length} expenses
                     </div>
