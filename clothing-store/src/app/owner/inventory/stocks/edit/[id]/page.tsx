@@ -330,6 +330,20 @@ function EditStockContent() {
               image: data.url,
             };
             newVariants.push(newVariant);
+
+            // Extract colors from the uploaded image
+            try {
+              const extractedColors = await extractColorsFromImage(data.url);
+              setDetectedColors((prev) => ({
+                ...prev,
+                [newVariant.id]: extractedColors,
+              }));
+            } catch (error) {
+              console.error(
+                "Failed to extract colors from uploaded image:",
+                error,
+              );
+            }
           } else {
             setError((prev) => prev + `Failed to upload ${file.name}. `);
           }
@@ -412,6 +426,31 @@ function EditStockContent() {
         return { ...variant, [field]: value } as ColorVariant;
       }),
     );
+  };
+
+  // Handle image upload with automatic color detection
+  const handleImageUpload = async (id: string, imageUrl: string) => {
+    // First update the image
+    updateColorVariant(id, "image", imageUrl);
+
+    // Then extract colors from the image
+    if (imageUrl) {
+      try {
+        const extractedColors = await extractColorsFromImage(imageUrl);
+        setDetectedColors((prev) => ({
+          ...prev,
+          [id]: extractedColors,
+        }));
+      } catch (error) {
+        console.error("Failed to extract colors from image:", error);
+      }
+    } else {
+      // Clear detected colors if image is removed
+      setDetectedColors((prev) => ({
+        ...prev,
+        [id]: [],
+      }));
+    }
   };
 
   // Debounce timers per-variant for color detection
@@ -1143,7 +1182,7 @@ function EditStockContent() {
                               <ImageUpload
                                 value={variant.image || ""}
                                 onChange={(url) =>
-                                  updateColorVariant(variant.id, "image", url)
+                                  handleImageUpload(variant.id, url)
                                 }
                                 folder="pos-clothing-store/variants"
                                 placeholder="Upload variant image"
@@ -1212,6 +1251,37 @@ function EditStockContent() {
                                   </div>
                                 </div>
                               </div>
+
+                              {/* Detected Colors Display */}
+                              {detectedColors[variant.id] &&
+                                detectedColors[variant.id].length > 0 && (
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                      Detected Colors (Click to Select)
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {detectedColors[variant.id].map(
+                                        (color, index) => (
+                                          <button
+                                            key={index}
+                                            type="button"
+                                            onClick={() =>
+                                              updateColorVariant(
+                                                variant.id,
+                                                "colorCode",
+                                                color,
+                                              )
+                                            }
+                                            className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-gray-500 transition-colors shadow-sm hover:shadow-md"
+                                            style={{ backgroundColor: color }}
+                                            title={`Use color ${color}`}
+                                            aria-label={`Select detected color ${color}`}
+                                          />
+                                        ),
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
 
                               {/* Size Selector */}
                               <div>
