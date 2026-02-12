@@ -1257,7 +1257,7 @@ function EditStockContent() {
                                 detectedColors[variant.id].length > 0 && (
                                   <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                      Detected Colors (Click to Select)
+                                      Detected Colors
                                     </label>
                                     <div className="flex flex-wrap gap-2">
                                       {detectedColors[variant.id].map(
