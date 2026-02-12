@@ -1,23 +1,13 @@
 "use client";
 
-import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
-import {
-  Printer,
-  Search,
-  Package,
-  QrCode,
-  Download,
-  Eye,
-  Settings,
-  Filter,
-  Save,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Printer, Search, Package, QrCode, Settings } from "lucide-react";
 import { ClothingInventoryItem } from "@/types/schemas";
 import { InventoryService } from "@/services/InventoryService";
 import { ShopService } from "@/services/shopService";
@@ -40,6 +30,7 @@ interface InventoryVariant {
 }
 
 function LabelPrintContent() {
+  const router = useRouter();
   const [activeMenuItem, setActiveMenuItem] = useState("label-print");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -58,24 +49,7 @@ function LabelPrintContent() {
   const [selectedShop, setSelectedShop] = useState("all");
   const [selectedVariants, setSelectedVariants] = useState<string[]>([]);
 
-  // Print settings state
-  const [labelSize, setLabelSize] = useState("small"); // small, medium, large
-  const [includePrice, setIncludePrice] = useState(true);
-  const [includeBarcode, setIncludeBarcode] = useState(true);
-  const [showPrintSettings, setShowPrintSettings] = useState(true);
-
-  // Enhanced label configuration state
-  const [labelWidth, setLabelWidth] = useState<number | string>(50);
-  const [labelHeight, setLabelHeight] = useState<number | string>(90);
-  const [labelGap, setLabelGap] = useState<number | string>(90);
-  const [standard, setStandard] = useState("EAN-13");
-  const [gs1CompanyPrefix, setGs1CompanyPrefix] = useState("8901234");
-  const [autoSequence, setAutoSequence] = useState<number | string>(64);
-  const [showCompany, setShowCompany] = useState(true);
-  const [showDates, setShowDates] = useState(false);
-  const [showPrice, setShowPrice] = useState(true);
-
-  // New state for saving settings
+  // Label settings loaded from localStorage (configured in Print Settings page)
   interface LabelSettings {
     labelWidth: number;
     labelHeight: number;
@@ -88,10 +62,28 @@ function LabelPrintContent() {
     showPrice: boolean;
   }
 
-  const [savedSettings, setSavedSettings] = useState<LabelSettings | null>(
-    null,
-  );
-  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [labelSettings, setLabelSettings] = useState<LabelSettings>({
+    labelWidth: 50,
+    labelHeight: 30,
+    labelGap: 3,
+    standard: "EAN-13",
+    gs1CompanyPrefix: "8851234",
+    autoSequence: 1,
+    showCompany: true,
+    showDates: false,
+    showPrice: true,
+  });
+
+  // For backward compatibility with existing code
+  const labelWidth = labelSettings.labelWidth;
+  const labelHeight = labelSettings.labelHeight;
+  const labelGap = labelSettings.labelGap;
+  const standard = labelSettings.standard;
+  const gs1CompanyPrefix = labelSettings.gs1CompanyPrefix;
+  const showCompany = labelSettings.showCompany;
+  const showDates = labelSettings.showDates;
+  const showPrice = labelSettings.showPrice;
+  const includeBarcode = true;
 
   // Individual quantity tracking for each selected item
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(
@@ -127,44 +119,16 @@ function LabelPrintContent() {
     return paddedNumber;
   };
 
-  // Save label settings function
-  const saveLabelSettings = () => {
-    const settings = {
-      labelWidth: typeof labelWidth === "number" ? labelWidth : 50,
-      labelHeight: typeof labelHeight === "number" ? labelHeight : 90,
-      labelGap: typeof labelGap === "number" ? labelGap : 90,
-      standard,
-      gs1CompanyPrefix,
-      autoSequence: typeof autoSequence === "number" ? autoSequence : 64,
-      showCompany,
-      showDates,
-      showPrice,
-    };
-
-    // Save to localStorage
-    localStorage.setItem("labelSettings", JSON.stringify(settings));
-    setSavedSettings(settings);
-    setShowSaveSuccess(true);
-
-    // Hide success message after 3 seconds
-    setTimeout(() => setShowSaveSuccess(false), 3000);
-  };
-
-  // Load saved settings on component mount
+  // Load label settings from localStorage (configured in Print Settings page)
   useEffect(() => {
     const saved = localStorage.getItem("labelSettings");
     if (saved) {
-      const settings = JSON.parse(saved);
-      setSavedSettings(settings);
-      setLabelWidth(settings.labelWidth);
-      setLabelHeight(settings.labelHeight);
-      setLabelGap(settings.labelGap);
-      setStandard(settings.standard);
-      setGs1CompanyPrefix(settings.gs1CompanyPrefix);
-      setAutoSequence(settings.autoSequence);
-      setShowCompany(settings.showCompany);
-      setShowDates(settings.showDates);
-      setShowPrice(settings.showPrice);
+      try {
+        const settings = JSON.parse(saved);
+        setLabelSettings(settings);
+      } catch (e) {
+        console.error("Error loading label settings:", e);
+      }
     }
   }, []);
 
@@ -767,9 +731,6 @@ function LabelPrintContent() {
         <div className="bg-white border-b border-gray-100 px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="p-2 bg-blue-50 rounded-xl">
-                <QrCode className="h-6 w-6 text-blue-600" />
-              </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-800">
                   Label Printing
@@ -781,12 +742,12 @@ function LabelPrintContent() {
             </div>
             <div className="flex items-center space-x-3">
               <Button
-                onClick={() => setShowPrintSettings(!showPrintSettings)}
+                onClick={() => router.push("/owner/barcode/print-settings")}
                 variant="outline"
                 className="border-gray-200 text-gray-600 hover:bg-gray-50"
               >
                 <Settings className="h-4 w-4 mr-2" />
-                {showPrintSettings ? "Hide Settings" : "Show Settings"}
+                Label Settings
               </Button>
               <Button
                 onClick={handlePrintLabels}
@@ -798,292 +759,28 @@ function LabelPrintContent() {
               </Button>
             </div>
           </div>
-        </div>
 
-        {/* Enhanced Label Configuration Section */}
-        {showPrintSettings && (
-          <div className="bg-white border-b border-gray-200">
-            <div className="px-6 py-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                  Label Size & Options
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* First Row - Dimensions */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Label Width (mm)
-                    </label>
-                    <input
-                      title="labelWidth"
-                      type="number"
-                      value={labelWidth}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setLabelWidth("");
-                        } else {
-                          const numValue = parseInt(value);
-                          setLabelWidth(isNaN(numValue) ? 50 : numValue);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                      min="10"
-                      max="200"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Label Height (mm)
-                    </label>
-                    <input
-                      title="labelHeight"
-                      type="number"
-                      value={labelHeight}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setLabelHeight("");
-                        } else {
-                          const numValue = parseInt(value);
-                          setLabelHeight(isNaN(numValue) ? 90 : numValue);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                      min="10"
-                      max="200"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Gap (mm)
-                    </label>
-                    <input
-                      title="labelGap"
-                      type="number"
-                      value={labelGap}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setLabelGap("");
-                        } else {
-                          const numValue = parseInt(value);
-                          setLabelGap(isNaN(numValue) ? 90 : numValue);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                      min="0"
-                      max="100"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  {/* Second Row - Standards and Settings */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Standard
-                    </label>
-                    <select
-                      title="standard"
-                      value={standard}
-                      onChange={(e) => setStandard(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                    >
-                      <option value="EAN-13">EAN-13 (Global retail)</option>
-                      <option value="UPC-A">UPC-A (North America)</option>
-                      <option value="Code-128">
-                        Code-128 (General purpose)
-                      </option>
-                      <option value="QR-Code">QR Code</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      GS1/Company Prefix
-                    </label>
-                    <input
-                      type="text"
-                      value={gs1CompanyPrefix}
-                      onChange={(e) => setGs1CompanyPrefix(e.target.value)}
-                      placeholder="e.g., 8901234"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Auto Sequence
-                    </label>
-                    <input
-                      title="autoSequence"
-                      type="number"
-                      value={autoSequence}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "") {
-                          setAutoSequence("");
-                        } else {
-                          const numValue = parseInt(value);
-                          setAutoSequence(isNaN(numValue) ? 64 : numValue);
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                      min="1"
-                      max="999999"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                  {/* Third Row - Checkboxes */}
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showCompany"
-                      checked={showCompany}
-                      onChange={(e) => setShowCompany(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="showCompany"
-                      className="ml-2 text-sm font-medium text-gray-700"
-                    >
-                      Show Branch
-                    </label>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showDates"
-                      checked={showDates}
-                      onChange={(e) => setShowDates(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="showDates"
-                      className="ml-2 text-sm font-medium text-gray-700"
-                    >
-                      Show Dates
-                    </label>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="showPrice"
-                      checked={showPrice}
-                      onChange={(e) => setShowPrice(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label
-                      htmlFor="showPrice"
-                      className="ml-2 text-sm font-medium text-gray-700"
-                    >
-                      Show Price
-                    </label>
-                  </div>
-                </div>
-
-                {/* Save Settings */}
-                <div className="mt-6">
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={saveLabelSettings}
-                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-md flex items-center gap-2"
-                    >
-                      <Save className="h-4 w-4" />
-                      Save Label Settings
-                    </Button>
-                    {showSaveSuccess && (
-                      <p className="text-green-600 text-sm mt-2 flex items-center gap-1">
-                        <span className="text-green-500">✓</span>
-                        Settings saved successfully!
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Label Preview */}
-                <div className="mt-8">
-                  <h4 className="text-sm font-medium text-gray-700 mb-4">
-                    Label Preview
-                  </h4>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex justify-center">
-                    <div
-                      className="bg-white border border-gray-300 p-3 flex flex-col justify-between relative rounded-lg shadow-sm"
-                      style={{
-                        width: `${Math.max((typeof labelWidth === "number" ? labelWidth : 50) * 3.78, 120)}px`,
-                        height: `${Math.max((typeof labelHeight === "number" ? labelHeight : 90) * 3.78, 80)}px`,
-                      }}
-                    >
-                      {/* Product Info Section */}
-                      <div className="flex-1">
-                        <div className="font-bold text-xs leading-tight mb-1 text-black">
-                          Summer Dress
-                        </div>
-                        <div className="text-xs leading-tight text-gray-700">
-                          Blue - M
-                        </div>
-                        {showCompany && (
-                          <div className="text-xs mt-1 text-gray-600">
-                            Sample Branch
-                          </div>
-                        )}
-                        {showDates && (
-                          <div className="text-xs mt-1 text-gray-600">
-                            {new Date().toLocaleDateString()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Barcode Section */}
-                      {includeBarcode && (
-                        <div className="my-2">
-                          <div className="flex justify-center items-end space-x-px bg-white p-1">
-                            {[
-                              1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1,
-                              0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0,
-                              1, 1, 0, 1, 0, 1,
-                            ].map((bar, index) => (
-                              <div
-                                key={index}
-                                className={`${bar ? "bg-black" : "bg-white"} w-0.5 h-4`}
-                              />
-                            ))}
-                          </div>
-                          <div className="text-center font-mono text-xs mt-1 tracking-wider text-black">
-                            {gs1CompanyPrefix}
-                            {autoSequence.toString().padStart(6, "0")}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Price Section */}
-                      {showPrice && (
-                        <div className="text-right">
-                          <div className="font-bold text-xs text-black">
-                            $29.99
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-gray-500 text-center">
-                    Preview updates based on your settings (
-                    {typeof labelWidth === "number" ? labelWidth : 50}×
-                    {typeof labelHeight === "number" ? labelHeight : 90}mm)
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* Current Settings Summary */}
+          <div className="mt-4 flex items-center gap-4 text-sm text-gray-600">
+            <span className="px-3 py-1 bg-gray-100 rounded-full">
+              Label: {labelWidth}×{labelHeight}mm
+            </span>
+            <span className="px-3 py-1 bg-gray-100 rounded-full">
+              {standard}
+            </span>
+            {showCompany && (
+              <span className="px-3 py-1 bg-gray-100 rounded-full">
+                Shop Name
+              </span>
+            )}
+            {showPrice && (
+              <span className="px-3 py-1 bg-gray-100 rounded-full">Price</span>
+            )}
+            {showDates && (
+              <span className="px-3 py-1 bg-gray-100 rounded-full">Date</span>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="flex-1 overflow-auto">
           <div className="min-h-full">
@@ -1099,14 +796,14 @@ function LabelPrintContent() {
                       placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-900 placeholder-gray-400 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200  focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-900 placeholder-gray-400 transition-all"
                     />
                   </div>
                   <select
                     title="selectedShop"
                     value={selectedShop}
                     onChange={(e) => setSelectedShop(e.target.value)}
-                    className="w-44 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-700 transition-all"
+                    className="w-44 px-4 py-2 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-700 transition-all"
                   >
                     <option value="all">All Shops</option>
                     {getUniqueShops().map((shop) => (
@@ -1118,19 +815,11 @@ function LabelPrintContent() {
                   <Button
                     onClick={handleSelectAll}
                     variant="outline"
-                    className="whitespace-nowrap px-4 py-3 border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-all"
+                    className="whitespace-nowrap px-4 py-2 border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
                   >
                     {selectedVariants.length === filteredVariants.length
                       ? "Deselect All"
                       : "Select All"}
-                  </Button>
-                  <Button
-                    onClick={() => setShowPrintSettings(!showPrintSettings)}
-                    variant="outline"
-                    className="whitespace-nowrap px-4 py-3 border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl transition-all flex items-center gap-2"
-                  >
-                    <Settings className="h-4 w-4" />
-                    {showPrintSettings ? "Hide Settings" : "Show Settings"}
                   </Button>
                 </div>
               </div>
