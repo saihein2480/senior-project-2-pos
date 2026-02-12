@@ -1016,7 +1016,7 @@ function OwnerHomeContent() {
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
                         {hasActiveFilters && (
-                          <span className="ml-2 px-1.5 py-0.5 bg-gray-600 text-white text-xs rounded-full">
+                          <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
                             {
                               [
                                 selectedCategory !== "all",
@@ -1037,7 +1037,7 @@ function OwnerHomeContent() {
                             {hasActiveFilters && (
                               <button
                                 onClick={clearFilters}
-                                className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                               >
                                 Clear all
                               </button>
