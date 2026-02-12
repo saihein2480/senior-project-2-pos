@@ -25,7 +25,7 @@ import {
 import { Shop, ShopListResponse } from "@/types/shop";
 import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
-import { detectColorName } from "@/lib/colorUtils";
+import { detectColorName, extractColorsFromImage } from "@/lib/colorUtils";
 
 // Type declaration for BarcodeDetector API
 interface BarcodeDetector {
@@ -74,6 +74,11 @@ function EditStockContent() {
   const [wholesaleTiers, setWholesaleTiers] = useState<WholesaleTier[]>([]);
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
+
+  // Track detected colors for each variant
+  const [detectedColors, setDetectedColors] = useState<
+    Record<string, string[]>
+  >({});
 
   // Loading and error states
   const [isLoading, setIsLoading] = useState(false);

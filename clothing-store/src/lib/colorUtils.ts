@@ -70,6 +70,111 @@ function deltaE(
   return Math.sqrt(dL * dL + da * da + db * db);
 }
 
+function rgbToHex(r: number, g: number, b: number): string {
+  return (
+    "#" +
+    [r, g, b]
+      .map((x) => {
+        const hex = Math.round(x).toString(16);
+        return hex.length === 1 ? "0" + hex : hex;
+      })
+      .join("")
+  );
+}
+
+// Extract dominant colors from an image
+export function extractColorsFromImage(imageUrl: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("Could not get canvas context"));
+          return;
+        }
+
+        // Set canvas size to image size
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw image on canvas
+        ctx.drawImage(img, 0, 0);
+
+        // Get image data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        // Sample colors - take every nth pixel to avoid processing too many
+        const sampleRate = Math.max(1, Math.floor(data.length / (4 * 1000))); // Sample ~1000 pixels
+        const colors: { [key: string]: number } = {};
+
+        for (let i = 0; i < data.length; i += 4 * sampleRate) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+
+          // Skip transparent/semi-transparent pixels
+          if (a < 128) continue;
+
+          // Skip very light colors (likely background)
+          if (r > 240 && g > 240 && b > 240) continue;
+
+          // Skip very dark colors (likely shadows)
+          if (r < 15 && g < 15 && b < 15) continue;
+
+          const hex = rgbToHex(r, g, b);
+          colors[hex] = (colors[hex] || 0) + 1;
+        }
+
+        // Sort colors by frequency and get top colors
+        const sortedColors = Object.entries(colors)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 12) // Get top 12 colors
+          .map(([hex]) => hex);
+
+        // Remove very similar colors using color difference
+        const distinctColors: string[] = [];
+        for (const color of sortedColors) {
+          const currentLab = rgbToLab(hexToRgb(color));
+          let isDifferent = true;
+
+          for (const existingColor of distinctColors) {
+            const existingLab = rgbToLab(hexToRgb(existingColor));
+            if (deltaE(currentLab, existingLab) < 15) {
+              // Colors are too similar
+              isDifferent = false;
+              break;
+            }
+          }
+
+          if (isDifferent) {
+            distinctColors.push(color);
+          }
+
+          // Limit to 8 distinct colors
+          if (distinctColors.length >= 8) break;
+        }
+
+        resolve(distinctColors);
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    img.onerror = () => {
+      reject(new Error("Could not load image"));
+    };
+
+    img.src = imageUrl;
+  });
+}
+
 export function detectColorName(hex: string): string {
   try {
     const key = hex.toUpperCase();
