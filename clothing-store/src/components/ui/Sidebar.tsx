@@ -118,13 +118,6 @@ const menuItems: MenuItem[] = [
         roles: ["owner", "manager"],
       },
       {
-        id: "new-stock",
-        label: "New Stock",
-        icon: "Plus",
-        href: "/owner/barcode/new-stock",
-        roles: ["owner", "manager"],
-      },
-      {
         id: "print-settings",
         label: "Print Settings",
         icon: "Settings",
