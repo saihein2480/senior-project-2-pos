@@ -1137,7 +1137,7 @@ function OwnerHomeContent() {
                           title="First page"
                           onClick={() => setCurrentPage(1)}
                           disabled={currentPage === 1}
-                          className="px-2 py-1 rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                         >
                           First
                         </button>
@@ -1148,7 +1148,7 @@ function OwnerHomeContent() {
                             setCurrentPage((p) => Math.max(p - 1, 1))
                           }
                           disabled={currentPage === 1}
-                          className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-2 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <svg
                             className="w-4 h-4"
@@ -1187,7 +1187,7 @@ function OwnerHomeContent() {
                                 <>
                                   <button
                                     onClick={() => setCurrentPage(1)}
-                                    className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                                   >
                                     1
                                   </button>
@@ -1201,7 +1201,7 @@ function OwnerHomeContent() {
                                 <button
                                   key={pageNumber}
                                   onClick={() => setCurrentPage(pageNumber)}
-                                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                  className={`px-3 py-1.5   text-sm font-medium transition-colors ${
                                     currentPage === pageNumber
                                       ? "bg-blue-600 text-white hover:bg-blue-700"
                                       : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -1218,7 +1218,7 @@ function OwnerHomeContent() {
                                   </span>
                                   <button
                                     onClick={() => setCurrentPage(totalPages)}
-                                    className="px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                                   >
                                     {totalPages}
                                   </button>
@@ -1236,7 +1236,7 @@ function OwnerHomeContent() {
                             )
                           }
                           disabled={currentPage === totalPages}
-                          className="p-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="p-2 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <svg
                             className="w-4 h-4"
@@ -1257,7 +1257,7 @@ function OwnerHomeContent() {
                           title="Last page"
                           onClick={() => setCurrentPage(totalPages)}
                           disabled={currentPage === totalPages}
-                          className="px-2 py-1 rounded-md border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                         >
                           Last
                         </button>

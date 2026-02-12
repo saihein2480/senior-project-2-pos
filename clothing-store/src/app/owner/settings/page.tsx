@@ -277,6 +277,8 @@ function OwnerSettingsContent() {
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <Sidebar
+          activeItem="settings"
+          onItemClick={() => {}}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isCartModalOpen={isCartModalOpen}
@@ -285,6 +287,8 @@ function OwnerSettingsContent() {
 
       {/* Mobile Sidebar (overlay) */}
       <Sidebar
+        activeItem="settings"
+        onItemClick={() => {}}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
@@ -515,7 +519,7 @@ function OwnerSettingsContent() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <label className="block text-sm font-normal text-gray-900 mb-2">
-                            Default Currency
+                            Main Currency
                           </label>
                           <div className="relative">
                             <select

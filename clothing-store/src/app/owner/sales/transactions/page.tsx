@@ -77,7 +77,12 @@ export default function TransactionsPage() {
   const [isProcessingCancel, setIsProcessingCancel] = useState(false);
   const [isProcessingDelete, setIsProcessingDelete] = useState(false);
 
-  const isProbablyId = (s?: string) => !!s && /(^cv|[-_].+-)/.test(s);
+  const isProbablyId = (s?: string) =>
+    !!s &&
+    (/(^cv|[-_].+-)/.test(s) || // Original ID patterns
+      /^\d{13,}/.test(s) || // Long numeric IDs (timestamps)
+      /^[a-f0-9]{16,}$/i.test(s) || // Long hex IDs
+      /^\d+[a-z]{5,}$/i.test(s)); // Timestamp + random chars
 
   const getDisplayColor = (item: Transaction["items"][number]): string => {
     const hex = item.colorCode || "#000000";

@@ -5,15 +5,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { SettingsService } from "@/services/settingsService";
 import { useSettings } from "@/contexts/SettingsContext";
-import {
-  X,
-  Minus,
-  Plus,
-  ShoppingCart,
-  Eye,
-  User,
-  Users,
-} from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, Eye, User, Users } from "lucide-react";
 import Image from "next/image";
 import { detectColorName } from "@/lib/colorUtils";
 import { CustomerSelectionModal } from "@/components/cart/CustomerSelectionModal";
@@ -381,7 +373,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   };
 
   const getVariantColorLabel = (item: CartItemForLabel) => {
-    const isProbablyId = (s?: string) => !!s && /(^cv|[-_].+-)/.test(s);
+    const isProbablyId = (s?: string) =>
+      !!s &&
+      (/(^cv|[-_].+-)/.test(s) || // Original ID patterns
+        /^\d{13,}/.test(s) || // Long numeric IDs (timestamps)
+        /^[a-f0-9]{16,}$/i.test(s) || // Long hex IDs
+        /^\d+[a-z]{5,}$/i.test(s)); // Timestamp + random chars
     const hex = item.colorCode || "#000000";
     if (item.selectedColor && !isProbablyId(item.selectedColor)) {
       return item.selectedColor;
@@ -702,7 +699,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                   <span className="text-xs font-medium text-gray-800">
                                     {(() => {
                                       const isProbablyId = (s?: string) =>
-                                        !!s && /(^cv|[-_].+-)/.test(s);
+                                        !!s &&
+                                        (/(^cv|[-_].+-)/.test(s) || // Original ID patterns
+                                          /^\d{13,}/.test(s) || // Long numeric IDs (timestamps)
+                                          /^[a-f0-9]{16,}$/i.test(s) || // Long hex IDs
+                                          /^\d+[a-z]{5,}$/i.test(s)); // Timestamp + random chars
                                       const hex = item.colorCode || "#000000";
                                       if (
                                         item.selectedColor &&
