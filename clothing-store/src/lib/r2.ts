@@ -123,7 +123,8 @@ export async function uploadToR2(
   file: Buffer,
   contentType: string,
   folder?: string,
-  originalFilename?: string
+  originalFilename?: string,
+  force?: boolean,
 ): Promise<R2UploadResult> {
   try {
     // Calculate hash of the file
@@ -132,8 +133,12 @@ export async function uploadToR2(
     // Determine extension from original filename if provided
     const extension = originalFilename?.split(".").pop() || undefined;
 
-    // Check if file with same hash already exists (try with extension)
-    const existingUrl = await checkDuplicateByHash(hash, folder, extension);
+    // If not forcing, check if file with same hash already exists (try with extension)
+    let existingUrl: string | null = null;
+    if (!force) {
+      existingUrl = await checkDuplicateByHash(hash, folder, extension);
+    }
+
     if (existingUrl) {
       console.log(
         `Duplicate file detected. Returning existing URL: ${existingUrl}`

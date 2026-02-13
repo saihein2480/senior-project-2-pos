@@ -27,6 +27,28 @@ const COLLECTION_NAME = "stocks";
 const generateId = () =>
   Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
+// Helper to generate an EAN-13 barcode string
+const generateEAN13 = (): string => {
+  const countryCode = "885"; // Thailand
+  const manufacturerCode = "1001";
+  const timestamp = Date.now().toString();
+  const productCode = timestamp.slice(-5);
+  const first12Digits = countryCode + manufacturerCode + productCode;
+
+  const calculateCheckDigit = (digits: string): string => {
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      const digit = parseInt(digits[i], 10);
+      sum += i % 2 === 0 ? digit : digit * 3;
+    }
+    const checkDigit = (10 - (sum % 10)) % 10;
+    return checkDigit.toString();
+  };
+
+  const checkDigit = calculateCheckDigit(first12Digits);
+  return first12Digits + checkDigit;
+};
+
 export class StockService {
   static async createStock(
     stockData: CreateStockRequest,
@@ -45,10 +67,14 @@ export class StockService {
         }),
       );
 
-      const colorVariants: ColorVariant[] = stockData.colorVariants.map(
+      const colorVariants: ColorVariant[] = (stockData.colorVariants || []).map(
         (variant) => ({
           ...variant,
           id: generateId(),
+          barcode:
+            variant.barcode && variant.barcode.toString().trim() !== ""
+              ? variant.barcode
+              : generateEAN13(),
         }),
       );
 
@@ -201,6 +227,17 @@ export class StockService {
     }
 
     try {
+      // If colorVariants are provided in updates, ensure each has a barcode
+      if (updates.colorVariants && Array.isArray(updates.colorVariants)) {
+        updates.colorVariants = updates.colorVariants.map((variant) => ({
+          ...variant,
+          barcode:
+            variant.barcode && variant.barcode.toString().trim() !== ""
+              ? variant.barcode
+              : generateEAN13(),
+        })) as unknown as ColorVariant[];
+      }
+
       const stockRef = doc(db, COLLECTION_NAME, id);
       await updateDoc(stockRef, {
         ...updates,

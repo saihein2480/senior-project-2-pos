@@ -717,8 +717,22 @@ function EditStockContent() {
     setIsLoading(true);
 
     try {
+      // Ensure there's at least one variant to attach a barcode to (handles colorless items)
+      let variantsToUse = colorVariants;
+      if (!variantsToUse || variantsToUse.length === 0) {
+        variantsToUse = [
+          {
+            id: Date.now().toString(),
+            color: "",
+            colorCode: "#000000",
+            barcode: "",
+            sizeQuantities: [],
+          },
+        ];
+      }
+
       // Auto-generate barcodes for variants that don't have one
-      const variantsWithBarcodes = colorVariants.map((variant, index) => {
+      const variantsWithBarcodes = variantsToUse.map((variant, index) => {
         if (!variant.barcode || variant.barcode.trim() === "") {
           // Generate unique barcode for this variant using index to ensure uniqueness
           const countryCode = "885"; // Thailand country code

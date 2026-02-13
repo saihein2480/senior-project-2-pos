@@ -31,8 +31,17 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Upload to Cloudflare R2 (with duplicate detection)
-    const result = await uploadToR2(buffer, file.type, folder, file.name);
+    // Allow caller to force upload (bypass duplicate detection)
+    const forceFlag = (formData.get("force") as string) === "true";
+
+    // Upload to Cloudflare R2 (with duplicate detection unless forced)
+    const result = await uploadToR2(
+      buffer,
+      file.type,
+      folder,
+      file.name,
+      forceFlag,
+    );
 
     return NextResponse.json({
       success: true,

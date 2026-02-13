@@ -208,6 +208,15 @@ export default function NewCustomerModal({
                       src={imagePreview}
                       alt="Customer preview"
                       className="w-24 h-24 object-cover rounded-full mx-auto mb-2 border-2 border-gray-200"
+                      onError={(e) => {
+                        try {
+                          (e.currentTarget as HTMLImageElement).onerror = null;
+                          (e.currentTarget as HTMLImageElement).src =
+                            "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'></svg>";
+                        } catch (err) {
+                          // ignore
+                        }
+                      }}
                     />
                     <button
                       aria-label="Remove image"

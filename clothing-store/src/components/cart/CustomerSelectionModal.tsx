@@ -179,6 +179,15 @@ export function CustomerSelectionModal({
                           className="h-12 w-12 rounded-full object-cover border-2 border-gray-200"
                           src={customer.customerImage}
                           alt={customer.displayName || customer.email}
+                          onError={(e) => {
+                            try {
+                              (e.currentTarget as HTMLImageElement).onerror = null;
+                              (e.currentTarget as HTMLImageElement).src =
+                                "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'></svg>";
+                            } catch (err) {
+                              // ignore
+                            }
+                          }}
                         />
                       ) : (
                         <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
