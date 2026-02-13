@@ -17,7 +17,7 @@ import {
   Filter,
   X,
 } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { StockItem, WholesaleTier } from "@/types/stock";
@@ -796,6 +796,19 @@ function OwnerHomeContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 60;
 
+  // Tooltip state for showing full item name on hover/touch
+  const [tooltipItem, setTooltipItem] = useState<string | null>(null);
+  const tooltipTimeoutRef = useRef<number | null>(null);
+
+  // Clear any tooltip timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        window.clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Use API data
   const displayInventory = clothingInventory;
 
@@ -979,7 +992,7 @@ function OwnerHomeContent() {
               <div className="px-4 py-5 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
                   <div className="flex items-center space-x-4">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    <h3 className="text-lg lg:text-base xl:text-lg leading-6 font-medium text-gray-900">
                       Clothing Inventory
                     </h3>
                     <div className="relative">
@@ -988,7 +1001,7 @@ function OwnerHomeContent() {
                         placeholder="Search items, groups, IDs..."
                         value={searchTerm}
                         onChange={handleSearchChange}
-                        className="pl-10 pr-4 py-2 w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
+                        className="pl-10 pr-4 py-2 w-60 xl:w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
                       />
                       <svg
                         className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"
@@ -1011,7 +1024,7 @@ function OwnerHomeContent() {
                         onClick={() =>
                           setShowFilterDropdown(!showFilterDropdown)
                         }
-                        className="flex items-center px-4 py-2 border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
+                        className="flex items-center px-3 py-1.5 xl:px-4 xl:py-2 border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
                       >
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
@@ -1029,7 +1042,7 @@ function OwnerHomeContent() {
                       </button>
 
                       {showFilterDropdown && (
-                        <div className="absolute z-50 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+                        <div className="absolute z-50 mt-2 w-72 xl:w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-semibold text-gray-900">
                               Filters
@@ -1128,146 +1141,7 @@ function OwnerHomeContent() {
                     </div>
                   </div>
 
-                  {/* Pagination */}
-                  <div className="flex items-center space-x-2">
-                    {/* Page Numbers - improved layout */}
-                    <div className="flex items-center justify-center space-x-2 w-full">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          title="First page"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          First
-                        </button>
-
-                        <button
-                          title="Previous page"
-                          onClick={() =>
-                            setCurrentPage((p) => Math.max(p - 1, 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="p-2 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15 19l-7-7 7-7"
-                            />
-                          </svg>
-                        </button>
-
-                        {(() => {
-                          const maxButtons = 5;
-                          let start = Math.max(
-                            1,
-                            currentPage - Math.floor(maxButtons / 2),
-                          );
-                          const end = Math.min(
-                            totalPages,
-                            start + maxButtons - 1,
-                          );
-                          if (end - start + 1 < maxButtons) {
-                            start = Math.max(1, end - maxButtons + 1);
-                          }
-                          const pages: number[] = [];
-                          for (let p = start; p <= end; p++) pages.push(p);
-
-                          return (
-                            <>
-                              {start > 1 && (
-                                <>
-                                  <button
-                                    onClick={() => setCurrentPage(1)}
-                                    className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                                  >
-                                    1
-                                  </button>
-                                  <span className="px-2 text-gray-500">
-                                    ...
-                                  </span>
-                                </>
-                              )}
-
-                              {pages.map((pageNumber) => (
-                                <button
-                                  key={pageNumber}
-                                  onClick={() => setCurrentPage(pageNumber)}
-                                  className={`px-3 py-1.5   text-sm font-medium transition-colors ${
-                                    currentPage === pageNumber
-                                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                                  }`}
-                                >
-                                  {pageNumber}
-                                </button>
-                              ))}
-
-                              {end < totalPages && (
-                                <>
-                                  <span className="px-2 text-gray-500">
-                                    ...
-                                  </span>
-                                  <button
-                                    onClick={() => setCurrentPage(totalPages)}
-                                    className="px-3 py-2 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                                  >
-                                    {totalPages}
-                                  </button>
-                                </>
-                              )}
-                            </>
-                          );
-                        })()}
-
-                        <button
-                          title="Next page"
-                          onClick={() =>
-                            setCurrentPage((prev) =>
-                              Math.min(prev + 1, totalPages),
-                            )
-                          }
-                          disabled={currentPage === totalPages}
-                          className="p-2 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </button>
-
-                        <button
-                          title="Last page"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Last
-                        </button>
-                      </div>
-
-                      <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
-                        Page {currentPage} of {totalPages}
-                      </div>
-                    </div>
-                  </div>
+                  
                 </div>
 
                 {/* Clothing Grid */}
@@ -1399,11 +1273,34 @@ function OwnerHomeContent() {
 
                           {/* Product Details */}
                           <div className="p-3">
-                            <h4 className="font-medium text-gray-900 text-sm mb-1">
-                              {item.name.length > 17
-                                ? `${item.name.substring(0, 17)}...`
-                                : item.name}
-                            </h4>
+                            <div className="relative">
+                              <h4
+                                className="font-medium text-gray-900 text-sm mb-1 truncate"
+                                title={item.name}
+                                onMouseEnter={() => setTooltipItem(item.id)}
+                                onMouseLeave={() => setTooltipItem(null)}
+                                onTouchStart={() => {
+                                  setTooltipItem(item.id);
+                                  if (tooltipTimeoutRef.current) {
+                                    window.clearTimeout(tooltipTimeoutRef.current);
+                                  }
+                                  tooltipTimeoutRef.current = window.setTimeout(() => {
+                                    setTooltipItem(null);
+                                    tooltipTimeoutRef.current = null;
+                                  }, 2500);
+                                }}
+                              >
+                                {item.name}
+                              </h4>
+
+                              {tooltipItem === item.id && (
+                                <div className="absolute left-0 bottom-full mb-1 z-50">
+                                  <div className="inline-block max-w-xs bg-gray-900 text-white text-xs px-2 py-1 rounded shadow">
+                                    {item.name}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             {/* Removed old category and branch display, now shown on image */}
 
                             {/* Price and Stock */}
@@ -1624,7 +1521,101 @@ function OwnerHomeContent() {
                       );
                     })
                   )}
-                </div>
+                  </div>
+
+                  {/* Pagination (moved to bottom) */}
+                  <div className="mt-6 flex items-center justify-center">
+                    <div className="flex items-center justify-center space-x-2 w-full px-2">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          title="First page"
+                          onClick={() => setCurrentPage(1)}
+                          disabled={currentPage === 1}
+                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          First
+                        </button>
+
+                        <button
+                          title="Previous page"
+                          onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+
+                        {(() => {
+                          const maxButtons = 5;
+                          let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                          const end = Math.min(totalPages, start + maxButtons - 1);
+                          if (end - start + 1 < maxButtons) {
+                            start = Math.max(1, end - maxButtons + 1);
+                          }
+                          const pages: number[] = [];
+                          for (let p = start; p <= end; p++) pages.push(p);
+
+                          return (
+                            <>
+                              {start > 1 && (
+                                <>
+                                  <button onClick={() => setCurrentPage(1)} className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">1</button>
+                                  <span className="px-2 text-gray-500">...</span>
+                                </>
+                              )}
+
+                              {pages.map((pageNumber) => (
+                                <button
+                                  key={pageNumber}
+                                  onClick={() => setCurrentPage(pageNumber)}
+                                  className={`px-2 py-1.5 text-sm font-medium transition-colors ${
+                                    currentPage === pageNumber
+                                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  {pageNumber}
+                                </button>
+                              ))}
+
+                              {end < totalPages && (
+                                <>
+                                  <span className="px-2 text-gray-500">...</span>
+                                  <button onClick={() => setCurrentPage(totalPages)} className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">{totalPages}</button>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
+
+                        <button
+                          title="Next page"
+                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+
+                        <button
+                          title="Last page"
+                          onClick={() => setCurrentPage(totalPages)}
+                          disabled={currentPage === totalPages}
+                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Last
+                        </button>
+                      </div>
+
+                      <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
+                        Page {currentPage} of {totalPages}
+                      </div>
+                    </div>
+                  </div>
               </div>
             </div>
           </div>

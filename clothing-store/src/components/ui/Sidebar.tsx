@@ -29,140 +29,8 @@ import {
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { UserRole } from "@/types/auth";
-
-const menuItems: MenuItem[] = [
-  {
-    id: "home",
-    label: "Home",
-    icon: "Home",
-    href: "/owner/home",
-    roles: ["owner", "manager", "staff"], // All roles can access
-  },
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: "BarChart3",
-    href: "/owner/dashboard",
-    roles: ["owner", "manager"], // Only owner and manager
-  },
-  {
-    id: "sales",
-    label: "Sales",
-    icon: "TrendingUp",
-    roles: ["owner", "manager", "staff"],
-    children: [
-      {
-        id: "transactions",
-        label: "Transactions",
-        icon: "CreditCard",
-        href: "/owner/sales/transactions",
-        roles: ["owner", "manager", "staff"],
-      },
-      {
-        id: "reports",
-        label: "Reports",
-        icon: "FileText",
-        href: "/owner/sales/reports",
-        roles: ["owner", "manager"], // No staff
-      },
-      {
-        id: "payments",
-        label: "Payments",
-        icon: "CreditCard",
-        href: "/owner/sales/payments",
-        roles: ["owner", "manager", "staff"],
-      },
-    ],
-  },
-  {
-    id: "inventory",
-    label: "Inventory",
-    icon: "Package",
-    roles: ["owner", "manager", "staff"],
-    children: [
-      {
-        id: "stocks",
-        label: "Stocks",
-        icon: "Package",
-        href: "/owner/inventory/stocks",
-        roles: ["owner", "manager"],
-      },
-      {
-        id: "customers",
-        label: "Customers",
-        icon: "Users",
-        href: "/owner/inventory/customers",
-        roles: ["owner", "manager", "staff"],
-      },
-    ],
-  },
-  {
-    id: "expenses",
-    label: "Expenses",
-    icon: "Receipt",
-    href: "/owner/expenses",
-    roles: ["owner", "manager"], // Only owner and manager
-  },
-  {
-    id: "barcode",
-    label: "Barcode",
-    icon: "QrCode",
-    roles: ["owner", "manager"],
-    children: [
-      {
-        id: "label-print",
-        label: "Label Print",
-        icon: "Tag",
-        href: "/owner/barcode/label-print",
-        roles: ["owner", "manager"],
-      },
-      {
-        id: "print-settings",
-        label: "Print Settings",
-        icon: "Settings",
-        href: "/owner/barcode/print-settings",
-        roles: ["owner", "manager"],
-      },
-    ],
-  },
-  {
-    id: "shops-branches",
-    label: "Shops & Branches",
-    icon: "Building2",
-    roles: ["owner"], // Only owner
-    children: [
-      {
-        id: "manage-shops",
-        label: "Manage Shops",
-        icon: "Store",
-        href: "/owner/shops/manage",
-        roles: ["owner"],
-      },
-      {
-        id: "shop-reports",
-        label: "Shop Reports",
-        icon: "FileText",
-        href: "/owner/shops/reports",
-        roles: ["owner"],
-      },
-    ],
-  },
-  {
-    id: "staff",
-    label: "Staff",
-    icon: "UserCheck",
-    href: "/owner/staff",
-    roles: ["owner"], // Only owner can manage staff
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: "Settings",
-    href: "/owner/settings",
-    roles: ["owner", "manager", "staff"], // All roles can access
-  },
-];
 
 const iconMap = {
   Home,
@@ -220,6 +88,143 @@ export function Sidebar({
   // Get user role from auth context
   const { user } = useAuth();
   const userRole = user?.role || "staff"; // Default to staff if no role
+
+  // Get translations
+  const { t } = useLanguage();
+
+  // Create menu items with translations
+  const menuItems: MenuItem[] = [
+    {
+      id: "home",
+      label: t.home,
+      icon: "Home",
+      href: "/owner/home",
+      roles: ["owner", "manager", "staff"], // All roles can access
+    },
+    {
+      id: "dashboard",
+      label: t.dashboard,
+      icon: "BarChart3",
+      href: "/owner/dashboard",
+      roles: ["owner", "manager"], // Only owner and manager
+    },
+    {
+      id: "sales",
+      label: t.sales,
+      icon: "TrendingUp",
+      roles: ["owner", "manager", "staff"],
+      children: [
+        {
+          id: "transactions",
+          label: t.transactions,
+          icon: "CreditCard",
+          href: "/owner/sales/transactions",
+          roles: ["owner", "manager", "staff"],
+        },
+        {
+          id: "reports",
+          label: t.reports,
+          icon: "FileText",
+          href: "/owner/sales/reports",
+          roles: ["owner", "manager"], // No staff
+        },
+        {
+          id: "payments",
+          label: t.payments,
+          icon: "CreditCard",
+          href: "/owner/sales/payments",
+          roles: ["owner", "manager", "staff"],
+        },
+      ],
+    },
+    {
+      id: "inventory",
+      label: t.inventory,
+      icon: "Package",
+      roles: ["owner", "manager", "staff"],
+      children: [
+        {
+          id: "stocks",
+          label: t.stocks,
+          icon: "Package",
+          href: "/owner/inventory/stocks",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "customers",
+          label: t.customers,
+          icon: "Users",
+          href: "/owner/inventory/customers",
+          roles: ["owner", "manager", "staff"],
+        },
+      ],
+    },
+    {
+      id: "expenses",
+      label: t.expenses,
+      icon: "Receipt",
+      href: "/owner/expenses",
+      roles: ["owner", "manager"], // Only owner and manager
+    },
+    {
+      id: "barcode",
+      label: t.barcode,
+      icon: "QrCode",
+      roles: ["owner", "manager"],
+      children: [
+        {
+          id: "label-print",
+          label: t.labelPrint,
+          icon: "Tag",
+          href: "/owner/barcode/label-print",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "print-settings",
+          label: t.printSettings,
+          icon: "Settings",
+          href: "/owner/barcode/print-settings",
+          roles: ["owner", "manager"],
+        },
+      ],
+    },
+    {
+      id: "shops-branches",
+      label: t.shopsBranches,
+      icon: "Building2",
+      roles: ["owner"], // Only owner
+      children: [
+        {
+          id: "manage-shops",
+          label: t.manageShops,
+          icon: "Store",
+          href: "/owner/shops/manage",
+          roles: ["owner"],
+        },
+        {
+          id: "shop-reports",
+          label: t.shopReports,
+          icon: "FileText",
+          href: "/owner/shops/reports",
+          roles: ["owner"],
+        },
+      ],
+    },
+    {
+      id: "staff",
+      label: t.staff,
+      icon: "UserCheck",
+      href: "/owner/staff",
+      roles: ["owner"], // Only owner can manage staff
+    },
+    {
+      id: "settings",
+      label: t.settings,
+      icon: "Settings",
+      href: "/owner/settings",
+      roles: ["owner", "manager", "staff"], // All roles can access
+    },
+  ];
 
   // Filter menu items based on user role
   const filterMenuItems = (items: MenuItem[]): MenuItem[] => {

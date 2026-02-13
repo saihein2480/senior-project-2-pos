@@ -2,6 +2,7 @@
 
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
@@ -125,6 +126,7 @@ interface Expense {
 function OwnerDashboardContent() {
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
+  const { t } = useLanguage();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -974,7 +976,7 @@ function OwnerDashboardContent() {
                   onChange={(e) => setFilterBranch(e.target.value)}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
                 >
-                  <option value="all">All Branches</option>
+                  <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
                     <option key={shop.id} value={shop.name}>
                       {shop.name}
@@ -1019,11 +1021,11 @@ function OwnerDashboardContent() {
                   }}
                   className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
                 >
-                  <option value="today">Today</option>
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                  <option value="custom">Custom Range</option>
+                  <option value="today">{t.today}</option>
+                  <option value="7d">{t.last7Days}</option>
+                  <option value="30d">{t.last30Days}</option>
+                  <option value="90d">{t.last90Days}</option>
+                  <option value="custom">{t.customRange}</option>
                 </select>
 
                 {/* Custom Date Range Inputs */}
@@ -1070,7 +1072,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Sales (฿ / Ks)
+                          {t.totalSales} (฿ / Ks)
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.totalRevenue)}
@@ -1084,7 +1086,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Profit 
+                          {t.totalProfit}
                         </p>
                         <p className="text-2xl font-bold text-green-600">
                           {formatPrice(stats.totalProfit)}
@@ -1098,7 +1100,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Orders
+                          {t.totalOrders}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {stats.totalOrders}
@@ -1112,7 +1114,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Customers
+                          {t.totalCustomers}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {stats.totalCustomers}
@@ -1132,7 +1134,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Sales (฿)
+                          {t.totalSalesThb}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.totalRevenueTHB || 0)}
@@ -1141,13 +1143,11 @@ function OwnerDashboardContent() {
                     </div>
                   </div>
 
-                  
-
                   <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Expense (฿)
+                          {t.totalExpenseThb}
                         </p>
                         <p className="text-2xl font-bold text-red-600">
                           {formatPrice(stats.totalExpenseTHB || 0)}
@@ -1160,7 +1160,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Sale (Ks)
+                          {t.totalSalesMmk}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {SettingsService.formatPrice(
@@ -1176,7 +1176,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Expense (Ks)
+                          {t.totalExpenseMmk}
                         </p>
                         <p className="text-2xl font-bold text-red-600">
                           {SettingsService.formatPrice(
@@ -1200,7 +1200,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Avg Order Value
+                          {t.avgOrderValue}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {formatPrice(stats.averageOrderValue)}
@@ -1215,7 +1215,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Items Sold
+                          {t.itemsSold}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {stats.totalItemsSold}
@@ -1230,7 +1230,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Total Products
+                          {t.totalProducts}
                         </p>
                         <p className="text-2xl font-bold text-gray-900">
                           {stats.totalProducts}
@@ -1245,7 +1245,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Low Stock Items
+                          {t.lowStockItems}
                         </p>
                         <p className="text-2xl font-bold text-orange-600">
                           {stats.lowStockProducts}
@@ -1263,13 +1263,13 @@ function OwnerDashboardContent() {
                 {/* Order Status Breakdown */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    Order Status Breakdown
+                    {t.orderStatusDistribution}
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                     <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Completed
+                          {t.completed}
                         </p>
                         <p className="text-2xl font-bold text-green-600">
                           {stats.completedOrders}
@@ -1290,7 +1290,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Pending
+                          {t.pending}
                         </p>
                         <p className="text-2xl font-bold text-yellow-600">
                           {stats.pendingOrders}
@@ -1311,7 +1311,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Cancelled
+                          {t.cancelled}
                         </p>
                         <p className="text-2xl font-bold text-red-600">
                           {stats.cancelledOrders}
@@ -1331,7 +1331,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Refund Payments
+                          {t.refundPayments}
                         </p>
                         <p className="text-2xl font-bold text-purple-600">
                           {stats.refundPayments}
@@ -1352,7 +1352,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Partial Refunds
+                          {t.partialRefunds}
                         </p>
                         <p className="text-2xl font-bold text-indigo-600">
                           {stats.partialRefunds}
@@ -1375,13 +1375,13 @@ function OwnerDashboardContent() {
                 {/* Revenue by Payment Method */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    Total Sale by Payment Method
+                    {t.paymentMethodDistribution}
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Cash
+                          {t.cash}
                         </p>
                         <p className="text-xl font-bold text-gray-900">
                           {formatPrice(revenueByMethod.cash)}
@@ -1402,7 +1402,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Scan
+                          {t.scan}
                         </p>
                         <p className="text-xl font-bold text-gray-900">
                           {formatPrice(revenueByMethod.scan)}
@@ -1423,7 +1423,7 @@ function OwnerDashboardContent() {
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
-                          Wallet
+                          {t.wallet}
                         </p>
                         <p className="text-xl font-bold text-gray-900">
                           {formatPrice(revenueByMethod.wallet)}
@@ -1443,7 +1443,9 @@ function OwnerDashboardContent() {
 
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="text-sm font-medium text-gray-500">COD</p>
+                        <p className="text-sm font-medium text-gray-500">
+                          {t.cod}
+                        </p>
                         <p className="text-xl font-bold text-gray-900">
                           {formatPrice(revenueByMethod.cod)}
                         </p>
@@ -1467,7 +1469,7 @@ function OwnerDashboardContent() {
                   {/* Revenue & Profit Trend Chart */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Total Sale & Profit Trend
+                      {t.totalSaleProfitTrend}
                     </h2>
                     {dailyRevenueData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
@@ -1541,7 +1543,7 @@ function OwnerDashboardContent() {
                             stroke="#3b82f6"
                             fillOpacity={1}
                             fill="url(#colorRevenue)"
-                            name="Total Sale"
+                            name={t.totalSales}
                           />
                           <Area
                             type="monotone"
@@ -1549,14 +1551,14 @@ function OwnerDashboardContent() {
                             stroke="#10b981"
                             fillOpacity={1}
                             fill="url(#colorProfit)"
-                            name="Profit"
+                            name={t.profit}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="text-center py-16">
                         <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No data available</p>
+                        <p className="text-gray-500">{t.noRevenueData}</p>
                       </div>
                     )}
                   </div>
@@ -1564,7 +1566,7 @@ function OwnerDashboardContent() {
                   {/* Payment Method Distribution Pie Chart */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Payment Method Distribution
+                      {t.paymentMethodDistribution}
                     </h2>
                     {paymentMethodChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
@@ -1609,9 +1611,7 @@ function OwnerDashboardContent() {
                     ) : (
                       <div className="text-center py-16">
                         <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">
-                          No payment data available
-                        </p>
+                        <p className="text-gray-500">{t.noPaymentData}</p>
                       </div>
                     )}
                   </div>
@@ -1622,7 +1622,7 @@ function OwnerDashboardContent() {
                   {/* Order Status Distribution Bar Chart */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Order Status Distribution
+                      {t.orderStatusDistribution}
                     </h2>
                     {orderStatusChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
@@ -1646,13 +1646,13 @@ function OwnerDashboardContent() {
                             formatter={(value?: number, name?: string) => {
                               if (value === undefined) return "N/A";
                               if (name === "value") {
-                                return [`${value} orders`, "Count"];
+                                return [`${value} ${t.orders}`, "Count"];
                               }
                               return value;
                             }}
                           />
                           <Legend />
-                          <Bar dataKey="value" name="Orders">
+                          <Bar dataKey="value" name={t.orders}>
                             {orderStatusChartData.map((entry, index) => {
                               const COLORS = {
                                 Completed: "#10b981",
@@ -1676,7 +1676,7 @@ function OwnerDashboardContent() {
                     ) : (
                       <div className="text-center py-16">
                         <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No order data available</p>
+                        <p className="text-gray-500">{t.noOrderData}</p>
                       </div>
                     )}
                   </div>
@@ -1684,7 +1684,7 @@ function OwnerDashboardContent() {
                   {/* Daily Orders Trend Line Chart */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Daily Orders Trend
+                      {t.dailyOrdersTrend}
                     </h2>
                     {dailyRevenueData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
@@ -1707,8 +1707,8 @@ function OwnerDashboardContent() {
                             }}
                             formatter={(value?: number) =>
                               value !== undefined
-                                ? [`${value} orders`, "Orders"]
-                                : ["N/A", "Orders"]
+                                ? [`${value} ${t.orders}`, t.orders]
+                                : ["N/A", t.orders]
                             }
                           />
                           <Legend />
@@ -1719,14 +1719,14 @@ function OwnerDashboardContent() {
                             strokeWidth={2}
                             dot={{ fill: "#8b5cf6", r: 4 }}
                             activeDot={{ r: 6 }}
-                            name="Daily Orders"
+                            name={t.dailyOrders}
                           />
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="text-center py-16">
                         <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No order data available</p>
+                        <p className="text-gray-500">{t.noOrderData}</p>
                       </div>
                     )}
                   </div>
@@ -1737,7 +1737,7 @@ function OwnerDashboardContent() {
                   {/* Top Selling Products */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Top Selling Products
+                      {t.topSellingProducts}
                     </h2>
                     {topProducts.length > 0 ? (
                       <div className="space-y-4">
@@ -1764,10 +1764,10 @@ function OwnerDashboardContent() {
                                 {formatPrice(product.revenue)}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {product.quantitySold} sold
+                                {product.quantitySold} {t.sold}
                               </p>
                               <p className="text-xs text-green-600">
-                                Profit: {formatPrice(product.profit)}
+                                {t.profit}: {formatPrice(product.profit)}
                               </p>
                             </div>
                           </div>
@@ -1776,7 +1776,7 @@ function OwnerDashboardContent() {
                     ) : (
                       <div className="text-center py-8">
                         <Package className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No sales data available</p>
+                        <p className="text-gray-500">{t.noSalesData}</p>
                       </div>
                     )}
                   </div>
@@ -1784,7 +1784,7 @@ function OwnerDashboardContent() {
                   {/* Recent Activity */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      Recent Activity
+                      {t.recentActivity}
                     </h2>
                     {recentActivity.length > 0 ? (
                       <div className="space-y-4">
@@ -1822,7 +1822,7 @@ function OwnerDashboardContent() {
                     ) : (
                       <div className="text-center py-8">
                         <Clock className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No recent activity</p>
+                        <p className="text-gray-500">{t.noRecentActivity}</p>
                       </div>
                     )}
                   </div>

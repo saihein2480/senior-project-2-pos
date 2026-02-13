@@ -14,8 +14,27 @@ export function InstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isDismissedPermanently, setIsDismissedPermanently] = useState(false);
+
+  // Check dismissed status on mount
+  useEffect(() => {
+    const dismissed = localStorage.getItem("installPromptDismissed");
+    if (dismissed) {
+      const dismissedTime = parseInt(dismissed, 10);
+      const oneMonth = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+      if (Date.now() - dismissedTime < oneMonth) {
+        setIsDismissedPermanently(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
+    // Don't run if user has permanently dismissed
+    if (isDismissedPermanently) {
+      return;
+    }
+
     // Check if already installed (standalone mode)
     const isInStandaloneMode =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -23,21 +42,16 @@ export function InstallPrompt() {
         true;
     setIsStandalone(isInStandaloneMode);
 
+    // If already installed, don't show prompt
+    if (isInStandaloneMode) {
+      return;
+    }
+
     // Check if iOS
     const isIOSDevice =
       /iPad|iPhone|iPod/.test(navigator.userAgent) &&
       !(window as Window & { MSStream?: unknown }).MSStream;
     setIsIOS(isIOSDevice);
-
-    // Check if user has dismissed the prompt before
-    const dismissed = localStorage.getItem("installPromptDismissed");
-    const dismissedTime = dismissed ? parseInt(dismissed, 10) : 0;
-    const oneWeek = 7 * 24 * 60 * 60 * 1000;
-
-    // Show prompt again after one week
-    if (dismissed && Date.now() - dismissedTime < oneWeek) {
-      return;
-    }
 
     // Listen for beforeinstallprompt event (Chrome, Edge, etc.)
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -49,11 +63,17 @@ export function InstallPrompt() {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     // For iOS, show custom prompt after a delay
-    if (isIOSDevice && !isInStandaloneMode) {
+    if (isIOSDevice) {
       const timer = setTimeout(() => {
         setShowPrompt(true);
       }, 3000);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener(
+          "beforeinstallprompt",
+          handleBeforeInstallPrompt,
+        );
+      };
     }
 
     return () => {
@@ -62,7 +82,7 @@ export function InstallPrompt() {
         handleBeforeInstallPrompt,
       );
     };
-  }, []);
+  }, [isDismissedPermanently]);
 
   // Register service worker
   useEffect(() => {
@@ -94,11 +114,12 @@ export function InstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false);
+    setIsDismissedPermanently(true);
     localStorage.setItem("installPromptDismissed", Date.now().toString());
   };
 
-  // Don't show if already installed or prompt not available
-  if (isStandalone || !showPrompt) {
+  // Don't show if already installed, permanently dismissed, or prompt not available
+  if (isStandalone || isDismissedPermanently || !showPrompt) {
     return null;
   }
 

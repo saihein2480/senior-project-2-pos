@@ -755,17 +755,17 @@ function NewStockContent() {
         <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
 
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4">
+        <div className="bg-white border-b border-gray-200 px-3 md:px-4 lg:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <button
                 title="Go back to stock list"
                 onClick={() => router.back()}
-                className="mr-4 p-2 hover:bg-gray-100 rounded-md"
+                className="mr-2 md:mr-4 p-2 hover:bg-gray-100 rounded-md touch-manipulation"
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
               </button>
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-lg md:text-xl lg:text-2xl font-semibold text-gray-900">
                 Create Stock Entry
               </h1>
             </div>
@@ -773,16 +773,16 @@ function NewStockContent() {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1">
-          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8">
             {/* Group Image Section */}
-            <div className="bg-white rounded-lg shadow mb-6">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">
+            <div className="bg-white rounded-lg shadow mb-4 md:mb-6">
+              <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200">
+                <h2 className="text-base md:text-lg font-medium text-gray-900">
                   Group Image
                 </h2>
               </div>
-              <div className="p-6">
+              <div className="p-4 md:p-6">
                 <ImageUpload
                   value={groupImage}
                   onChange={setGroupImage}
@@ -793,14 +793,14 @@ function NewStockContent() {
             </div>
 
             {/* Group Info Section */}
-            <div className="bg-white rounded-lg shadow mb-6">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">
+            <div className="bg-white rounded-lg shadow mb-4 md:mb-6">
+              <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200">
+                <h2 className="text-base md:text-lg font-medium text-gray-900">
                   Group Info
                 </h2>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 md:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Group Name
@@ -834,7 +834,7 @@ function NewStockContent() {
                       <button
                         type="button"
                         onClick={() => setShowCategoryModal(true)}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 whitespace-nowrap"
+                        className="px-3 md:px-4 py-2 bg-gray-100 text-gray-700 text-sm md:text-base rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 whitespace-nowrap touch-manipulation"
                       >
                         + Add New
                       </button>

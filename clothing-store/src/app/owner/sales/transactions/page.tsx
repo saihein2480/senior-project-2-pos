@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
 import { Sidebar } from "@/components/ui/Sidebar";
@@ -36,6 +37,7 @@ export default function TransactionsPage() {
   const { user } = useAuth();
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
+  const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -413,20 +415,24 @@ export default function TransactionsPage() {
   };
 
   const getStatusText = (status: string) => {
-    switch (status) {
-      case "refunded":
-        return "Refunded";
-      case "partially_refunded":
-        return "Partially Refunded";
-      case "completed":
-        return "Completed";
-      case "pending":
-        return "Pending";
-      case "cancelled":
-        return "Cancelled";
-      default:
-        return status;
-    }
+    const statusMap: Record<string, string> = {
+      refunded: t.refunded,
+      partially_refunded: t.partiallyRefunded,
+      completed: t.completed,
+      pending: t.pending,
+      cancelled: t.cancelled,
+    };
+    return statusMap[status] || status;
+  };
+
+  const translatePaymentMethod = (method: string) => {
+    const methodMap: Record<string, string> = {
+      cash: t.cash,
+      scan: t.scanPayment,
+      wallet: t.wallet,
+      cod: t.cod,
+    };
+    return methodMap[method] || method;
   };
 
   const toggleDropdown = (transactionId: string) => {
@@ -945,10 +951,10 @@ export default function TransactionsPage() {
             </div> */}
 
             {/* Summary Stats */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">
-                  Total Transactions
+                  {t.totalTransactions}
                 </h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {filteredTransactions.length}
@@ -956,7 +962,7 @@ export default function TransactionsPage() {
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">
-                  Total Sales
+                  {t.totalSales}
                 </h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatPrice(calculateNetRevenue(revenueTransactions))}
@@ -964,21 +970,23 @@ export default function TransactionsPage() {
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">
-                  Total Profit
+                  {t.totalProfit}
                 </h3>
                 <p className="text-2xl font-bold text-green-600">
                   {formatPrice(calculateTotalProfit(revenueTransactions))}
                 </p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">Completed</h3>
+                <h3 className="text-sm font-medium text-gray-500">
+                  {t.completed}
+                </h3>
                 <p className="text-2xl font-bold text-green-600">
                   {completedTransactionsCount}
                 </p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">
-                  Total Sales (฿)
+                  {t.totalSalesThb}
                 </h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatPrice(calculateNetRevenue(revenueTransactionsTHB))}
@@ -986,7 +994,7 @@ export default function TransactionsPage() {
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-500">
-                  Total Sales (Ks)
+                  {t.totalSalesMmk}
                 </h3>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatInMMK(calculateNetRevenue(revenueTransactionsMMK))}
@@ -1002,7 +1010,7 @@ export default function TransactionsPage() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search transactions..."
+                    placeholder={t.searchTransactions}
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -1030,12 +1038,14 @@ export default function TransactionsPage() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="pending">Pending</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="refunded">Refunded</option>
-                  <option value="partially_refunded">Partially Refunded</option>
+                  <option value="all">{t.allStatus}</option>
+                  <option value="completed">{t.completed}</option>
+                  <option value="pending">{t.pending}</option>
+                  <option value="cancelled">{t.cancelled}</option>
+                  <option value="refunded">{t.refunded}</option>
+                  <option value="partially_refunded">
+                    {t.partiallyRefunded}
+                  </option>
                 </select>
 
                 {/* Payment Method Filter */}
@@ -1055,11 +1065,11 @@ export default function TransactionsPage() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Payment Methods</option>
-                  <option value="cash">Cash</option>
-                  <option value="scan">Scan Payment</option>
-                  <option value="wallet">Wallet</option>
-                  <option value="cod">COD</option>
+                  <option value="all">{t.allPaymentMethods}</option>
+                  <option value="cash">{t.cash}</option>
+                  <option value="scan">{t.scanPayment}</option>
+                  <option value="wallet">{t.wallet}</option>
+                  <option value="cod">{t.cod}</option>
                 </select>
 
                 {/* Branch Filter */}
@@ -1072,7 +1082,7 @@ export default function TransactionsPage() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Branches</option>
+                  <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
                     <option key={shop.id} value={shop.name}>
                       {shop.name}
@@ -1121,12 +1131,12 @@ export default function TransactionsPage() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 >
-                  <option value="today">Today</option>
-                  <option value="7d">Last 7 Days</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                  <option value="all">All Time</option>
-                  <option value="custom">Custom Range</option>
+                  <option value="today">{t.today}</option>
+                  <option value="7d">{t.last7Days}</option>
+                  <option value="30d">{t.last30Days}</option>
+                  <option value="90d">{t.last90Days}</option>
+                  <option value="all">{t.allTime}</option>
+                  <option value="custom">{t.customRange}</option>
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
@@ -1232,306 +1242,326 @@ export default function TransactionsPage() {
                   <p className="text-gray-600">No transactions found</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          <input
-                            type="checkbox"
-                            checked={
-                              filteredTransactions.length > 0 &&
-                              selectedTransactions.length ===
-                                filteredTransactions.length
-                            }
-                            onChange={toggleSelectAll}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                            aria-label="Select all transactions"
-                          />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Transaction ID
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Items
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Profit
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Tax
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Branch
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Selling Currency
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Payment Method
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date & Time
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {currentTransactions.map((transaction) => {
-                        const hasRefunds =
-                          transaction.refunds && transaction.refunds.length > 0;
-                        const isFullyRefunded =
-                          transaction.status === "refunded";
-                        const isPartiallyRefunded =
-                          transaction.status === "partially_refunded";
-
-                        const rowClass = "hover:bg-gray-50";
-
-                        return (
-                          <tr key={transaction.id} className={rowClass}>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="overflow-x-auto -mx-4 md:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               <input
                                 type="checkbox"
-                                checked={selectedTransactions.includes(
-                                  transaction.id!,
-                                )}
-                                onChange={() =>
-                                  toggleSelectTransaction(transaction.id!)
+                                checked={
+                                  filteredTransactions.length > 0 &&
+                                  selectedTransactions.length ===
+                                    filteredTransactions.length
                                 }
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
-                                aria-label={`Select transaction ${transaction.transactionId}`}
+                                onChange={toggleSelectAll}
+                                className="h-4 w-4 md:h-5 md:w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer touch-manipulation"
+                                aria-label="Select all transactions"
                               />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {transaction.transactionId}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {transaction.customer?.displayName ||
-                                  "Walk-in customer"}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {transaction.items.reduce(
-                                (total, item) => total + item.quantity,
-                                0,
-                              )}{" "}
-                              items
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {(() => {
-                                const refundedAmount =
-                                  transaction.refunds?.reduce(
-                                    (sum, refund) => sum + refund.totalAmount,
-                                    0,
-                                  ) || 0;
-                                const netTotal =
-                                  transaction.total - refundedAmount;
-                                const subtotal =
-                                  transaction.subtotal ||
-                                  transaction.total - (transaction.tax || 0);
-                                const tax = transaction.tax || 0;
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.transactionId}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.customer}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.items}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.total}
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.profit}
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.tax}
+                            </th>
+                            <th className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.branch}
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.sellingCurrency}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.paymentMethod}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.status}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.dateTime}
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {t.actions}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {currentTransactions.map((transaction) => {
+                            const hasRefunds =
+                              transaction.refunds &&
+                              transaction.refunds.length > 0;
+                            const isFullyRefunded =
+                              transaction.status === "refunded";
+                            const isPartiallyRefunded =
+                              transaction.status === "partially_refunded";
 
-                                if (refundedAmount > 0) {
-                                  return (
-                                    <div className="flex flex-col group relative">
-                                      <span className="text-gray-900">
-                                        {formatPrice(netTotal)}
-                                      </span>
-                                      <span className="text-xs text-gray-500">
-                                        (Original:{" "}
-                                        {formatPrice(transaction.total)})
-                                      </span>
-                                      {/* Tooltip */}
-                                      <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
-                                        <div>
-                                          Subtotal: {formatPrice(subtotal)}
+                            const rowClass = "hover:bg-gray-50";
+
+                            return (
+                              <tr key={transaction.id} className={rowClass}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTransactions.includes(
+                                      transaction.id!,
+                                    )}
+                                    onChange={() =>
+                                      toggleSelectTransaction(transaction.id!)
+                                    }
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                    aria-label={`Select transaction ${transaction.transactionId}`}
+                                  />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {transaction.transactionId}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">
+                                    {transaction.customer?.displayName ||
+                                      t.walkInCustomer}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {transaction.items.reduce(
+                                    (total, item) => total + item.quantity,
+                                    0,
+                                  )}{" "}
+                                  {t.items}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {(() => {
+                                    const refundedAmount =
+                                      transaction.refunds?.reduce(
+                                        (sum, refund) =>
+                                          sum + refund.totalAmount,
+                                        0,
+                                      ) || 0;
+                                    const netTotal =
+                                      transaction.total - refundedAmount;
+                                    const subtotal =
+                                      transaction.subtotal ||
+                                      transaction.total -
+                                        (transaction.tax || 0);
+                                    const tax = transaction.tax || 0;
+
+                                    if (refundedAmount > 0) {
+                                      return (
+                                        <div className="flex flex-col group relative">
+                                          <span className="text-gray-900">
+                                            {formatPrice(netTotal)}
+                                          </span>
+                                          <span className="text-xs text-gray-500">
+                                            ({t.original}:{" "}
+                                            {formatPrice(transaction.total)})
+                                          </span>
+                                          {/* Tooltip */}
+                                          <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
+                                            <div>
+                                              {t.subtotal}:{" "}
+                                              {formatPrice(subtotal)}
+                                            </div>
+                                            <div>
+                                              {t.tax}: {formatPrice(tax)}
+                                            </div>
+                                            <div className="border-t border-gray-600 pt-1 mt-1">
+                                              <div>
+                                                {t.total}:{" "}
+                                                {formatPrice(transaction.total)}
+                                              </div>
+                                              <div>
+                                                {t.refunded}: -
+                                                {formatPrice(refundedAmount)}
+                                              </div>
+                                              <div className="font-semibold">
+                                                {t.netProfit}:{" "}
+                                                {formatPrice(netTotal)}
+                                              </div>
+                                            </div>
+                                          </div>
                                         </div>
-                                        <div>Tax: {formatPrice(tax)}</div>
-                                        <div className="border-t border-gray-600 pt-1 mt-1">
+                                      );
+                                    }
+
+                                    return (
+                                      <div className="group relative">
+                                        <span className="cursor-help">
+                                          {formatPrice(transaction.total)}
+                                        </span>
+                                        {/* Tooltip */}
+                                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
                                           <div>
-                                            Total:{" "}
+                                            {t.subtotal}:{" "}
+                                            {formatPrice(subtotal)}
+                                          </div>
+                                          <div>
+                                            {t.tax}: {formatPrice(tax)}
+                                          </div>
+                                          <div className="border-t border-gray-600 pt-1 mt-1 font-semibold">
+                                            {t.total}:{" "}
                                             {formatPrice(transaction.total)}
                                           </div>
-                                          <div>
-                                            Refunded: -
-                                            {formatPrice(refundedAmount)}
-                                          </div>
-                                          <div className="font-semibold">
-                                            Net: {formatPrice(netTotal)}
-                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  );
-                                }
+                                    );
+                                  })()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  {(() => {
+                                    // Calculate profit: (selling price - original price) * quantity for each item
+                                    const totalProfit =
+                                      transaction.items.reduce((sum, item) => {
+                                        const sellingPrice =
+                                          item.discountedPrice ||
+                                          item.unitPrice;
+                                        const profit =
+                                          (sellingPrice - item.originalPrice) *
+                                          item.quantity;
+                                        return sum + profit;
+                                      }, 0);
 
-                                return (
-                                  <div className="group relative">
-                                    <span className="cursor-help">
-                                      {formatPrice(transaction.total)}
+                                    // Calculate profit lost from refunds
+                                    const refundedProfit =
+                                      transaction.refunds?.reduce(
+                                        (refundTotal, refund) => {
+                                          return (
+                                            refundTotal +
+                                            refund.items.reduce(
+                                              (refundItemTotal, refundItem) => {
+                                                const originalItem =
+                                                  transaction.items[
+                                                    refundItem.itemIndex
+                                                  ];
+                                                if (originalItem) {
+                                                  const itemSellingPrice =
+                                                    originalItem.discountedPrice ||
+                                                    originalItem.unitPrice;
+                                                  const refundedItemProfit =
+                                                    (itemSellingPrice -
+                                                      originalItem.originalPrice) *
+                                                    refundItem.quantity;
+                                                  return (
+                                                    refundItemTotal +
+                                                    refundedItemProfit
+                                                  );
+                                                }
+                                                return refundItemTotal;
+                                              },
+                                              0,
+                                            )
+                                          );
+                                        },
+                                        0,
+                                      ) || 0;
+
+                                    const netProfit =
+                                      totalProfit - refundedProfit;
+                                    const isProfitable = netProfit >= 0;
+                                    return (
+                                      <span
+                                        className={
+                                          isProfitable
+                                            ? "text-green-600"
+                                            : "text-red-600"
+                                        }
+                                      >
+                                        {formatPrice(netProfit)}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {formatPrice(transaction.tax || 0)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {transaction.branchName || t.mainBranch}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {transaction.sellingCurrency &&
+                                  transaction.exchangeRate &&
+                                  transaction.sellingTotal ? (
+                                    <div className="space-y-1">
+                                      <div className="font-medium">
+                                        {transaction.sellingCurrency === "MMK"
+                                          ? "Ks"
+                                          : transaction.sellingCurrency}{" "}
+                                        {transaction.sellingTotal.toLocaleString()}
+                                      </div>
+                                      <div className="text-xs text-gray-500">
+                                        {t.rate}: 1 THB ={" "}
+                                        {transaction.exchangeRate}{" "}
+                                        {transaction.sellingCurrency === "MMK"
+                                          ? "Ks"
+                                          : transaction.sellingCurrency}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    {getPaymentMethodIcon(
+                                      transaction.paymentMethod,
+                                    )}
+                                    <span className="ml-2 text-sm text-gray-900">
+                                      {translatePaymentMethod(
+                                        transaction.paymentMethod,
+                                      )}
                                     </span>
-                                    {/* Tooltip */}
-                                    <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
-                                      <div>
-                                        Subtotal: {formatPrice(subtotal)}
-                                      </div>
-                                      <div>Tax: {formatPrice(tax)}</div>
-                                      <div className="border-t border-gray-600 pt-1 mt-1 font-semibold">
-                                        Total: {formatPrice(transaction.total)}
-                                      </div>
-                                    </div>
                                   </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              {(() => {
-                                // Calculate profit: (selling price - original price) * quantity for each item
-                                const totalProfit = transaction.items.reduce(
-                                  (sum, item) => {
-                                    const sellingPrice =
-                                      item.discountedPrice || item.unitPrice;
-                                    const profit =
-                                      (sellingPrice - item.originalPrice) *
-                                      item.quantity;
-                                    return sum + profit;
-                                  },
-                                  0,
-                                );
-
-                                // Calculate profit lost from refunds
-                                const refundedProfit =
-                                  transaction.refunds?.reduce(
-                                    (refundTotal, refund) => {
-                                      return (
-                                        refundTotal +
-                                        refund.items.reduce(
-                                          (refundItemTotal, refundItem) => {
-                                            const originalItem =
-                                              transaction.items[
-                                                refundItem.itemIndex
-                                              ];
-                                            if (originalItem) {
-                                              const itemSellingPrice =
-                                                originalItem.discountedPrice ||
-                                                originalItem.unitPrice;
-                                              const refundedItemProfit =
-                                                (itemSellingPrice -
-                                                  originalItem.originalPrice) *
-                                                refundItem.quantity;
-                                              return (
-                                                refundItemTotal +
-                                                refundedItemProfit
-                                              );
-                                            }
-                                            return refundItemTotal;
-                                          },
-                                          0,
-                                        )
-                                      );
-                                    },
-                                    0,
-                                  ) || 0;
-
-                                const netProfit = totalProfit - refundedProfit;
-                                const isProfitable = netProfit >= 0;
-                                return (
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
                                   <span
-                                    className={
-                                      isProfitable
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                    }
+                                    className={getStatusBadge(
+                                      transaction.status,
+                                    )}
                                   >
-                                    {formatPrice(netProfit)}
+                                    {getStatusText(transaction.status)}
                                   </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatPrice(transaction.tax || 0)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {transaction.branchName || "Main Branch"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {transaction.sellingCurrency &&
-                              transaction.exchangeRate &&
-                              transaction.sellingTotal ? (
-                                <div className="space-y-1">
-                                  <div className="font-medium">
-                                    {transaction.sellingCurrency === "MMK"
-                                      ? "Ks"
-                                      : transaction.sellingCurrency}{" "}
-                                    {transaction.sellingTotal.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {formatDate(transaction.timestamp)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="relative">
+                                    <button
+                                      ref={(el) => {
+                                        if (el)
+                                          buttonRefs.current[
+                                            transaction.id as string
+                                          ] = el;
+                                      }}
+                                      onClick={() =>
+                                        toggleDropdown(transaction.id!)
+                                      }
+                                      className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                                      aria-label="Transaction actions"
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </button>
                                   </div>
-                                  <div className="text-xs text-gray-500">
-                                    Rate: 1 THB = {transaction.exchangeRate}{" "}
-                                    {transaction.sellingCurrency === "MMK"
-                                      ? "Ks"
-                                      : transaction.sellingCurrency}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">-</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                {getPaymentMethodIcon(
-                                  transaction.paymentMethod,
-                                )}
-                                <span className="ml-2 text-sm text-gray-900 capitalize">
-                                  {transaction.paymentMethod}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span
-                                className={getStatusBadge(transaction.status)}
-                              >
-                                {getStatusText(transaction.status)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(transaction.timestamp)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="relative">
-                                <button
-                                  ref={(el) => {
-                                    if (el)
-                                      buttonRefs.current[
-                                        transaction.id as string
-                                      ] = el;
-                                  }}
-                                  onClick={() =>
-                                    toggleDropdown(transaction.id!)
-                                  }
-                                  className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                                  aria-label="Transaction actions"
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               )}
               {/* Pagination */}
@@ -1542,7 +1572,7 @@ export default function TransactionsPage() {
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Previous
+                    {t.previous}
                   </button>
                   <button
                     onClick={() =>
@@ -1551,12 +1581,12 @@ export default function TransactionsPage() {
                     disabled={currentPage === totalPages}
                     className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Next
+                    {t.next}
                   </button>
                 </div>
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                   <div className="flex items-center space-x-2">
-                    <p className="text-sm text-gray-700">Rows per page:</p>
+                    <p className="text-sm text-gray-700">{t.rowsPerPage}:</p>
                     <select
                       title="Select number of rows per page"
                       value={rowsPerPage}
@@ -1572,9 +1602,18 @@ export default function TransactionsPage() {
                       <option value={100}>100</option>
                     </select>
                     <p className="text-sm text-gray-700">
-                      Showing {startIndex + 1}–
-                      {Math.min(endIndex, filteredTransactions.length)} of{" "}
-                      {filteredTransactions.length} transactions
+                      {t.showingTransactions
+                        .replace("{start}", String(startIndex + 1))
+                        .replace(
+                          "{end}",
+                          String(
+                            Math.min(endIndex, filteredTransactions.length),
+                          ),
+                        )
+                        .replace(
+                          "{total}",
+                          String(filteredTransactions.length),
+                        )}
                     </p>
                   </div>
                   <div>

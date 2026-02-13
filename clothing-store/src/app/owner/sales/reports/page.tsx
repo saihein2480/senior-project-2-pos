@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
@@ -97,6 +98,7 @@ function ReportsPageContent() {
   const { user } = useAuth();
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
+  const { t } = useLanguage();
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [shops, setShops] = useState<{ id: string; name: string }[]>([]);
@@ -1030,7 +1032,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Sales
+                      {t.totalSales}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
                       {formatPrice(reportData?.totalRevenue || 0)}
@@ -1043,7 +1045,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Profit
+                      {t.totalProfit}
                     </p>
                     <p className="text-2xl font-bold text-orange-600">
                       {formatPrice(reportData?.totalProfit || 0)}
@@ -1056,7 +1058,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Transactions
+                      {t.totalTransactions}
                     </p>
                     <p className="text-2xl font-bold text-gray-900">
                       {reportData?.totalTransactions || 0}
@@ -1069,7 +1071,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Customers
+                      {t.totalCustomers}
                     </p>
                     <p className="text-2xl font-bold text-gray-900">
                       {reportData?.totalCustomers || 0}
@@ -1089,7 +1091,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Sales (฿)
+                      {t.totalSalesThb}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
                       {formatPrice(reportData?.totalRevenue || 0)}
@@ -1101,7 +1103,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Sale (Ks)
+                      {t.totalSalesMmk}
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
                       {formatInMMK(reportData?.totalRevenueMMK || 0)}
@@ -1114,7 +1116,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Expense (฿)
+                      {t.totalExpenseThb}
                     </p>
                     <p className="text-2xl font-bold text-red-600">
                       {formatPrice(reportData?.totalExpenseTHB || 0)}
@@ -1127,7 +1129,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Expense (Ks)
+                      {t.totalExpenseMmk}
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
                       {SettingsService.formatPrice(
@@ -1150,7 +1152,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Remaining Stock Value (Unit Price)
+                      {t.remainingStockValueUnit}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
                       {formatPrice(reportData?.totalStockSellValueTHB || 0)}
@@ -1169,7 +1171,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Remaining Stock Value (Original Price)
+                      {t.remainingStockValueOriginal}
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
                       {formatPrice(reportData?.totalStockOriginalTHB || 0)}
@@ -1187,7 +1189,7 @@ function ReportsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Net Profit
+                      {t.totalNetProfit}
                     </p>
                     <p className="text-2xl font-bold text-orange-600">
                       {formatPrice(reportData?.totalNetTHB || 0)}
@@ -1275,7 +1277,7 @@ function ReportsPageContent() {
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Daily Status
+                    {t.dailyStatus}
                   </h3>
                   <div className="flex items-center space-x-2">
                     <select
@@ -1289,7 +1291,7 @@ function ReportsPageContent() {
                       }}
                       className="px-3 py-2 border border-gray-300 bg-white text-sm text-gray-900"
                     >
-                      <option value="all">All Branches</option>
+                      <option value="all">{t.allBranches}</option>
                       {shops.map((shop) => (
                         <option key={shop.id} value={shop.name}>
                           {shop.name}
@@ -1408,25 +1410,25 @@ function ReportsPageContent() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
+                        {t.date}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total Sales
+                        {t.totalSale}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Original Price
+                        {t.originalPrice}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Profit
+                        {t.profit}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Expense
+                        {t.expenses}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Net Sales
+                        {t.netSales}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Net Profit
+                        {t.totalNetProfit}
                       </th>
                     </tr>
                   </thead>
@@ -1521,7 +1523,7 @@ function ReportsPageContent() {
                       disabled={dailyCurrentPage === 1}
                       className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                     >
-                      Previous
+                      {t.previous}
                     </button>
                     <button
                       onClick={() =>
@@ -1548,7 +1550,7 @@ function ReportsPageContent() {
                   </div>
                   <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                     <div className="flex items-center space-x-2">
-                      <p className="text-sm text-gray-700">Rows per page:</p>
+                      <p className="text-sm text-gray-700">{t.rowsPerPage}:</p>
                       <select
                         title="Select number of rows per page"
                         value={dailyRowsPerPage}
@@ -1564,17 +1566,10 @@ function ReportsPageContent() {
                         <option value={100}>100</option>
                       </select>
                       <p className="text-sm text-gray-700">
-                        Showing{" "}
-                        {Math.min(
-                          displayedDailyStatus.length,
-                          (dailyCurrentPage - 1) * dailyRowsPerPage + 1,
-                        )}
-                        –
-                        {Math.min(
-                          dailyCurrentPage * dailyRowsPerPage,
-                          displayedDailyStatus.length,
-                        )}{" "}
-                        of {displayedDailyStatus.length} days
+                        {t.showing_entries
+                          .replace("{start}", String(Math.min(displayedDailyStatus.length, (dailyCurrentPage - 1) * dailyRowsPerPage + 1)))
+                          .replace("{end}", String(Math.min(dailyCurrentPage * dailyRowsPerPage, displayedDailyStatus.length)))
+                          .replace("{total}", String(displayedDailyStatus.length))}
                       </p>
                     </div>
                     <div>
@@ -1629,7 +1624,7 @@ function ReportsPageContent() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  Top Selling Items
+                  {t.topSellingProducts}
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -1637,16 +1632,16 @@ function ReportsPageContent() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Item
+                        {t.productName}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Quantity Sold
+                        {t.quantitySold}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total Sale
+                        {t.totalSale}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Performance
+                        {t.performance}
                       </th>
                     </tr>
                   </thead>
@@ -1715,7 +1710,7 @@ function ReportsPageContent() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search transactions..."
+                    placeholder={t.searchTransactions}
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -1887,7 +1882,7 @@ function ReportsPageContent() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
-                  Recent Transactions
+                  {t.recentTransactions}
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -1895,43 +1890,43 @@ function ReportsPageContent() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ID
+                        {t.transactionId}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Customer
+                        {t.customer}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Items
+                        {t.items}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subtotal
+                        {t.subtotal}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Discount
+                        {t.discount}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Tax
+                        {t.tax}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total
+                        {t.total}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Profit
+                        {t.profit}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Payment Method
+                        {t.paymentMethod}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Branch
+                        {t.branch}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Sold By
+                        {t.soldBy}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
+                        {t.status}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date & Time
+                        {t.dateTime}
                       </th>
                     </tr>
                   </thead>
@@ -1944,7 +1939,7 @@ function ReportsPageContent() {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {transaction.customer?.displayName
                             ? transaction.customer.displayName
-                            : "Walk-in customer"}
+                            : t.walkInCustomer}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex flex-col">
@@ -2125,13 +2120,13 @@ function ReportsPageContent() {
 
               {/* Pagination */}
               <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div className="flex-1 flex justify-between sm:hidden">
+                  <div className="flex-1 flex justify-between sm:hidden">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Previous
+                    {t.previous}
                   </button>
                   <button
                     onClick={() =>
@@ -2140,7 +2135,7 @@ function ReportsPageContent() {
                     disabled={currentPage === totalPages}
                     className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                   >
-                    Next
+                    {t.next}
                   </button>
                 </div>
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
@@ -2161,9 +2156,13 @@ function ReportsPageContent() {
                       <option value={100}>100</option>
                     </select>
                     <p className="text-sm text-gray-700">
-                      Showing {startIndex + 1}–
-                      {Math.min(endIndex, allTransactions.length)} of{" "}
-                      {allTransactions.length} transactions
+                      {t.showingTransactions
+                        .replace("{start}", String(startIndex + 1))
+                        .replace(
+                          "{end}",
+                          String(Math.min(endIndex, allTransactions.length)),
+                        )
+                        .replace("{total}", String(allTransactions.length))}
                     </p>
                   </div>
                   <div>

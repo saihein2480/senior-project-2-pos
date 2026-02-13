@@ -605,22 +605,24 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
       {/* Full Screen Cart - Combined View */}
-      <div className="absolute inset-0 bg-white shadow-xl flex">
+      <div className="absolute inset-0 bg-white shadow-xl flex flex-col md:flex-row">
         {/* Left Side - Cart Big View */}
-        <div className="flex-1 flex flex-col border-r border-gray-200">
+        <div className="flex-1 flex flex-col md:border-r border-gray-200">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div className="flex items-center space-x-3">
-              <Eye className="h-6 w-6 text-blue-600" />
-              <h2 className="text-xl font-bold text-gray-900">Cart Items</h2>
-              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center space-x-2 md:space-x-3">
+              <Eye className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
+              <h2 className="text-lg md:text-xl font-bold text-gray-900">
+                Cart Items
+              </h2>
+              <span className="bg-blue-100 text-blue-800 text-xs md:text-sm font-medium px-2 md:px-2.5 py-0.5 rounded-full">
                 {cart.totalItems} items
               </span>
             </div>
           </div>
 
           {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6">
             {cart.items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <ShoppingCart className="h-16 w-16 mb-6 text-gray-300" />
@@ -636,7 +638,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   return sortedItems.map((item, index) => (
                     <div
                       key={item.id}
-                      className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="bg-white border border-gray-200 rounded-lg p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex items-center gap-4">
                         {/* Product Image */}
@@ -1105,25 +1107,25 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         </div>
 
         {/* Right Side - Shopping Cart Summary */}
-        <div className="w-full max-w-md flex flex-col">
+        <div className="w-full md:max-w-md lg:max-w-lg flex flex-col border-t md:border-t-0 md:border-l border-gray-200">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4">
+            <h2 className="text-base md:text-lg font-semibold text-gray-900">
               Shopping Cart
             </h2>
             <div className="flex items-center space-x-2">
               <button
                 title="Close cart"
                 onClick={onClose}
-                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-full p-2 md:p-2.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5 md:h-6 md:w-6" />
               </button>
             </div>
           </div>
 
           {/* Customer Info */}
-          <div className="border-b border-gray-200 px-6 py-4">
+          <div className="border-b border-gray-200 px-3 md:px-6 py-3 md:py-4">
             <div className="flex items-center space-x-3">
               <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
                 {getSelectedCustomer()?.customerImage ? (
@@ -1181,7 +1183,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             </div>
           ) : (
             <div className="flex-1 border-t border-gray-200 overflow-y-auto">
-              <div className="px-6 py-6 space-y-6">
+              <div className="px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
                 {/* Discount section */}
                 <div className="p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
                   <div className="flex items-center space-x-2 text-blue-700 mb-3">

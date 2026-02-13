@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   LogOut,
   ChevronDown,
@@ -33,18 +34,18 @@ export function TopNavBar({
     getCurrencySymbol,
   } = useCurrency();
   const { businessSettings } = useSettings();
+  const { language, setLanguage, t } = useLanguage();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("English");
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const languages = [
-    { name: "English", flag: "🇺🇸", code: "EN" },
-    { name: "Burmese", flag: "🇲🇲", code: "MM" },
+    { name: "English", flag: "🇺🇸", code: "EN", value: "en" as const },
+    { name: "Burmese", flag: "🇲🇲", code: "MM", value: "my" as const },
   ];
 
   const currencies = [
@@ -52,10 +53,9 @@ export function TopNavBar({
     { code: "THB", name: "Thai Baht", symbol: "฿" },
   ];
 
-  const handleLanguageChange = (language: string) => {
-    setSelectedLanguage(language);
+  const handleLanguageChange = (langValue: "en" | "my") => {
+    setLanguage(langValue);
     setIsLanguageDropdownOpen(false);
-    console.log("Language changed to:", language);
   };
 
   const handleCurrencyChange = (currency: "THB" | "MMK") => {
@@ -114,7 +114,7 @@ export function TopNavBar({
               <Menu className="w-6 h-6 text-gray-700" />
             </button>
 
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-gray-900 hidden xl:block">
               {user?.displayName || user?.email || "Owner"}
             </h1>
           </div>
@@ -124,8 +124,8 @@ export function TopNavBar({
               <Store className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">
                 {businessSettings?.currentBranch === "No Branch"
-                  ? "No Branch"
-                  : businessSettings?.currentBranch || "Main Branch"}
+                  ? t.noBranch
+                  : businessSettings?.currentBranch || t.mainBranch}
               </span>
             </div>
             {/* Date Display */}
@@ -140,9 +140,8 @@ export function TopNavBar({
 
             {/* Main Currency Title */}
             <div className="flex items-center space-x-1 px-3 py-2 bg-white border-gray-300 rounded-lg">
-              <span className="text-sm text-gray-600">Main Currency:</span>
-              <span className="text-sm  text-gray-800">
-                {getCurrencySymbol(defaultCurrency)} {defaultCurrency}
+              <span className="text-sm text-gray-600">
+                {t.mainCurrency} {getCurrencySymbol(defaultCurrency)} {defaultCurrency}
               </span>
             </div>
 
@@ -212,7 +211,7 @@ export function TopNavBar({
             {/* Language Selector (compact pill + dropdown) */}
             <div className="relative" ref={languageDropdownRef}>
               <button
-                title="language"
+                title={t.language}
                 onClick={() =>
                   setIsLanguageDropdownOpen(!isLanguageDropdownOpen)
                 }
@@ -221,7 +220,7 @@ export function TopNavBar({
                 className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
               >
                 <span className="text-sm font-medium text-gray-700">
-                  {selectedLanguage}
+                  {languages.find((l) => l.value === language)?.name}
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 text-gray-600 transition-transform ${
@@ -236,13 +235,13 @@ export function TopNavBar({
                   aria-orientation="vertical"
                   className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
                 >
-                  {languages.map((language) => {
-                    const isSelected = selectedLanguage === language.name;
+                  {languages.map((lang) => {
+                    const isSelected = language === lang.value;
                     return (
                       <button
-                        key={language.code}
+                        key={lang.code}
                         role="menuitem"
-                        onClick={() => handleLanguageChange(language.name)}
+                        onClick={() => handleLanguageChange(lang.value)}
                         className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
                           isSelected
                             ? "bg-blue-50 text-gray-700"
@@ -250,11 +249,11 @@ export function TopNavBar({
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-lg">{language.flag}</span>
+                          <span className="text-lg">{lang.flag}</span>
                           <div className="text-left">
-                            <div className="font-medium">{language.name}</div>
+                            <div className="font-medium">{lang.name}</div>
                             <div className="text-xs text-gray-500">
-                              {language.code}
+                              {lang.code}
                             </div>
                           </div>
                         </div>
@@ -306,7 +305,7 @@ export function TopNavBar({
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
-                    Logout
+                    {t.logout}
                   </button>
                 </div>
               )}

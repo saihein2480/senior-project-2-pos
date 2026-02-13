@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
@@ -44,6 +45,7 @@ interface PaymentStats {
 function PaymentsPageContent() {
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
+  const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -490,6 +492,26 @@ function PaymentsPageContent() {
     }
   };
 
+  const translatePaymentMethod = (method: string) => {
+    const methodMap: Record<string, string> = {
+      cash: t.cash,
+      scan: t.scanPayment,
+      wallet: t.wallet,
+      cod: t.cod,
+    };
+    return methodMap[method] || method;
+  };
+
+  const translateStatus = (status: string) => {
+    const statusMap: Record<string, string> = {
+      completed: t.completed,
+      pending: t.pending,
+      cancelled: t.cancelled,
+      failed: t.failed,
+    };
+    return statusMap[status] || status;
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       <div className="hidden md:block">
@@ -536,7 +558,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Sales
+                      {t.totalSales}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
                       {formatPrice(paymentStats.totalAmount)}
@@ -549,7 +571,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Total Profit
+                      {t.totalProfit}
                     </p>
                     <p className="text-2xl font-bold text-orange-600">
                       {formatPrice(paymentStats.totalProfit)}
@@ -562,7 +584,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Successful Payments
+                      {t.successfulPayments}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
                       {paymentStats.successfulPayments}
@@ -575,7 +597,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Refund Payments
+                      {t.refundPayments}
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
                       {paymentStats.refundPayments}
@@ -588,7 +610,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Partial Refunds
+                      {t.partialRefunds}
                     </p>
                     <p className="text-2xl font-bold text-yellow-600">
                       {paymentStats.partialRefundPayments}
@@ -601,7 +623,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Cancelled Payments
+                      {t.cancelledPayments}
                     </p>
                     <p className="text-2xl font-bold text-red-600">
                       {paymentStats.cancelledPayments}
@@ -612,13 +634,13 @@ function PaymentsPageContent() {
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Payment Methods Breakdown
+                {t.paymentMethodsBreakdown}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Cash Payments
+                      {t.cashPayments}
                     </p>
                     <p className="text-xl font-bold text-gray-900">
                       {formatPrice(paymentStats.cashPayments.amount)}
@@ -632,7 +654,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Scan Payments
+                      {t.scanPayments}
                     </p>
                     <p className="text-xl font-bold text-gray-900">
                       {formatPrice(paymentStats.scanPayments.amount)}
@@ -646,7 +668,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      Wallet Payments
+                      {t.walletPayments}
                     </p>
                     <p className="text-xl font-bold text-gray-900">
                       {formatPrice(paymentStats.walletPayments.amount)}
@@ -660,7 +682,7 @@ function PaymentsPageContent() {
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500">
-                      COD Payments
+                      {t.codPayments}
                     </p>
                     <p className="text-xl font-bold text-gray-900">
                       {formatPrice(paymentStats.codPayments.amount)}
@@ -685,19 +707,21 @@ function PaymentsPageContent() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Cash Payments
+                    {t.cashPayments}
                   </h3>
                   <DollarSign className="h-6 w-6 text-green-600" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Transaction:</span>
+                    <span className="text-sm text-gray-600">
+                      {t.transaction}:
+                    </span>
                     <span className="text-sm font-medium text-gray-600">
                       {paymentStats.cashPayments.count}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Amount:</span>
+                    <span className="text-sm text-gray-600">{t.amount}:</span>
                     <span className="text-sm font-medium text-gray-600">
                       {formatPrice(paymentStats.cashPayments.amount)}
                     </span>
@@ -708,19 +732,21 @@ function PaymentsPageContent() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Scan Payments
+                    {t.scanPayments}
                   </h3>
                   <Smartphone className="h-6 w-6 text-blue-600" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Transaction:</span>
+                    <span className="text-sm text-gray-600">
+                      {t.transaction}:
+                    </span>
                     <span className="text-sm font-medium text-gray-600">
                       {paymentStats.scanPayments.count}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Amount:</span>
+                    <span className="text-sm text-gray-600">{t.amount}:</span>
                     <span className="text-sm font-medium text-gray-600">
                       {formatPrice(paymentStats.scanPayments.amount)}
                     </span>
@@ -731,19 +757,21 @@ function PaymentsPageContent() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    Wallet Payments
+                    {t.walletPayments}
                   </h3>
                   <Wallet className="h-6 w-6 text-purple-600" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Transaction:</span>
+                    <span className="text-sm text-gray-600">
+                      {t.transaction}:
+                    </span>
                     <span className="text-sm font-medium text-gray-600  ">
                       {paymentStats.walletPayments.count}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Amount:</span>
+                    <span className="text-sm text-gray-600">{t.amount}:</span>
                     <span className="text-sm font-medium text-gray-600">
                       {formatPrice(paymentStats.walletPayments.amount)}
                     </span>
@@ -754,19 +782,21 @@ function PaymentsPageContent() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    COD Payments
+                    {t.codPayments}
                   </h3>
                   <Truck className="h-6 w-6 text-gray-700" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Transaction:</span>
+                    <span className="text-sm text-gray-600">
+                      {t.transaction}:
+                    </span>
                     <span className="text-sm font-medium text-gray-600">
                       {paymentStats.codPayments.count}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Amount:</span>
+                    <span className="text-sm text-gray-600">{t.amount}:</span>
                     <span className="text-sm font-medium text-gray-600">
                       {formatPrice(paymentStats.codPayments.amount)}
                     </span>
@@ -782,7 +812,7 @@ function PaymentsPageContent() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search transactions..."
+                    placeholder={t.searchTransactions}
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -810,12 +840,14 @@ function PaymentsPageContent() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="pending">Pending</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="refunded">Refunded</option>
-                  <option value="partially_refunded">Partially Refunded</option>
+                  <option value="all">{t.allStatus}</option>
+                  <option value="completed">{t.completed}</option>
+                  <option value="pending">{t.pending}</option>
+                  <option value="cancelled">{t.cancelled}</option>
+                  <option value="refunded">{t.refunded}</option>
+                  <option value="partially_refunded">
+                    {t.partiallyRefunded}
+                  </option>
                 </select>
 
                 {/* Payment Method Filter */}
@@ -835,11 +867,11 @@ function PaymentsPageContent() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Payment Methods</option>
-                  <option value="cash">Cash</option>
-                  <option value="scan">Scan Payment</option>
-                  <option value="wallet">Wallet</option>
-                  <option value="cod">COD</option>
+                  <option value="all">{t.allPaymentMethods}</option>
+                  <option value="cash">{t.cash}</option>
+                  <option value="scan">{t.scanPayment}</option>
+                  <option value="wallet">{t.wallet}</option>
+                  <option value="cod">{t.cod}</option>
                 </select>
 
                 {/* Branch Filter */}
@@ -852,7 +884,7 @@ function PaymentsPageContent() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                 >
-                  <option value="all">All Branches</option>
+                  <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
                     <option key={shop.id} value={shop.name}>
                       {shop.name}
@@ -901,12 +933,12 @@ function PaymentsPageContent() {
                   }}
                   className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
                 >
-                  <option value="today">Today</option>
-                  <option value="7d">Last 7 Days</option>
-                  <option value="30d">Last 30 Days</option>
-                  <option value="90d">Last 90 Days</option>
-                  <option value="all">All Time</option>
-                  <option value="custom">Custom Range</option>
+                  <option value="today">{t.today}</option>
+                  <option value="7d">{t.last7Days}</option>
+                  <option value="30d">{t.last30Days}</option>
+                  <option value="90d">{t.last90Days}</option>
+                  <option value="all">{t.allTime}</option>
+                  <option value="custom">{t.customRange}</option>
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
@@ -945,7 +977,7 @@ function PaymentsPageContent() {
                   className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm flex items-center"
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  {t.exportCsv}
                 </button>
               </div>
             </div>
@@ -954,11 +986,11 @@ function PaymentsPageContent() {
               {loading ? (
                 <div className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading payments...</p>
+                  <p className="mt-2 text-gray-600">{t.loading}</p>
                 </div>
               ) : filteredTransactions.length === 0 ? (
                 <div className="p-8 text-center">
-                  <p className="text-gray-600">No payments found</p>
+                  <p className="text-gray-600">{t.noPaymentsFound}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -966,28 +998,28 @@ function PaymentsPageContent() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Transaction ID
+                          {t.transactionId}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Customer
+                          {t.customer}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Branch
+                          {t.branch}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Selling Currency
+                          {t.sellingCurrency}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount (THB)
+                          {t.amount} (THB)
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Payment Method
+                          {t.paymentMethod}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
+                          {t.status}
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
+                          {t.date}
                         </th>
                       </tr>
                     </thead>
@@ -1000,11 +1032,11 @@ function PaymentsPageContent() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {transaction.customer?.displayName ||
-                                "Walk-in customer"}
+                                t.walkInCustomer}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {transaction.branchName || "Main Branch"}
+                            {transaction.branchName || t.mainBranch}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {transaction.sellingCurrency &&
@@ -1018,7 +1050,7 @@ function PaymentsPageContent() {
                                   {transaction.sellingTotal.toLocaleString()}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                  Rate: 1 THB = {transaction.exchangeRate}{" "}
+                                  {t.rate}: 1 THB = {transaction.exchangeRate}{" "}
                                   {transaction.sellingCurrency === "MMK"
                                     ? "Ks"
                                     : transaction.sellingCurrency}
@@ -1034,8 +1066,10 @@ function PaymentsPageContent() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               {getPaymentMethodIcon(transaction.paymentMethod)}
-                              <span className="ml-2 text-sm text-gray-900 capitalize">
-                                {transaction.paymentMethod}
+                              <span className="ml-2 text-sm text-gray-900">
+                                {translatePaymentMethod(
+                                  transaction.paymentMethod,
+                                )}
                               </span>
                             </div>
                           </td>
@@ -1047,7 +1081,7 @@ function PaymentsPageContent() {
                                   transaction.status,
                                 )}`}
                               >
-                                {transaction.status}
+                                {translateStatus(transaction.status)}
                               </span>
                             </div>
                           </td>
@@ -1072,7 +1106,7 @@ function PaymentsPageContent() {
                       disabled={currentPage === 1}
                       className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                     >
-                      Previous
+                      {t.previous}
                     </button>
                     <button
                       onClick={() =>
@@ -1081,12 +1115,12 @@ function PaymentsPageContent() {
                       disabled={currentPage === totalPages}
                       className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                     >
-                      Next
+                      {t.next}
                     </button>
                   </div>
                   <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                     <div className="flex items-center space-x-2">
-                      <p className="text-sm text-gray-700">Rows per page:</p>
+                      <p className="text-sm text-gray-700">{t.rowsPerPage}:</p>
                       <select
                         title="Select number of rows per page"
                         value={rowsPerPage}
@@ -1102,9 +1136,18 @@ function PaymentsPageContent() {
                         <option value={100}>100</option>
                       </select>
                       <p className="text-sm text-gray-700">
-                        Showing {startIndex + 1}–
-                        {Math.min(endIndex, filteredTransactions.length)} of{" "}
-                        {filteredTransactions.length} payments
+                        {t.showingPayments
+                          .replace("{start}", String(startIndex + 1))
+                          .replace(
+                            "{end}",
+                            String(
+                              Math.min(endIndex, filteredTransactions.length),
+                            ),
+                          )
+                          .replace(
+                            "{total}",
+                            String(filteredTransactions.length),
+                          )}
                       </p>
                     </div>
                     <div>

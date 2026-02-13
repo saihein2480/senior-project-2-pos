@@ -887,39 +887,39 @@ export function PaymentClearanceModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-white/20">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 md:p-4">
+      <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border border-white/20">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b-2 border-gray-300/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-bold text-gray-900">
+        <div className="flex items-center justify-between p-3 md:p-4 border-b-2 border-gray-300/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <h2 className="text-lg md:text-xl font-bold text-gray-900">
               Payment Clearance
             </h2>
             {selectedCurrency !== defaultCurrency && (
               <button
                 title="View detailed currency information"
                 onClick={() => setShowDetailModal(true)}
-                className="text-blue-600 hover:text-blue-800 transition-colors p-1 rounded-full hover:bg-blue-100"
+                className="text-blue-600 hover:text-blue-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-blue-100 touch-manipulation"
               >
-                <Eye className="h-5 w-5" />
+                <Eye className="h-4 w-4 md:h-5 md:w-5" />
               </button>
             )}
           </div>
           <button
             title="Close"
             onClick={onClose}
-            className="text-gray-600 hover:text-gray-800 transition-colors p-1 rounded-full hover:bg-gray-200"
+            className="text-gray-600 hover:text-gray-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-gray-200 touch-manipulation"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5 md:h-6 md:w-6" />
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           {/* Left Side - Customer Info & Payment Summary */}
-          <div className="w-3/5 p-4 border-r border-gray-200 overflow-y-auto">
+          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r border-gray-200 overflow-y-auto">
             {/* Customer Information */}
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+            <div className="flex items-center space-x-2 md:space-x-3 mb-3">
+              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-blue-500 flex items-center justify-center">
                 {customer?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

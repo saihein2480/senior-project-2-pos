@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { InstallPrompt } from "@/components/ui/InstallPrompt";
 
@@ -41,13 +42,15 @@ export default function RootLayout({
         className={`${inter.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
-        <AuthProvider>
-          <SettingsProvider>
-            <CurrencyProvider>
-              <CartProvider>{children}</CartProvider>
-            </CurrencyProvider>
-          </SettingsProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <SettingsProvider>
+              <CurrencyProvider>
+                <CartProvider>{children}</CartProvider>
+              </CurrencyProvider>
+            </SettingsProvider>
+          </AuthProvider>
+        </LanguageProvider>
         <InstallPrompt />
         <SpeedInsights />
       </body>
