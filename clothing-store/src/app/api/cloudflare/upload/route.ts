@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!file.type.startsWith("image/")) {
       return NextResponse.json(
         { error: "File must be an image" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File size must be less than 5MB" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -31,17 +31,8 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Allow caller to force upload (bypass duplicate detection)
-    const forceFlag = (formData.get("force") as string) === "true";
-
-    // Upload to Cloudflare R2 (with duplicate detection unless forced)
-    const result = await uploadToR2(
-      buffer,
-      file.type,
-      folder,
-      file.name,
-      forceFlag,
-    );
+    // Upload to Cloudflare R2 (with duplicate detection)
+    const result = await uploadToR2(buffer, file.type, folder, file.name);
 
     return NextResponse.json({
       success: true,
@@ -61,7 +52,7 @@ export async function POST(request: NextRequest) {
           error instanceof Error ? error.message : "Failed to upload image",
         success: false,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

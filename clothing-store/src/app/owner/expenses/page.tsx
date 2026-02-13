@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -10,48 +10,18 @@ import { TopNavBar } from "@/components/ui/TopNavBar";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ExpenseCategory, Expense } from "@/types/expense";
 import { Trash2 } from "lucide-react";
-import {
-  useExpenses,
-  useExpenseCategories,
-  useCreateExpense,
-  useCreateExpenseCategory,
-  useUpdateExpense,
-  useDeleteExpense,
-  useDeleteExpenseCategory,
-  queryKeys,
-} from "@/hooks/useQueries";
-import { useQueryClient } from "@tanstack/react-query";
 
 function ExpensesContent() {
   const [activeMenuItem, setActiveMenuItem] = useState("expenses");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-
-  // TanStack Query hooks
-  const queryClient = useQueryClient();
-  const { data: expensesData, isLoading: isLoadingExpenses } = useExpenses();
-  const { data: categoriesData, isLoading: isLoadingCategories } =
-    useExpenseCategories();
-  const createExpenseMutation = useCreateExpense();
-  const createCategoryMutation = useCreateExpenseCategory();
-  const updateExpenseMutation = useUpdateExpense();
-  const deleteExpenseMutation = useDeleteExpense();
-  const deleteCategoryMutation = useDeleteExpenseCategory();
-
-  // Derived state from query data
-  const expenses: Expense[] = useMemo(
-    () => (expensesData?.success ? expensesData.data : []),
-    [expensesData],
-  );
-  const categories: ExpenseCategory[] = useMemo(
-    () => (categoriesData?.success ? categoriesData.data : []),
-    [categoriesData],
-  );
-  const loading = isLoadingExpenses || isLoadingCategories;
 
   // Form state
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -81,6 +51,31 @@ function ExpensesContent() {
   const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
   const [isProcessingBulkDelete, setIsProcessingBulkDelete] = useState(false);
 
+  const fetchData = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const [categoriesRes, expensesRes] = await Promise.all([
+        fetch("/api/expenses?type=categories"),
+        fetch("/api/expenses"),
+      ]);
+
+      const categoriesData = await categoriesRes.json();
+      const expensesData = await expensesRes.json();
+
+      if (categoriesData.success) setCategories(categoriesData.data);
+      if (expensesData.success) setExpenses(expensesData.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      showAlert("error", "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   const showAlert = (type: "success" | "error", message: string) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 3000);
@@ -92,21 +87,26 @@ function ExpensesContent() {
       return;
     }
 
-    createCategoryMutation.mutate(newCategoryName, {
-      onSuccess: (data) => {
-        if (data.success) {
-          setNewCategoryName("");
-          setShowCategoryModal(false);
-          showAlert("success", "Category added successfully");
-        } else {
-          showAlert("error", "Failed to add category");
-        }
-      },
-      onError: (error) => {
-        console.error("Error adding category:", error);
+    try {
+      const response = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "category", name: newCategoryName }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCategories([data.data, ...categories]);
+        setNewCategoryName("");
+        setShowCategoryModal(false);
+        showAlert("success", "Category added successfully");
+      } else {
         showAlert("error", "Failed to add category");
-      },
-    });
+      }
+    } catch (error) {
+      console.error("Error adding category:", error);
+      showAlert("error", "Failed to add category");
+    }
   };
 
   // Removed Spending Menu add handler
@@ -117,53 +117,61 @@ function ExpensesContent() {
       return;
     }
 
-    createExpenseMutation.mutate(
-      {
-        categoryId: selectedCategoryId,
-        note,
-        imageUrl,
-        date,
-        amount: parseFloat(amount),
-        currency: selectedCurrency,
-      },
-      {
-        onSuccess: (data) => {
-          if (data.success) {
-            // Reset form
-            setSelectedCategoryId("");
-            setNote("");
-            setImageUrl("");
-            setAmount("");
-            setDate(new Date().toISOString().split("T")[0]);
-            showAlert("success", "Expense added successfully");
-          } else {
-            showAlert("error", "Failed to add expense");
-          }
-        },
-        onError: (error) => {
-          console.error("Error adding expense:", error);
-          showAlert("error", "Failed to add expense");
-        },
-      },
-    );
+    try {
+      setLoading(true);
+      const response = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categoryId: selectedCategoryId,
+          note,
+          imageUrl,
+          date,
+          amount: parseFloat(amount),
+          currency: selectedCurrency,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setExpenses([data.data, ...expenses]);
+        // Reset form
+        setSelectedCategoryId("");
+        setNote("");
+        setImageUrl("");
+        setAmount("");
+        setDate(new Date().toISOString().split("T")[0]);
+        showAlert("success", "Expense added successfully");
+      } else {
+        showAlert("error", "Failed to add expense");
+      }
+    } catch (error) {
+      console.error("Error adding expense:", error);
+      showAlert("error", "Failed to add expense");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteCategory = async (id: string) => {
     if (!confirm("Are you sure you want to delete this category?")) return;
 
-    deleteCategoryMutation.mutate(id, {
-      onSuccess: (data) => {
-        if (data.success) {
-          showAlert("success", "Category deleted successfully");
-        } else {
-          showAlert("error", "Failed to delete category");
-        }
-      },
-      onError: (error) => {
-        console.error("Error deleting category:", error);
+    try {
+      const response = await fetch(`/api/expenses?type=category&id=${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCategories(categories.filter((cat) => cat.id !== id));
+        showAlert("success", "Category deleted successfully");
+      } else {
         showAlert("error", "Failed to delete category");
-      },
-    });
+      }
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      showAlert("error", "Failed to delete category");
+    }
   };
 
   // Removed Spending Menu delete handler
@@ -173,19 +181,22 @@ function ExpensesContent() {
       return;
     }
 
-    deleteExpenseMutation.mutate(id, {
-      onSuccess: (data) => {
-        if (data.success) {
-          showAlert("success", "Expense deleted successfully");
-        } else {
-          showAlert("error", "Failed to delete expense");
-        }
-      },
-      onError: (error) => {
-        console.error("Error deleting expense:", error);
+    try {
+      const response = await fetch(`/api/expenses?id=${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setExpenses(expenses.filter((expense) => expense.id !== id));
+        showAlert("success", "Expense deleted successfully");
+      } else {
         showAlert("error", "Failed to delete expense");
-      },
-    });
+      }
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      showAlert("error", "Failed to delete expense");
+    }
   };
 
   // Toggle select single expense
@@ -237,9 +248,13 @@ function ExpensesContent() {
       }
     }
 
-    // Invalidate queries to refresh data
+    // Remove deleted expenses from state
     if (successCount > 0) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.expenses });
+      setExpenses((prevExpenses) =>
+        prevExpenses.filter(
+          (expense) => !selectedExpenses.includes(expense.id),
+        ),
+      );
       setSelectedExpenses([]);
       showAlert(
         "success",
@@ -265,33 +280,35 @@ function ExpensesContent() {
       return;
     }
 
-    updateExpenseMutation.mutate(
-      {
-        id: editingExpense.id,
-        data: {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/expenses?id=${editingExpense.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           categoryId: editingExpense.categoryId,
           note: editingExpense.note,
           date: editingExpense.date,
           amount: editingExpense.amount,
           currency: editingExpense.currency,
-        },
-      },
-      {
-        onSuccess: (data) => {
-          if (data.success) {
-            setShowEditModal(false);
-            setEditingExpense(null);
-            showAlert("success", "Expense updated successfully");
-          } else {
-            showAlert("error", "Failed to update expense");
-          }
-        },
-        onError: (error) => {
-          console.error("Error updating expense:", error);
-          showAlert("error", "Failed to update expense");
-        },
-      },
-    );
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await fetchData();
+        setShowEditModal(false);
+        setEditingExpense(null);
+        showAlert("success", "Expense updated successfully");
+      } else {
+        showAlert("error", "Failed to update expense");
+      }
+    } catch (error) {
+      console.error("Error updating expense:", error);
+      showAlert("error", "Failed to update expense");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatCurrency = (amount: number, curr: "THB" | "MMK") => {

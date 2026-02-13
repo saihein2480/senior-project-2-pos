@@ -1097,7 +1097,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             </div>
                           </div>
                         </div>
-                      </div>
+                       </div>
                     </div>
                   ));
                 })()}

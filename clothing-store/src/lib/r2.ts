@@ -39,7 +39,7 @@ function calculateHash(buffer: Buffer): string {
  * Get image dimensions from buffer
  */
 async function getImageDimensions(
-  buffer: Buffer
+  buffer: Buffer,
 ): Promise<{ width: number; height: number } | null> {
   try {
     // Using a simple approach - you might want to use a library like 'sharp' for production
@@ -57,7 +57,7 @@ async function getImageDimensions(
 async function checkDuplicateByHash(
   hash: string,
   folder?: string,
-  extension?: string
+  extension?: string,
 ): Promise<string | null> {
   try {
     const base = folder ? `${folder}/${hash}` : hash;
@@ -124,7 +124,6 @@ export async function uploadToR2(
   contentType: string,
   folder?: string,
   originalFilename?: string,
-  force?: boolean,
 ): Promise<R2UploadResult> {
   try {
     // Calculate hash of the file
@@ -133,15 +132,11 @@ export async function uploadToR2(
     // Determine extension from original filename if provided
     const extension = originalFilename?.split(".").pop() || undefined;
 
-    // If not forcing, check if file with same hash already exists (try with extension)
-    let existingUrl: string | null = null;
-    if (!force) {
-      existingUrl = await checkDuplicateByHash(hash, folder, extension);
-    }
-
+    // Check if file with same hash already exists (try with extension)
+    const existingUrl = await checkDuplicateByHash(hash, folder, extension);
     if (existingUrl) {
       console.log(
-        `Duplicate file detected. Returning existing URL: ${existingUrl}`
+        `Duplicate file detected. Returning existing URL: ${existingUrl}`,
       );
       return {
         key: existingUrl.replace(`${PUBLIC_URL}/`, ""),
@@ -196,7 +191,7 @@ export async function uploadToR2(
     throw new Error(
       `Failed to upload to R2: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 }
@@ -220,7 +215,7 @@ export async function deleteFromR2(key: string): Promise<void> {
     throw new Error(
       `Failed to delete from R2: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 }
