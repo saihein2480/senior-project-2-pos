@@ -351,7 +351,7 @@ export function Sidebar({
 
     const itemClasses = `
   flex items-center w-full text-sm transition-colors
-  px-3 py-2 hover:bg-gray-200
+  px-3 py-2 hover:bg-gray-100
   ${isActiveOrHasActiveChild ? "text-blue-700 border-r-2 border-blue-700" : "text-gray-700"}
   ${level > 0 ? "pl-8" : ""}
 `;
