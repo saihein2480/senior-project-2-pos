@@ -350,15 +350,11 @@ export function Sidebar({
     const isActiveOrHasActiveChild = isActive || hasActiveChild;
 
     const itemClasses = `
-      flex items-center w-full text-sm text-gray-700 hover:bg-gray-100 transition-colors
-      px-3 py-2
-      ${
-        isActiveOrHasActiveChild
-          ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-          : ""
-      }
-      ${level > 0 ? "pl-8" : ""}
-    `;
+  flex items-center w-full text-sm transition-colors
+  px-3 py-2 hover:bg-gray-200
+  ${isActiveOrHasActiveChild ? "text-blue-700 border-r-2 border-blue-700" : "text-gray-700"}
+  ${level > 0 ? "pl-8" : ""}
+`;
 
     const iconClasses = `w-4 h-4 mr-3 flex-shrink-0 ${
       isActiveOrHasActiveChild ? "text-blue-700" : ""
