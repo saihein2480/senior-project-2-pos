@@ -35,6 +35,7 @@ import { detectColorName } from "@/lib/colorUtils";
 
 export default function TransactionsPage() {
   const { user } = useAuth();
+  const isOwner = user?.role === "owner";
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const { t } = useLanguage();
@@ -657,6 +658,11 @@ export default function TransactionsPage() {
 
   // Toggle selection for a transaction
   const toggleSelectTransaction = (transactionId: string) => {
+    if (!isOwner) {
+      // Only owner can select transactions for bulk actions
+      alert("Only owner accounts can select transactions.");
+      return;
+    }
     setSelectedTransactions((prev) =>
       prev.includes(transactionId)
         ? prev.filter((id) => id !== transactionId)
@@ -666,6 +672,10 @@ export default function TransactionsPage() {
 
   // Select/deselect all transactions
   const toggleSelectAll = () => {
+    if (!isOwner) {
+      alert("Only owner accounts can select transactions.");
+      return;
+    }
     const allTransactionIds = filteredTransactions.map((t) => t.id!);
     if (selectedTransactions.length === allTransactionIds.length) {
       setSelectedTransactions([]);
@@ -1181,7 +1191,7 @@ export default function TransactionsPage() {
             </div>
 
             {/* Bulk Actions Bar */}
-            {selectedTransactions.length > 0 && (
+            {isOwner && selectedTransactions.length > 0 && (
               <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm font-medium text-blue-900">
@@ -1257,7 +1267,13 @@ export default function TransactionsPage() {
                                     filteredTransactions.length
                                 }
                                 onChange={toggleSelectAll}
-                                className="h-4 w-4 md:h-5 md:w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer touch-manipulation"
+                                disabled={!isOwner}
+                                title={
+                                  !isOwner
+                                    ? "Only owner can select transactions"
+                                    : undefined
+                                }
+                                className="h-4 w-4 md:h-5 md:w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
                                 aria-label="Select all transactions"
                               />
                             </th>
@@ -1322,7 +1338,13 @@ export default function TransactionsPage() {
                                     onChange={() =>
                                       toggleSelectTransaction(transaction.id!)
                                     }
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                    disabled={!isOwner}
+                                    title={
+                                      !isOwner
+                                        ? "Only owner can select transactions"
+                                        : undefined
+                                    }
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     aria-label={`Select transaction ${transaction.transactionId}`}
                                   />
                                 </td>
