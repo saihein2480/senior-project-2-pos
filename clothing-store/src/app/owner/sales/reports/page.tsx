@@ -1094,7 +1094,7 @@ function ReportsPageContent() {
                       {t.totalSalesThb}
                     </p>
                     <p className="text-2xl font-bold text-green-600">
-                      {formatPrice(reportData?.totalRevenue || 0)}
+                      {formatPrice(reportData?.totalRevenueTHB || 0)}
                     </p>
                   </div>
                 </div>
