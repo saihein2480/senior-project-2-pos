@@ -421,7 +421,7 @@ function ExpensesContent() {
                         title="category"
                         value={selectedCategoryId}
                         onChange={(e) => setSelectedCategoryId(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300"
                       >
                         <option value="" className="text-gray-500">
                           Select Category
@@ -457,7 +457,7 @@ function ExpensesContent() {
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300"
                     />
                   </div>
 
@@ -473,7 +473,7 @@ function ExpensesContent() {
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0.00"
-                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300"
                       />
                       <select
                         title="currency"
@@ -481,7 +481,7 @@ function ExpensesContent() {
                         onChange={(e) =>
                           setSelectedCurrency(e.target.value as "THB" | "MMK")
                         }
-                        className="px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300"
                       >
                         <option value="THB" className="text-gray-900">
                           THB
@@ -503,7 +503,7 @@ function ExpensesContent() {
                       onChange={(e) => setNote(e.target.value)}
                       placeholder="Enter any additional notes..."
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300"
                     />
                   </div>
 
@@ -548,7 +548,7 @@ function ExpensesContent() {
                       title="category"
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 text-gray-900"
                     >
                       <option value="" className="text-gray-900">
                         All Categories
@@ -575,7 +575,7 @@ function ExpensesContent() {
                       title="currency"
                       value={filterCurrency}
                       onChange={(e) => setFilterCurrency(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-300 text-gray-900"
                     >
                       <option value="" className="text-gray-900">
                         All Currencies

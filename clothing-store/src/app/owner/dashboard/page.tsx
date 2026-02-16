@@ -974,7 +974,7 @@ function OwnerDashboardContent() {
                   title="Filter by Branch"
                   value={filterBranch}
                   onChange={(e) => setFilterBranch(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                 >
                   <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
@@ -1019,7 +1019,7 @@ function OwnerDashboardContent() {
                       setEndDate(end.toISOString().split("T")[0]);
                     }
                   }}
-                  className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                 >
                   <option value="today">{t.today}</option>
                   <option value="7d">{t.last7Days}</option>
@@ -1037,7 +1037,7 @@ function OwnerDashboardContent() {
                       setStartDate(e.target.value);
                       setDateRange("custom");
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     max={endDate}
                     aria-label="Start Date"
                     placeholder="Start Date"
@@ -1050,7 +1050,7 @@ function OwnerDashboardContent() {
                       setEndDate(e.target.value);
                       setDateRange("custom");
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     min={startDate}
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"

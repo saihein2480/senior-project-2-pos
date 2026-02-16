@@ -560,7 +560,7 @@ function PaymentsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalSales}
                     </p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatPrice(paymentStats.totalAmount)}
                     </p>
                   </div>
@@ -573,7 +573,7 @@ function PaymentsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalProfit}
                     </p>
-                    <p className="text-2xl font-bold text-orange-600">
+                    <p className="text-2xl font-bold text-green-600">
                       {formatPrice(paymentStats.totalProfit)}
                     </p>
                   </div>

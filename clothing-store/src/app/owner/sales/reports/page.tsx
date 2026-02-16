@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -130,6 +130,20 @@ function ReportsPageContent() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Tooltip for small touch/mouse hints on table cells
+  const [cellTooltip, setCellTooltip] = useState<{
+    key: string;
+    text: string;
+  } | null>(null);
+  const tooltipTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current)
+        window.clearTimeout(tooltipTimeoutRef.current);
+    };
+  }, []);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -1034,7 +1048,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalSales}
                     </p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatPrice(reportData?.totalRevenue || 0)}
                     </p>
                   </div>
@@ -1093,7 +1107,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalSalesThb}
                     </p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatPrice(reportData?.totalRevenueTHB || 0)}
                     </p>
                   </div>
@@ -1105,7 +1119,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalSalesMmk}
                     </p>
-                    <p className="text-2xl font-bold text-purple-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatInMMK(reportData?.totalRevenueMMK || 0)}
                     </p>
                   </div>
@@ -1131,7 +1145,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.totalExpenseMmk}
                     </p>
-                    <p className="text-2xl font-bold text-purple-600">
+                    <p className="text-2xl font-bold text-red-600">
                       {SettingsService.formatPrice(
                         reportData?.totalExpenseMMK || 0,
                         "MMK",
@@ -1154,7 +1168,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.remainingStockValueUnit}
                     </p>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatPrice(reportData?.totalStockSellValueTHB || 0)}
                     </p>
                     <p className="text-sm text-gray-500">
@@ -1173,7 +1187,7 @@ function ReportsPageContent() {
                     <p className="text-sm font-medium text-gray-500">
                       {t.remainingStockValueOriginal}
                     </p>
-                    <p className="text-2xl font-bold text-purple-600">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatPrice(reportData?.totalStockOriginalTHB || 0)}
                     </p>
                     <p className="text-sm text-gray-500">
@@ -1491,20 +1505,92 @@ function ReportsPageContent() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{formatPrice(row.netSalesTHB || 0)}</div>
-                            <div className="text-xs text-gray-500">
-                              {SettingsService.formatPrice(
-                                row.netSalesMMK || 0,
-                                "MMK",
+                            <div className="relative">
+                              <div
+                                onMouseEnter={() =>
+                                  setCellTooltip({
+                                    key: `${row.date}-netsales`,
+                                    text: "Net Sales = Total Sales - Expense",
+                                  })
+                                }
+                                onMouseLeave={() => setCellTooltip(null)}
+                                onTouchStart={() => {
+                                  if (tooltipTimeoutRef.current)
+                                    window.clearTimeout(
+                                      tooltipTimeoutRef.current,
+                                    );
+                                  setCellTooltip({
+                                    key: `${row.date}-netsales`,
+                                    text: "Net Sales = Total Sales - Expense",
+                                  });
+                                  tooltipTimeoutRef.current = window.setTimeout(
+                                    () => {
+                                      setCellTooltip(null);
+                                    },
+                                    2500,
+                                  );
+                                }}
+                                className="cursor-help"
+                                aria-label="Net Sales formula: Net Sales = Total Sales - Expense"
+                              >
+                                <div>{formatPrice(row.netSalesTHB || 0)}</div>
+                                <div className="text-xs text-gray-500">
+                                  {SettingsService.formatPrice(
+                                    row.netSalesMMK || 0,
+                                    "MMK",
+                                  )}
+                                </div>
+                              </div>
+
+                              {cellTooltip?.key === `${row.date}-netsales` && (
+                                <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
+                                  {cellTooltip.text}
+                                </div>
                               )}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div>{formatPrice(row.netTHB || 0)}</div>
-                            <div className="text-xs text-gray-500">
-                              {SettingsService.formatPrice(
-                                row.netMMK || 0,
-                                "MMK",
+                            <div className="relative">
+                              <div
+                                onMouseEnter={() =>
+                                  setCellTooltip({
+                                    key: `${row.date}-netprofit`,
+                                    text: "Total Net Profit = Profit - Expense",
+                                  })
+                                }
+                                onMouseLeave={() => setCellTooltip(null)}
+                                onTouchStart={() => {
+                                  if (tooltipTimeoutRef.current)
+                                    window.clearTimeout(
+                                      tooltipTimeoutRef.current,
+                                    );
+                                  setCellTooltip({
+                                    key: `${row.date}-netprofit`,
+                                    text: "Total Net Profit = Profit - Expense",
+                                  });
+                                  tooltipTimeoutRef.current = window.setTimeout(
+                                    () => {
+                                      setCellTooltip(null);
+                                    },
+                                    2500,
+                                  );
+                                }}
+                                className="cursor-help"
+                                aria-label="Total Net Profit formula: Total Net Profit = Profit - Expense"
+                              >
+                                <div>{formatPrice(row.netTHB || 0)}</div>
+                                <div className="text-xs text-gray-500">
+                                  {SettingsService.formatPrice(
+                                    row.netMMK || 0,
+                                    "MMK",
+                                  )}
+                                </div>
+                              </div>
+
+                              {cellTooltip?.key === `${row.date}-netprofit` && (
+                                <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
+                                  {cellTooltip.text}
+                                </div>
                               )}
                             </div>
                           </td>
@@ -1567,9 +1653,28 @@ function ReportsPageContent() {
                       </select>
                       <p className="text-sm text-gray-700">
                         {t.showing_entries
-                          .replace("{start}", String(Math.min(displayedDailyStatus.length, (dailyCurrentPage - 1) * dailyRowsPerPage + 1)))
-                          .replace("{end}", String(Math.min(dailyCurrentPage * dailyRowsPerPage, displayedDailyStatus.length)))
-                          .replace("{total}", String(displayedDailyStatus.length))}
+                          .replace(
+                            "{start}",
+                            String(
+                              Math.min(
+                                displayedDailyStatus.length,
+                                (dailyCurrentPage - 1) * dailyRowsPerPage + 1,
+                              ),
+                            ),
+                          )
+                          .replace(
+                            "{end}",
+                            String(
+                              Math.min(
+                                dailyCurrentPage * dailyRowsPerPage,
+                                displayedDailyStatus.length,
+                              ),
+                            ),
+                          )
+                          .replace(
+                            "{total}",
+                            String(displayedDailyStatus.length),
+                          )}
                       </p>
                     </div>
                     <div>
@@ -1716,7 +1821,7 @@ function ReportsPageContent() {
                       setSearchTerm(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                   />
                 </div>
 
@@ -1736,7 +1841,7 @@ function ReportsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">All Status</option>
                   <option value="completed">Completed</option>
@@ -1761,7 +1866,7 @@ function ReportsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">All Payment Methods</option>
                   <option value="cash">Cash</option>
@@ -1778,7 +1883,7 @@ function ReportsPageContent() {
                     setFilterBranch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">All Branches</option>
                   {shops.map((shop) => (
@@ -1827,7 +1932,7 @@ function ReportsPageContent() {
                       }
                     }
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900 bg-white"
                 >
                   <option value="today">Today</option>
                   <option value="7d">Last 7 Days</option>
@@ -1847,7 +1952,7 @@ function ReportsPageContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     max={endDate}
                     aria-label="Start Date"
                   />
@@ -1860,7 +1965,7 @@ function ReportsPageContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     min={startDate}
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"
@@ -2120,7 +2225,7 @@ function ReportsPageContent() {
 
               {/* Pagination */}
               <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between sm:hidden">
+                <div className="flex-1 flex justify-between sm:hidden">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}

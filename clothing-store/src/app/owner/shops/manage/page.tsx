@@ -381,7 +381,7 @@ function ShopManagementContent() {
         {/* Page Header */}
         <div className="bg-white border-b border-gray-200 px-4 md:px-8 lg:px-12 py-4">
           <div className="flex items-center">
-            <Building2 className="h-6 w-6 text-blue-600 mr-3" />
+          
             <h1 className="text-2xl font-semibold text-gray-900">
               Shop Management
             </h1>
@@ -446,7 +446,7 @@ function ShopManagementContent() {
                         handleInputChange("name", e.target.value)
                       }
                       placeholder="e.g. Dagon Branch"
-                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 ${
                         formErrors.name
                           ? "border-red-300 bg-red-50"
                           : "border-gray-300"
@@ -474,7 +474,7 @@ function ShopManagementContent() {
                       }
                       placeholder="e.g. 123 Main Street"
                       rows={3}
-                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 resize-none ${
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 resize-none ${
                         formErrors.address
                           ? "border-red-300 bg-red-50"
                           : "border-gray-300"
@@ -503,7 +503,7 @@ function ShopManagementContent() {
                           handleInputChange("primaryPhone", e.target.value)
                         }
                         placeholder="09xxxxxxxxx"
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 ${
                           formErrors.primaryPhone
                             ? "border-red-300 bg-red-50"
                             : "border-gray-300"
@@ -531,7 +531,7 @@ function ShopManagementContent() {
                           handleInputChange("secondaryPhone", e.target.value)
                         }
                         placeholder="09xxxxxxxxx"
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 ${
                           formErrors.secondaryPhone
                             ? "border-red-300 bg-red-50"
                             : "border-gray-300"
@@ -561,7 +561,7 @@ function ShopManagementContent() {
                           handleInputChange("township", e.target.value)
                         }
                         placeholder="e.g. Dagon Township"
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 ${
                           formErrors.township
                             ? "border-red-300 bg-red-50"
                             : "border-gray-300"
@@ -588,7 +588,7 @@ function ShopManagementContent() {
                           handleInputChange("city", e.target.value)
                         }
                         placeholder="e.g. Yangon"
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
+                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-gray-300 text-gray-900 ${
                           formErrors.city
                             ? "border-red-300 bg-red-50"
                             : "border-gray-300"

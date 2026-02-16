@@ -796,14 +796,14 @@ function LabelPrintContent() {
                       placeholder="Search products..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200  focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-900 placeholder-gray-400 transition-all"
+                      className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200  focus:ring-2 focus:ring-gray-500/20 focus:border-gray-300 text-gray-900 placeholder-gray-400 transition-all"
                     />
                   </div>
                   <select
                     title="selectedShop"
                     value={selectedShop}
                     onChange={(e) => setSelectedShop(e.target.value)}
-                    className="w-44 px-4 py-2 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-gray-700 transition-all"
+                    className="w-44 px-4 py-2 bg-white border border-gray-200 focus:ring-2 focus:ring-gray-500/20 focus:border-gray-300 text-gray-700 transition-all"
                   >
                     <option value="all">All Shops</option>
                     {getUniqueShops().map((shop) => (

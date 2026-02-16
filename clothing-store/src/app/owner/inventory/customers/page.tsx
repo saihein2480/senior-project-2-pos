@@ -370,7 +370,7 @@ function CustomerPageContent() {
                   </p>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     onClick={handleRefresh}
                     disabled={isRefreshing}
@@ -382,7 +382,7 @@ function CustomerPageContent() {
                       }`}
                     />
                     Refresh
-                  </Button>
+                  </Button> */}
                   <Button
                     className="flex items-center"
                     onClick={() => setIsModalOpen(true)}
@@ -399,7 +399,7 @@ function CustomerPageContent() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
                         <Users className="h-5 w-5 text-blue-600" />
                       </div>
                     </div>
@@ -418,7 +418,7 @@ function CustomerPageContent() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
                         <Store className="h-5 w-5 text-purple-600" />
                       </div>
                     </div>
@@ -437,7 +437,7 @@ function CustomerPageContent() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
                         <Building2 className="h-5 w-5 text-orange-600" />
                       </div>
                     </div>
@@ -456,7 +456,7 @@ function CustomerPageContent() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
                         <CreditCard className="h-5 w-5 text-red-600" />
                       </div>
                     </div>

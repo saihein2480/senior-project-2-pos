@@ -219,7 +219,7 @@ function PrintSettingsContent() {
                         labelWidth: parseInt(e.target.value) || 50,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                     min="20"
                     max="100"
                   />
@@ -238,7 +238,7 @@ function PrintSettingsContent() {
                         labelHeight: parseInt(e.target.value) || 30,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                     min="15"
                     max="100"
                   />
@@ -257,7 +257,7 @@ function PrintSettingsContent() {
                         labelGap: parseInt(e.target.value) || 3,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                     min="0"
                     max="20"
                   />
@@ -284,7 +284,7 @@ function PrintSettingsContent() {
                         standard: e.target.value,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                   >
                     <option value="EAN-13">EAN-13 (International)</option>
                     <option value="UPC-A">UPC-A (North America)</option>
@@ -310,7 +310,7 @@ function PrintSettingsContent() {
                           .slice(0, 7),
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                     placeholder="8851234"
                     maxLength={7}
                   />
@@ -332,7 +332,7 @@ function PrintSettingsContent() {
                         autoSequence: parseInt(e.target.value) || 1,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                     min="1"
                     max="99999"
                   />
@@ -359,7 +359,7 @@ function PrintSettingsContent() {
                         showCompany: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 accent-blue-600 focus:ring-gray-300 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">

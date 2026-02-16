@@ -415,7 +415,7 @@ function ShopReportsContent() {
                         }
                       }
                     }}
-                    className="px-4 py-2 border border-gray-300 text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    className="px-4 py-2 border border-gray-300 text-gray-900 text-sm focus:ring-2 focus:ring-gray-300 bg-white"
                   >
                     <option value="7d">Last 7 Days</option>
                     <option value="30d">Last 30 Days</option>
@@ -436,7 +436,7 @@ function ShopReportsContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 text-sm"
+                    className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900 text-sm"
                     max={endDate}
                     aria-label="Start Date"
                   />
@@ -449,7 +449,7 @@ function ShopReportsContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 text-sm"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900 text-sm"
                     min={startDate}
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"
