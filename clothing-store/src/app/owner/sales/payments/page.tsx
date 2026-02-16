@@ -818,7 +818,7 @@ function PaymentsPageContent() {
                       setSearchTerm(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300  focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300  focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                   />
                 </div>
 
@@ -838,7 +838,7 @@ function PaymentsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">{t.allStatus}</option>
                   <option value="completed">{t.completed}</option>
@@ -865,7 +865,7 @@ function PaymentsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">{t.allPaymentMethods}</option>
                   <option value="cash">{t.cash}</option>
@@ -882,7 +882,7 @@ function PaymentsPageContent() {
                     setFilterBranch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
                 >
                   <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
@@ -931,7 +931,7 @@ function PaymentsPageContent() {
                       }
                     }
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900 bg-white"
                 >
                   <option value="today">{t.today}</option>
                   <option value="7d">{t.last7Days}</option>
@@ -951,7 +951,7 @@ function PaymentsPageContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     max={endDate}
                     aria-label="Start Date"
                   />
@@ -964,7 +964,7 @@ function PaymentsPageContent() {
                       setDateRange("custom");
                       setCurrentPage(1);
                     }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
                     min={startDate}
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"
