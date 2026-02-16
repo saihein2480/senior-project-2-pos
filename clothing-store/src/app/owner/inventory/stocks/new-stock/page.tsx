@@ -1452,7 +1452,7 @@ function NewStockContent() {
 
 export default function NewStockPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <NewStockContent />
     </ProtectedRoute>
   );

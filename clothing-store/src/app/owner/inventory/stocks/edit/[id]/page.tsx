@@ -1574,7 +1574,7 @@ function EditStockContent() {
 
 export default function EditStockPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <EditStockContent />
     </ProtectedRoute>
   );

@@ -7,7 +7,8 @@ import { UserRole } from "@/types/auth";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: UserRole;
+  // allow either single role or array of roles
+  requiredRole?: UserRole | UserRole[];
   redirectTo?: string;
 }
 
@@ -26,7 +27,7 @@ export function ProtectedRoute({
       "user:",
       user,
       "requiredRole:",
-      requiredRole
+      requiredRole,
     );
     if (!loading) {
       if (!user) {
@@ -36,22 +37,27 @@ export function ProtectedRoute({
         return;
       }
 
-      if (requiredRole && user.role !== requiredRole) {
-        console.log(
-          "ProtectedRoute: Role mismatch, user role:",
-          user.role,
-          "required:",
-          requiredRole
-        );
-        // User doesn't have the required role
-        if (user.role === "customer") {
-          router.push("/customer/home");
-        } else if (user.role === "owner") {
-          router.push("/owner/dashboard");
-        } else {
-          router.push("/");
+      if (requiredRole) {
+        const allowed = Array.isArray(requiredRole)
+          ? requiredRole.includes(user.role)
+          : user.role === requiredRole;
+        if (!allowed) {
+          console.log(
+            "ProtectedRoute: Role mismatch, user role:",
+            user.role,
+            "required:",
+            requiredRole,
+          );
+          // User doesn't have the required role
+          if (user.role === "customer") {
+            router.push("/customer/home");
+          } else if (user.role === "owner") {
+            router.push("/owner/dashboard");
+          } else {
+            router.push("/");
+          }
+          return;
         }
-        return;
       }
       console.log("ProtectedRoute: Access granted");
     }
@@ -70,9 +76,15 @@ export function ProtectedRoute({
   }
 
   // Don't render children if user is not authenticated or doesn't have required role
-  if (!user || (requiredRole && user.role !== requiredRole)) {
-    return null;
-  }
+  const hasAccess = (() => {
+    if (!user) return false;
+    if (!requiredRole) return true;
+    return Array.isArray(requiredRole)
+      ? requiredRole.includes(user.role)
+      : user.role === requiredRole;
+  })();
+
+  if (!hasAccess) return null;
 
   return <>{children}</>;
 }
