@@ -878,7 +878,7 @@ function LabelPrintContent() {
                     {filteredVariants.map((variant) => (
                       <div
                         key={variant.id}
-                        className={`group relative bg-white rounded-lg border cursor-pointer transition-all duration-200 ${
+                        className={`group relative bg-white border cursor-pointer transition-all duration-200 ${
                           selectedVariants.includes(variant.id)
                             ? "border-blue-400 bg-blue-50/50 shadow-lg shadow-blue-100/50"
                             : "border-gray-200 hover:border-gray-300 hover:shadow-md"

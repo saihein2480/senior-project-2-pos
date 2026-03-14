@@ -289,10 +289,12 @@ function InventoryStocksContent() {
     const headers = [
       "Group ID",
       "Group Name",
+      "Category",
       "Shop",
       "Color",
       "Size",
       "Quantity",
+      "Original Price",
       "Price",
       "Barcode",
       "Date Added",
@@ -304,10 +306,12 @@ function InventoryStocksContent() {
         variant.sizes.map((size) => [
           group.groupId,
           group.groupName,
+          group.category || "",
           shopLookup.get(group.shop) || group.shop,
           variant.color,
           size.size,
           size.quantity,
+          group.originalPrice || 0,
           group.unitPrice || 0,
           variant.barcode || "",
           group.formattedReleaseDate || group.releaseDate || "",
@@ -315,11 +319,22 @@ function InventoryStocksContent() {
       ),
     );
 
+    const formatCsvCell = (cell: string | number, columnIndex: number) => {
+      const value = cell.toString().replace(/"/g, '""');
+
+      // Keep barcode values as exact text in spreadsheet apps (no scientific notation/truncation)
+      if (columnIndex === 9) {
+        return `"=""${value}"""`;
+      }
+
+      return `"${value}"`;
+    };
+
     // Create CSV content
     const csvContent = [
       headers.join(","),
       ...rows.map((row) =>
-        row.map((cell) => `"${cell.toString().replace(/"/g, '""')}"`).join(","),
+        row.map((cell, columnIndex) => formatCsvCell(cell, columnIndex)).join(","),
       ),
     ].join("\n");
 
