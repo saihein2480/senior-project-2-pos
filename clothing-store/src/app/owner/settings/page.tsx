@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
@@ -38,6 +39,7 @@ interface BusinessSettings {
   showBusinessLogoOnInvoice: boolean;
   autoPrintReceiptAfterCheckout: boolean;
   invoiceFooterMessage: string;
+  invoiceFooterImage: string;
   receiptPaperSize: ReceiptPaperSize;
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
@@ -72,6 +74,7 @@ function OwnerSettingsContent() {
     showBusinessLogoOnInvoice: true,
     autoPrintReceiptAfterCheckout: true,
     invoiceFooterMessage: "",
+    invoiceFooterImage: "",
     receiptPaperSize: "80mm",
     enableDarkMode: false,
     enableSoundEffects: false,
@@ -196,13 +199,13 @@ function OwnerSettingsContent() {
         localStorage.setItem(`userBranch_${user.uid}`, settings.currentBranch);
       }
 
-      // Staff and Manager: Only save branch (already done above)
-      if (user?.role === "staff" || user?.role === "manager") {
+      // Staff: only save branch (already done above)
+      if (user?.role === "staff") {
         // Refresh settings context to reflect the new branch
         await refreshSettings();
-        alert("Branch saved successfully!");
+        toast.success("Branch saved successfully!");
       }
-      // Owner: Save all other settings globally (excluding currentBranch)
+      // Owner/Manager: save business settings
       else {
         const response = await fetch("/api/settings", {
           method: "POST",
@@ -220,10 +223,10 @@ function OwnerSettingsContent() {
           await refreshCurrencySettings();
           // Refresh settings context to reflect the new settings (including tax rate)
           await refreshSettings();
-          alert("Settings saved successfully!");
+          toast.success("Settings saved successfully!");
         } else {
           setError(result.error || "Failed to save settings");
-          alert(
+          toast.error(
             "Failed to save settings: " + (result.error || "Unknown error"),
           );
         }
@@ -231,7 +234,7 @@ function OwnerSettingsContent() {
     } catch (err) {
       console.error("Error saving settings:", err);
       setError("Failed to save settings");
-      alert("Failed to save settings. Please try again.");
+      toast.error("Failed to save settings. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -255,17 +258,17 @@ function OwnerSettingsContent() {
           setSettings(result.data);
           // Refresh settings context to reflect the reset settings
           await refreshSettings();
-          alert("Settings reset successfully!");
+          toast.success("Settings reset successfully!");
         } else {
           setError(result.error || "Failed to reset settings");
-          alert(
+          toast.error(
             "Failed to reset settings: " + (result.error || "Unknown error"),
           );
         }
       } catch (err) {
         console.error("Error resetting settings:", err);
         setError("Failed to reset settings");
-        alert("Failed to reset settings. Please try again.");
+        toast.error("Failed to reset settings. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -275,7 +278,7 @@ function OwnerSettingsContent() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="settings"
           onItemClick={() => {}}
@@ -294,7 +297,7 @@ function OwnerSettingsContent() {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isCartModalOpen={isCartModalOpen}
-        className="md:hidden"
+        className="lg:hidden"
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -715,6 +718,26 @@ function OwnerSettingsContent() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-900 mb-2">
+                          Invoice Footer Image
+                        </label>
+                        <ImageUpload
+                          value={settings.invoiceFooterImage}
+                          onChange={(url) =>
+                            handleInputChange("invoiceFooterImage", url)
+                          }
+                          onRemove={() =>
+                            handleInputChange("invoiceFooterImage", "")
+                          }
+                          folder="pos-clothing-store/invoice-footer"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          This image will appear at the bottom of printed
+                          invoices/receipts.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">
                           Receipt Paper Size
                         </label>
                         <select
@@ -922,3 +945,4 @@ export default function OwnerSettingsPage() {
     </ProtectedRoute>
   );
 }
+

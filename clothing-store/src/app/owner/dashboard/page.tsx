@@ -4,6 +4,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { detectColorName } from "@/lib/colorUtils";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import {
@@ -71,6 +72,12 @@ interface DashboardStats {
   ordersGrowth: number;
   customersGrowth: number;
   averageOrderValue: number;
+  netProfitTHB: number;
+  netProfitMMK: number;
+  remainingStockValueUnitPriceTHB: number;
+  remainingStockValueUnitPriceMMK: number;
+  remainingStockValueOriginalPriceTHB: number;
+  remainingStockValueOriginalPriceMMK: number;
 }
 
 interface RevenueByMethod {
@@ -159,6 +166,12 @@ function OwnerDashboardContent() {
     ordersGrowth: 0,
     customersGrowth: 0,
     averageOrderValue: 0,
+    netProfitTHB: 0,
+    netProfitMMK: 0,
+    remainingStockValueUnitPriceTHB: 0,
+    remainingStockValueUnitPriceMMK: 0,
+    remainingStockValueOriginalPriceTHB: 0,
+    remainingStockValueOriginalPriceMMK: 0,
   });
   const [revenueByMethod, setRevenueByMethod] = useState<RevenueByMethod>({
     cash: 0,
@@ -489,10 +502,14 @@ function OwnerDashboardContent() {
         customers,
         rangeStartDate,
         filteredExpenses,
+        businessSettings?.currencyRate || 130,
       );
 
       const paymentMethods = calculateRevenueByMethod(filteredTransactions);
-      const products = calculateTopProducts(filteredTransactions);
+      const products = calculateTopProducts(
+        filteredTransactions,
+        stocksForStats,
+      );
       const activities = generateRecentActivity(
         filteredTransactions,
         customers,
@@ -542,11 +559,14 @@ function OwnerDashboardContent() {
     customers: Customer[],
     startDate: Date,
     expenses: Expense[] = [],
+    currencyRate: number = 130,
   ): DashboardStats => {
     let totalRevenue = 0;
     let totalRevenueMMK = 0;
     let totalRevenueTHB = 0;
     let totalProfit = 0;
+    let totalProfitTHB = 0;
+    let totalProfitMMK = 0;
     let totalItemsSold = 0;
     let completedOrders = 0;
     let pendingOrders = 0;
@@ -604,7 +624,15 @@ function OwnerDashboardContent() {
             );
           }, 0) || 0;
 
-        totalProfit += Math.max(0, transactionProfit - refundedProfit);
+        const baseProfit = Math.max(0, transactionProfit - refundedProfit);
+        totalProfit += baseProfit;
+
+        if (currency === "MMK") {
+          const txRate = transaction.exchangeRate || currencyRate;
+          totalProfitMMK += baseProfit * txRate;
+        } else {
+          totalProfitTHB += baseProfit;
+        }
       }
 
       // Count items sold
@@ -713,6 +741,31 @@ function OwnerDashboardContent() {
       else if (exp.currency === "MMK") totalExpenseMMK += exp.amount || 0;
     });
 
+    // Convert stock stats to both currencies
+    let remainingStockValueUnitPriceTHB = 0;
+    let remainingStockValueOriginalPriceTHB = 0;
+
+    stocks.forEach((stock) => {
+      let totalStockQuantity = 0;
+      stock.colorVariants.forEach((variant) => {
+        totalStockQuantity += variant.sizeQuantities.reduce(
+          (sizeSum, sq) => sizeSum + sq.quantity,
+          0,
+        );
+      });
+      remainingStockValueUnitPriceTHB += totalStockQuantity * stock.unitPrice;
+      remainingStockValueOriginalPriceTHB +=
+        totalStockQuantity * stock.originalPrice;
+    });
+
+    const remainingStockValueUnitPriceMMK =
+      remainingStockValueUnitPriceTHB * currencyRate;
+    const remainingStockValueOriginalPriceMMK =
+      remainingStockValueOriginalPriceTHB * currencyRate;
+
+    const netProfitTHB = totalProfitTHB - totalExpenseTHB;
+    const netProfitMMK = totalProfitMMK - totalExpenseMMK;
+
     return {
       totalRevenue,
       totalRevenueMMK,
@@ -735,6 +788,12 @@ function OwnerDashboardContent() {
       ordersGrowth,
       customersGrowth,
       averageOrderValue,
+      netProfitTHB,
+      netProfitMMK,
+      remainingStockValueUnitPriceTHB,
+      remainingStockValueUnitPriceMMK,
+      remainingStockValueOriginalPriceTHB,
+      remainingStockValueOriginalPriceMMK,
     };
   };
 
@@ -778,7 +837,10 @@ function OwnerDashboardContent() {
   };
 
   // Calculate top selling products
-  const calculateTopProducts = (transactions: Transaction[]): TopProduct[] => {
+  const calculateTopProducts = (
+    transactions: Transaction[],
+    stocks: StockItem[],
+  ): TopProduct[] => {
     const productMap = new Map<
       string,
       {
@@ -789,6 +851,21 @@ function OwnerDashboardContent() {
         profit: number;
       }
     >();
+
+    // Create a lookup map for faster color name resolution
+    const colorIdToNameMap = new Map<string, string>();
+    stocks.forEach((stock) => {
+      stock.colorVariants.forEach((variant) => {
+        colorIdToNameMap.set(variant.id, variant.color);
+      });
+    });
+
+    const isProbablyId = (s?: string) =>
+      !!s &&
+      (/(^cv|[-_].+-)/.test(s) || // Original ID patterns
+        /^\d{13,}/.test(s) || // Long numeric IDs (timestamps)
+        /^[a-f0-9]{16,}$/i.test(s) || // Long hex IDs
+        /^\d+[a-z]{5,}$/i.test(s)); // Timestamp + random chars
 
     transactions.forEach((transaction) => {
       if (
@@ -803,6 +880,22 @@ function OwnerDashboardContent() {
           const itemProfit =
             (item.unitPrice - item.originalPrice) * item.quantity;
 
+          let displayColorName = item.selectedColor;
+          if (item.selectedColor) {
+            if (colorIdToNameMap.has(item.selectedColor)) {
+              displayColorName = colorIdToNameMap.get(item.selectedColor);
+            } else if (isProbablyId(item.selectedColor)) {
+              try {
+                // If it looks like an ID or hex, try to detect it from the code or fallback
+                displayColorName = item.colorCode
+                  ? detectColorName(item.colorCode)
+                  : detectColorName(item.selectedColor) || item.selectedColor;
+              } catch {
+                displayColorName = item.selectedColor;
+              }
+            }
+          }
+
           if (existing) {
             existing.quantity += item.quantity;
             existing.revenue += itemRevenue;
@@ -810,7 +903,7 @@ function OwnerDashboardContent() {
           } else {
             productMap.set(key, {
               name: `${item.groupName}${
-                item.selectedColor ? ` (${item.selectedColor})` : ""
+                displayColorName ? ` (${displayColorName})` : ""
               }`,
               category: item.groupName,
               quantity: item.quantity,
@@ -926,7 +1019,7 @@ function OwnerDashboardContent() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop sidebar (hidden on small screens) */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="dashboard"
           onItemClick={() => {}}
@@ -937,7 +1030,7 @@ function OwnerDashboardContent() {
       </div>
 
       {/* Mobile sidebar overlay */}
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem="dashboard"
           onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -1181,6 +1274,74 @@ function OwnerDashboardContent() {
                         <p className="text-2xl font-bold text-red-600">
                           {SettingsService.formatPrice(
                             stats.totalExpenseMMK || 0,
+                            "MMK",
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <hr className="text-gray-300 p-3"></hr>
+                </div>
+
+                {/* Advanced Financial Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 mb-4">
+                        Remaining Stock Value (Unit Price)
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-2xl font-bold text-gray-900">
+                          {formatPrice(
+                            stats.remainingStockValueUnitPriceTHB || 0,
+                          )}
+                        </p>
+                        <p className="text-xl font-semibold text-gray-700">
+                          {SettingsService.formatPrice(
+                            stats.remainingStockValueUnitPriceMMK || 0,
+                            "MMK",
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 mb-4">
+                        Remaining Stock Value (Original Price)
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-2xl font-bold text-gray-900">
+                          {formatPrice(
+                            stats.remainingStockValueOriginalPriceTHB || 0,
+                          )}
+                        </p>
+                        <p className="text-xl font-semibold text-gray-700">
+                          {SettingsService.formatPrice(
+                            stats.remainingStockValueOriginalPriceMMK || 0,
+                            "MMK",
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 mb-4">
+                        Total Net Profit
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-2xl font-bold text-green-600">
+                          {formatPrice(stats.netProfitTHB || 0)}
+                        </p>
+                        <p className="text-xl font-semibold text-green-600">
+                          {SettingsService.formatPrice(
+                            stats.netProfitMMK || 0,
                             "MMK",
                           )}
                         </p>
@@ -1747,7 +1908,7 @@ function OwnerDashboardContent() {
                             className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
                           >
                             <div className="flex items-center space-x-3">
-                              <span className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-bold">
+                              <span className="flex items-center justify-center w-8 h-8  text-gray-800 rounded-full text-md font-bold">
                                 #{index + 1}
                               </span>
                               <div>

@@ -1,4 +1,5 @@
 "use client";
+import { toast } from 'react-hot-toast';
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -496,11 +497,11 @@ export default function TransactionsPage() {
         transaction.id,
         user?.email || "Admin",
       );
-      alert("Transaction approved successfully!");
+      toast.success("Transaction approved successfully!");
       loadTransactions(); // Reload transactions
     } catch (error) {
       console.error("Error approving transaction:", error);
-      alert(
+      toast.error(
         `Failed to approve transaction: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
@@ -523,7 +524,8 @@ export default function TransactionsPage() {
         (quantity) => quantity > 0,
       );
       if (!hasItemsToRefund) {
-        alert("Please select at least one item to refund.");
+        toast.error("Please select at least one item to refund.");
+        setIsProcessingRefund(false);
         return;
       }
 
@@ -562,7 +564,7 @@ export default function TransactionsPage() {
       });
 
       if (validationErrors.length > 0) {
-        alert("Refund validation failed:\n\n" + validationErrors.join("\n"));
+        toast.error("Refund validation failed:\n\n" + validationErrors.join("\n"));
         return;
       }
 
@@ -595,7 +597,7 @@ export default function TransactionsPage() {
         "Owner", // processedBy
       );
 
-      alert(
+      toast.error(
         `Refund processed successfully!\nRefund ID: ${refundId}\nAmount: ${formatPrice(
           refundAmount,
         )}`,
@@ -607,7 +609,7 @@ export default function TransactionsPage() {
       loadTransactions(); // Reload to show updated data
     } catch (error) {
       console.error("Error processing refund:", error);
-      alert(
+      toast.error(
         `Error processing refund: ${
           error instanceof Error ? error.message : "Please try again."
         }`,
@@ -627,7 +629,7 @@ export default function TransactionsPage() {
     try {
       // Validate that the transaction can be cancelled
       if (selectedTransaction.status === "cancelled") {
-        alert("This transaction is already cancelled.");
+        toast.error("This transaction is already cancelled.");
         return;
       }
 
@@ -639,7 +641,7 @@ export default function TransactionsPage() {
         user?.email || "Unknown user",
       );
 
-      alert(
+      toast.error(
         `Transaction ${selectedTransaction.transactionId} has been cancelled successfully.\nInventory has been restored.`,
       );
 
@@ -650,7 +652,7 @@ export default function TransactionsPage() {
       console.error("Error cancelling transaction:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
-      alert(`Failed to cancel transaction: ${errorMessage}. Please try again.`);
+      toast.error(`Failed to cancel transaction: ${errorMessage}. Please try again.`);
     } finally {
       setIsProcessingCancel(false);
     }
@@ -660,7 +662,7 @@ export default function TransactionsPage() {
   const toggleSelectTransaction = (transactionId: string) => {
     if (!isOwner) {
       // Only owner can select transactions for bulk actions
-      alert("Only owner accounts can select transactions.");
+      toast.error("Only owner accounts can select transactions.");
       return;
     }
     setSelectedTransactions((prev) =>
@@ -673,7 +675,7 @@ export default function TransactionsPage() {
   // Select/deselect all transactions
   const toggleSelectAll = () => {
     if (!isOwner) {
-      alert("Only owner accounts can select transactions.");
+      toast.error("Only owner accounts can select transactions.");
       return;
     }
     const allTransactionIds = filteredTransactions.map((t) => t.id!);
@@ -712,7 +714,7 @@ export default function TransactionsPage() {
       }
 
       if (successCount > 0) {
-        alert(
+        toast.error(
           `Successfully approved ${successCount} transaction(s).${
             failCount > 0
               ? `\nFailed to approve ${failCount} transaction(s).`
@@ -722,11 +724,11 @@ export default function TransactionsPage() {
         setSelectedTransactions([]);
         loadTransactions();
       } else {
-        alert("Failed to approve any transactions. Please try again.");
+        toast.error("Failed to approve any transactions. Please try again.");
       }
     } catch (error) {
       console.error("Error in bulk approve:", error);
-      alert("An error occurred during bulk approval.");
+      toast.error("An error occurred during bulk approval.");
     }
   };
 
@@ -766,7 +768,7 @@ export default function TransactionsPage() {
       }
 
       if (successCount > 0) {
-        alert(
+        toast.error(
           `Successfully cancelled ${successCount} transaction(s).${
             failCount > 0
               ? `\nFailed to cancel ${failCount} transaction(s).`
@@ -776,11 +778,11 @@ export default function TransactionsPage() {
         setSelectedTransactions([]);
         loadTransactions();
       } else {
-        alert("Failed to cancel any transactions. Please try again.");
+        toast.error("Failed to cancel any transactions. Please try again.");
       }
     } catch (error) {
       console.error("Error in bulk cancel:", error);
-      alert("An error occurred during bulk cancellation.");
+      toast.error("An error occurred during bulk cancellation.");
     }
   };
 
@@ -800,7 +802,7 @@ export default function TransactionsPage() {
         await transactionService.deleteTransactions(selectedTransactions);
 
       if (result.successCount > 0) {
-        alert(
+        toast.error(
           `Successfully deleted ${result.successCount} transaction(s).${
             result.failCount > 0
               ? `\nFailed to delete ${result.failCount} transaction(s).`
@@ -810,11 +812,11 @@ export default function TransactionsPage() {
         setSelectedTransactions([]);
         loadTransactions();
       } else {
-        alert("Failed to delete any transactions. Please try again.");
+        toast.error("Failed to delete any transactions. Please try again.");
       }
     } catch (error) {
       console.error("Error in bulk delete:", error);
-      alert("An error occurred during bulk delete operation.");
+      toast.error("An error occurred during bulk delete operation.");
     } finally {
       setIsProcessingDelete(false);
     }
@@ -822,7 +824,7 @@ export default function TransactionsPage() {
 
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) {
-      alert("No data to export");
+      toast.error("No data to export");
       return;
     }
 
@@ -920,7 +922,7 @@ export default function TransactionsPage() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop sidebar (hidden on small screens) */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="transactions"
           onItemClick={() => {}}
@@ -931,7 +933,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Mobile sidebar overlay */}
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem="transactions"
           onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -2148,6 +2150,86 @@ export default function TransactionsPage() {
                                 -{formatPrice(selectedTransaction.discount)}
                               </span>
                             </div>
+                            {(() => {
+                              const breakdown =
+                                selectedTransaction.discountBreakdown;
+                              if (!breakdown) return null;
+                              const summaryItems = [
+                                {
+                                  key: "wholesale",
+                                  label: "Wholesale Pricing",
+                                  badge: "WHOLESALE",
+                                  badgeClasses: "bg-amber-100 text-amber-800",
+                                  amount: breakdown.wholesaleSavings,
+                                },
+                                {
+                                  key: "groupPercent",
+                                  label: "Group Discount",
+                                  badge: "GROUP",
+                                  badgeClasses: "bg-blue-100 text-blue-800",
+                                  amount: breakdown.groupPercentSavings,
+                                },
+                                {
+                                  key: "groupFixed",
+                                  label: "Group Fixed Discount",
+                                  badge: "GROUP",
+                                  badgeClasses: "bg-blue-100 text-blue-800",
+                                  amount: breakdown.groupFixedTotal,
+                                },
+                                {
+                                  key: "variantPercent",
+                                  label: "Variant Discount",
+                                  badge: "VARIANT",
+                                  badgeClasses: "bg-purple-100 text-purple-800",
+                                  amount: breakdown.variantPercentSavings,
+                                },
+                                {
+                                  key: "variantFixed",
+                                  label: "Variant Fixed Discount",
+                                  badge: "VARIANT",
+                                  badgeClasses: "bg-purple-100 text-purple-800",
+                                  amount: breakdown.variantFixedTotal,
+                                },
+                                {
+                                  key: "cart",
+                                  label:
+                                    breakdown.cartDiscountPercent > 0
+                                      ? `Cart Discount (${breakdown.cartDiscountPercent}%)`
+                                      : "Cart Discount",
+                                  badge: "CART",
+                                  badgeClasses: "bg-green-100 text-green-800",
+                                  amount: breakdown.cartDiscount,
+                                },
+                              ].filter((item) => (item.amount || 0) > 0);
+
+                              if (summaryItems.length === 0) return null;
+
+                              return (
+                                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+                                  <div className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
+                                    Discount Details
+                                  </div>
+                                  {summaryItems.map((item) => (
+                                    <div
+                                      key={item.key}
+                                      className="flex items-center justify-between text-xs font-medium text-gray-800"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span>{item.label}</span>
+                                        <span
+                                          className={`text-[10px] px-1.5 py-0.5 rounded ${item.badgeClasses}`}
+                                        >
+                                          {item.badge}
+                                        </span>
+                                      </div>
+                                      <span className="font-semibold text-red-600">
+                                        -{formatPrice(item.amount)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                             <div className="border-t border-gray-300 pt-3">
                               <div className="flex justify-between">
                                 <span className="text-base font-medium text-gray-900">

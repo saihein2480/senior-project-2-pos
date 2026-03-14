@@ -283,7 +283,7 @@ function ShopReportsContent() {
     return (
       <div className="flex h-screen bg-gray-50">
         {/* Desktop Sidebar */}
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <Sidebar
             activeItem="shop-reports"
             onItemClick={() => {}}
@@ -302,7 +302,7 @@ function ShopReportsContent() {
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isCartModalOpen={isCartModalOpen}
-          className="md:hidden"
+          className="lg:hidden"
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -331,7 +331,7 @@ function ShopReportsContent() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="shop-reports"
           onItemClick={() => {}}
@@ -350,7 +350,7 @@ function ShopReportsContent() {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isCartModalOpen={isCartModalOpen}
-        className="md:hidden"
+        className="lg:hidden"
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -756,3 +756,4 @@ export default function ShopReportsPage() {
     </ProtectedRoute>
   );
 }
+

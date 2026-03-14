@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
           showBusinessLogoOnInvoice: true,
           autoPrintReceiptAfterCheckout: true,
           invoiceFooterMessage: "",
+          invoiceFooterImage: "",
           receiptPaperSize: "80mm",
           enableDarkMode: false,
           enableSoundEffects: false,
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
           ? body.autoPrintReceiptAfterCheckout
           : true,
       invoiceFooterMessage: body.invoiceFooterMessage || "",
+      invoiceFooterImage: body.invoiceFooterImage || "",
       receiptPaperSize: [
         "44mm",
         "57mm",

@@ -146,7 +146,7 @@ export function StaffLogin() {
           <div>
             <Button
               type="submit"
-              variant="secondary"
+              variant="primary"
               className="w-full"
               loading={isLoading}
               disabled={isLoading}

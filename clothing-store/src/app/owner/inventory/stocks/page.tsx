@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import { useState, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -469,7 +470,7 @@ function InventoryStocksContent() {
       );
       setTimeout(() => setSuccessMessage(null), 5000);
     } else {
-      alert("Failed to delete any stock items. Please try again.");
+      toast.error("Failed to delete any stock items. Please try again.");
     }
 
     setIsProcessingBulkDelete(false);
@@ -477,7 +478,7 @@ function InventoryStocksContent() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem={activeItem}
           onItemClick={(item) => setActiveItem(item.id)}
@@ -487,7 +488,7 @@ function InventoryStocksContent() {
         />
       </div>
 
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem={activeItem}
           onItemClick={(item) => {
@@ -1037,11 +1038,11 @@ function InventoryStocksContent() {
                                                     <span
                                                       className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
                                                         sizeInfo.quantity > 10
-                                                          ? "bg-green-100 text-green-700"
+                                                          ? "text-green-700"
                                                           : sizeInfo.quantity >
                                                               0
-                                                            ? "bg-yellow-100 text-yellow-700"
-                                                            : "bg-red-100 text-red-700"
+                                                            ? " text-yellow-700"
+                                                            : " text-red-700"
                                                       }`}
                                                     >
                                                       {sizeInfo.quantity}
@@ -1258,3 +1259,4 @@ export default function InventoryStocksPage() {
     </ProtectedRoute>
   );
 }
+

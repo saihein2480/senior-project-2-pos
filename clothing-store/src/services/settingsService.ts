@@ -34,11 +34,23 @@ export interface BusinessSettings {
   showBusinessLogoOnInvoice: boolean;
   autoPrintReceiptAfterCheckout: boolean;
   invoiceFooterMessage: string;
+  invoiceFooterImage: string;
   receiptPaperSize: ReceiptPaperSize;
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
   currentBranch?: string;
+  labelSettings?: {
+    labelWidth: number;
+    labelHeight: number;
+    labelGap: number;
+    standard: string;
+    gs1CompanyPrefix: string;
+    autoSequence: number;
+    showCompany: boolean;
+    showDates: boolean;
+    showPrice: boolean;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -78,11 +90,13 @@ export class SettingsService {
           autoPrintReceiptAfterCheckout:
             data.autoPrintReceiptAfterCheckout ?? true,
           invoiceFooterMessage: data.invoiceFooterMessage || "",
+          invoiceFooterImage: data.invoiceFooterImage || "",
           receiptPaperSize: data.receiptPaperSize || "80mm",
           enableDarkMode: data.enableDarkMode ?? false,
           enableSoundEffects: data.enableSoundEffects ?? false,
           currencyRate: data.currencyRate || 0,
           currentBranch: data.currentBranch || "Main Branch",
+          labelSettings: data.labelSettings,
           createdAt:
             data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
           updatedAt:
@@ -145,6 +159,7 @@ export class SettingsService {
       showBusinessLogoOnInvoice: true,
       autoPrintReceiptAfterCheckout: true,
       invoiceFooterMessage: "",
+      invoiceFooterImage: "",
       receiptPaperSize: "80mm",
       enableDarkMode: false,
       enableSoundEffects: false,

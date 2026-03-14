@@ -276,7 +276,38 @@ class AuthService {
   private handleAuthError(error: unknown, defaultMessage: string): Error {
     console.error("Auth error:", error);
 
+    const authError = error as { code?: string; message?: string };
+
+    if (authError?.code) {
+      switch (authError.code) {
+        case "auth/invalid-credential":
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+          return new Error(
+            "Invalid email or password. Please check your credentials and try again.",
+          );
+        case "auth/too-many-requests":
+          return new Error(
+            "Too many failed login attempts. Please try again later.",
+          );
+        case "auth/user-disabled":
+          return new Error(
+            "This account has been disabled. Please contact your administrator.",
+          );
+        case "auth/email-already-in-use":
+          return new Error("An account with this email already exists.");
+        case "auth/invalid-email":
+          return new Error("Please enter a valid email address.");
+      }
+    }
+
     if (error instanceof Error) {
+      // Make sure not to show raw Firebase errors (e.g. Firebase: Error...)
+      if (error.message.startsWith("Firebase:")) {
+        return new Error(
+          `${defaultMessage}. Please check your credentials and try again.`,
+        );
+      }
       return error;
     }
 

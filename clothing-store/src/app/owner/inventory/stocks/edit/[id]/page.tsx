@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -1436,7 +1437,7 @@ function EditStockContent() {
 
       {/* Add Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 text-gray-900">
               Add New Category
@@ -1475,7 +1476,7 @@ function EditStockContent() {
                               }
                             } catch (error) {
                               console.error("Error deleting category:", error);
-                              alert(
+                              toast.error(
                                 "Failed to delete category. Please try again.",
                               );
                             }
@@ -1518,7 +1519,7 @@ function EditStockContent() {
                         setNewCategoryName("");
                       } catch (error) {
                         console.error("Error adding category:", error);
-                        alert("Failed to add category. Please try again.");
+                        toast.error("Failed to add category. Please try again.");
                       }
                     }
                   }
@@ -1543,7 +1544,7 @@ function EditStockContent() {
                       setNewCategoryName("");
                     } catch (error) {
                       console.error("Error adding category:", error);
-                      alert("Failed to add category. Please try again.");
+                      toast.error("Failed to add category. Please try again.");
                     }
                   }
                 }}

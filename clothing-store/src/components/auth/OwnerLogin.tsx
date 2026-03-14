@@ -49,10 +49,14 @@ export function OwnerLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-2xl font-normal text-gray-900">
-            Owner Sign In
-          </h2>
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="bg-gray-100 p-3 rounded-full">
+              <Store className="h-8 w-8 text-gray-700" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-normal text-gray-900">Owner Sign In</h2>
+          <p className="mt-2 text-sm text-gray-600">Login for store owners</p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
@@ -102,7 +106,7 @@ export function OwnerLogin() {
           <div>
             <Button
               type="submit"
-              variant="secondary"
+              variant="primary"
               className="w-full"
               loading={isLoading}
               disabled={isLoading}

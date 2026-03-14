@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
@@ -11,6 +12,7 @@ import { Printer, Search, Package, QrCode, Settings } from "lucide-react";
 import { ClothingInventoryItem } from "@/types/schemas";
 import { InventoryService } from "@/services/InventoryService";
 import { ShopService } from "@/services/shopService";
+import { SettingsService } from "@/services/settingsService";
 import { Shop } from "@/types/shop";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -28,6 +30,30 @@ interface InventoryVariant {
   quantity: number;
   image?: string;
 }
+
+interface LabelSettings {
+  labelWidth: number;
+  labelHeight: number;
+  labelGap: number;
+  standard: string;
+  gs1CompanyPrefix: string;
+  autoSequence: number;
+  showCompany: boolean;
+  showDates: boolean;
+  showPrice: boolean;
+}
+
+const DEFAULT_LABEL_SETTINGS: LabelSettings = {
+  labelWidth: 50,
+  labelHeight: 30,
+  labelGap: 3,
+  standard: "EAN-13",
+  gs1CompanyPrefix: "8851234",
+  autoSequence: 1,
+  showCompany: true,
+  showDates: false,
+  showPrice: true,
+};
 
 function LabelPrintContent() {
   const router = useRouter();
@@ -49,30 +75,10 @@ function LabelPrintContent() {
   const [selectedShop, setSelectedShop] = useState("all");
   const [selectedVariants, setSelectedVariants] = useState<string[]>([]);
 
-  // Label settings loaded from localStorage (configured in Print Settings page)
-  interface LabelSettings {
-    labelWidth: number;
-    labelHeight: number;
-    labelGap: number;
-    standard: string;
-    gs1CompanyPrefix: string;
-    autoSequence: number;
-    showCompany: boolean;
-    showDates: boolean;
-    showPrice: boolean;
-  }
+  // Label settings loaded from shared settings (configured in Print Settings page)
 
-  const [labelSettings, setLabelSettings] = useState<LabelSettings>({
-    labelWidth: 50,
-    labelHeight: 30,
-    labelGap: 3,
-    standard: "EAN-13",
-    gs1CompanyPrefix: "8851234",
-    autoSequence: 1,
-    showCompany: true,
-    showDates: false,
-    showPrice: true,
-  });
+  const [labelSettings, setLabelSettings] =
+    useState<LabelSettings>(DEFAULT_LABEL_SETTINGS);
 
   // For backward compatibility with existing code
   const labelWidth = labelSettings.labelWidth;
@@ -119,17 +125,32 @@ function LabelPrintContent() {
     return paddedNumber;
   };
 
-  // Load label settings from localStorage (configured in Print Settings page)
+  // Load label settings from shared business settings first, then local fallback
   useEffect(() => {
-    const saved = localStorage.getItem("labelSettings");
-    if (saved) {
+    const loadLabelSettings = async () => {
       try {
-        const settings = JSON.parse(saved);
-        setLabelSettings(settings);
+        // 1) Cloud/shared settings
+        const businessSettings = await SettingsService.getBusinessSettings();
+        if (businessSettings?.labelSettings) {
+          setLabelSettings({
+            ...DEFAULT_LABEL_SETTINGS,
+            ...businessSettings.labelSettings,
+          });
+          return;
+        }
+
+        // 2) Local fallback
+        const saved = localStorage.getItem("labelSettings");
+        if (saved) {
+          const settings = JSON.parse(saved);
+          setLabelSettings({ ...DEFAULT_LABEL_SETTINGS, ...settings });
+        }
       } catch (e) {
         console.error("Error loading label settings:", e);
       }
-    }
+    };
+
+    loadLabelSettings();
   }, []);
 
   // Fetch inventory items and convert to variants
@@ -301,7 +322,7 @@ function LabelPrintContent() {
 
   const handlePrintLabels = async () => {
     if (selectedVariants.length === 0) {
-      alert("Please select at least one variant to print barcode labels");
+      toast.error("Please select at least one variant to print barcode labels");
       return;
     }
 
@@ -323,7 +344,7 @@ function LabelPrintContent() {
       }
     } catch (error) {
       console.error("Error generating print content:", error);
-      alert("Error generating barcode labels. Please try again.");
+      toast.error("Error generating barcode labels. Please try again.");
     }
   };
 

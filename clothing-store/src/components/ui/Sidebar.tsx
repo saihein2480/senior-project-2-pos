@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
   BarChart3,
@@ -491,19 +492,30 @@ export function Sidebar({
   // If this is a mobile instance, render as overlay with backdrop
   if (typeof isMobileOpen !== "undefined") {
     return (
-      <>
-        <div
-          className="fixed inset-0 bg-black bg-opacity-40 z-40"
-          onClick={() => onCloseMobile?.()}
-        />
-        <div
-          className={`fixed inset-y-0 left-0 z-50 transform transition-transform ${
-            isMobileOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          {container}
-        </div>
-      </>
+      <AnimatePresence>
+        {isMobileOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm"
+              onClick={() => onCloseMobile?.()}
+              aria-hidden="true"
+            />
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="fixed inset-y-0 left-0 z-50 w-64 drop-shadow-2xl"
+            >
+              {container}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     );
   }
 

@@ -82,8 +82,8 @@ export function WholesalePricingTiers({
                 >
                   <div className="flex items-center space-x-4">
                     <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-blue-600">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                        <span className="text-lg font-medium text-gray-900">
                           {index + 1}
                         </span>
                       </div>
@@ -92,12 +92,12 @@ export function WholesalePricingTiers({
                       <div className="text-sm font-medium text-gray-900">
                         Minimum Quantity: {tier.minQuantity}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      {/* <div className="text-sm text-gray-500">
                         {tier.minQuantity === 1 
                           ? "Single item purchase"
                           : `Bulk order of ${tier.minQuantity}+ items`
                         }
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                   <div className="text-right">

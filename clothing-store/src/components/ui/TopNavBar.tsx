@@ -103,33 +103,33 @@ export function TopNavBar({
 
   return (
     <header className="sticky top-0 z-10 bg-white shadow border-b border-gray-200">
-      <div className="px-4">
-        <div className="flex justify-between items-center py-6 px-6">
+      <div className="px-2 sm:px-4">
+        <div className="flex justify-between items-center py-4 sm:py-6 px-2 sm:px-4">
           <div className="flex items-center">
             <button
               onClick={() => onMenuToggle?.()}
-              className="mr-3 p-2 rounded-md hover:bg-gray-100 md:hidden"
+              className="mr-2 sm:mr-3 p-2 rounded-md hover:bg-gray-100 lg:hidden"
               aria-label="Toggle menu"
             >
               <Menu className="w-6 h-6 text-gray-700" />
             </button>
 
-            <h1 className="text-2xl font-semibold text-gray-900 hidden xl:block">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 hidden xl:block">
               {user?.displayName || user?.email || "Owner"}
             </h1>
           </div>
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6">
             {/* Current Branch/Shop Display */}
-            <div className="flex items-center space-x-2 px-3 py-2 bg-white border rounded-full border-gray-300 ">
+            <div className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white border rounded-full border-gray-300 ">
               <Store className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] sm:max-w-none truncate">
                 {businessSettings?.currentBranch === "No Branch"
                   ? t.noBranch
                   : businessSettings?.currentBranch || t.mainBranch}
               </span>
             </div>
             {/* Date Display */}
-            <div className="text-sm text-gray-600">
+            <div className="hidden lg:block text-sm text-gray-600">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "short",
                 year: "numeric",
@@ -139,9 +139,10 @@ export function TopNavBar({
             </div>
 
             {/* Main Currency Title */}
-            <div className="flex items-center space-x-1 px-3 py-2 bg-white border-gray-300 rounded-lg">
-              <span className="text-sm text-gray-600">
-                {t.mainCurrency} {getCurrencySymbol(defaultCurrency)} {defaultCurrency}
+            <div className="hidden md:flex items-center space-x-1 px-3 py-2 bg-white flex-shrink-0">
+              <span className="text-sm text-gray-600 whitespace-nowrap">
+                {t.mainCurrency} {getCurrencySymbol(defaultCurrency)}{" "}
+                {defaultCurrency}
               </span>
             </div>
 

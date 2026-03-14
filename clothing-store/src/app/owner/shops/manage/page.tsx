@@ -347,7 +347,7 @@ function ShopManagementContent() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -367,7 +367,7 @@ function ShopManagementContent() {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isCartModalOpen={isCartModalOpen}
-        className="md:hidden"
+        className="lg:hidden"
       />
 
       {/* Main Content Area */}
@@ -608,7 +608,7 @@ function ShopManagementContent() {
                   <Button
                     onClick={isEditMode ? handleUpdateShop : handleAddShop}
                     disabled={isSubmitting}
-                    className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white px-6 py-3 flex items-center"
+                    className="bg-blue-400 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 flex items-center"
                   >
                     {isSubmitting ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -821,3 +821,4 @@ export default function ShopManagementPage() {
     </ProtectedRoute>
   );
 }
+

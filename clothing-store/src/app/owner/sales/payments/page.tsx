@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "react-hot-toast";
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -184,7 +185,7 @@ function PaymentsPageContent() {
 
   const exportToCSV = () => {
     if (filteredTransactions.length === 0) {
-      alert("No data to export");
+      toast.error("No data to export");
       return;
     }
 
@@ -430,11 +431,27 @@ function PaymentsPageContent() {
     return matchesSearch && matchesMethod && matchesStatus;
   });
 
+  // Keep table order deterministic: newest transactions first
+  const sortedFilteredTransactions = [...filteredTransactions].sort((a, b) => {
+    const timeA = new Date(a.timestamp).getTime();
+    const timeB = new Date(b.timestamp).getTime();
+
+    if (timeA !== timeB) {
+      return timeB - timeA;
+    }
+
+    // Stable fallback when timestamps are equal
+    return (b.transactionId || "").localeCompare(a.transactionId || "");
+  });
+
   // Pagination calculations
-  const totalPages = Math.ceil(filteredTransactions.length / rowsPerPage);
+  const totalPages = Math.ceil(sortedFilteredTransactions.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
-  const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
+  const currentTransactions = sortedFilteredTransactions.slice(
+    startIndex,
+    endIndex,
+  );
 
   const paymentStats = calculatePaymentStats();
 
@@ -451,15 +468,15 @@ function PaymentsPageContent() {
   const getPaymentMethodIcon = (method: string) => {
     switch (method) {
       case "cash":
-        return <DollarSign className="h-5 w-5" />;
+        return <CreditCard className="h-4 w-4 text-gray-900" />;
       case "scan":
-        return <Smartphone className="h-5 w-5" />;
+        return <Smartphone className="h-4 w-4 text-gray-900" />;
       case "wallet":
-        return <Wallet className="h-5 w-5" />;
+        return <Wallet className="h-4 w-4 text-gray-900" />;
       case "cod":
-        return <Truck className="h-5 w-5" />;
+        return <Truck className="h-4 w-4 text-gray-900" />;
       default:
-        return <CreditCard className="h-5 w-5" />;
+        return <CreditCard className="h-4 w-4 text-gray-900" />;
     }
   };
 
@@ -514,7 +531,7 @@ function PaymentsPageContent() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="payments"
           onItemClick={() => {}}
@@ -524,7 +541,7 @@ function PaymentsPageContent() {
         />
       </div>
 
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem="payments"
           onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -988,7 +1005,7 @@ function PaymentsPageContent() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="mt-2 text-gray-600">{t.loading}</p>
                 </div>
-              ) : filteredTransactions.length === 0 ? (
+              ) : sortedFilteredTransactions.length === 0 ? (
                 <div className="p-8 text-center">
                   <p className="text-gray-600">{t.noPaymentsFound}</p>
                 </div>
@@ -1073,9 +1090,9 @@ function PaymentsPageContent() {
                               </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-2 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              {getStatusIcon(transaction.status)}
+                              {/* {getStatusIcon(transaction.status)} */}
                               <span
                                 className={`ml-2 ${getStatusBadge(
                                   transaction.status,
@@ -1096,7 +1113,7 @@ function PaymentsPageContent() {
               )}
 
               {/* Pagination */}
-              {filteredTransactions.length > 0 && (
+              {sortedFilteredTransactions.length > 0 && (
                 <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
                   <div className="flex-1 flex justify-between sm:hidden">
                     <button
@@ -1141,12 +1158,15 @@ function PaymentsPageContent() {
                           .replace(
                             "{end}",
                             String(
-                              Math.min(endIndex, filteredTransactions.length),
+                              Math.min(
+                                endIndex,
+                                sortedFilteredTransactions.length,
+                              ),
                             ),
                           )
                           .replace(
                             "{total}",
-                            String(filteredTransactions.length),
+                            String(sortedFilteredTransactions.length),
                           )}
                       </p>
                     </div>

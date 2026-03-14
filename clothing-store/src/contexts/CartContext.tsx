@@ -15,6 +15,7 @@ import {
 } from "@/types/cart";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartService } from "@/services/cartService";
+import { toast } from "react-hot-toast";
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
@@ -241,7 +242,7 @@ export function CartProvider({ children }: CartProviderProps) {
           totalAvailable,
           availableToAdd,
         });
-        alert(
+        toast.error(
           `Cannot add ${newItem.quantity} items. Only ${availableToAdd} available to add (${stockInDatabase} in stock + ${currentCartQuantity} already in cart).`,
         );
         return;
@@ -280,10 +281,10 @@ export function CartProvider({ children }: CartProviderProps) {
         (sum, item) => sum + item.quantity,
         0,
       );
-      const totalAmount = updatedItems.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0,
-      );
+      const totalAmount = updatedItems.reduce((sum, item) => {
+        const price = item.discountedPrice !== undefined ? item.discountedPrice : item.unitPrice;
+        return sum + price * item.quantity;
+      }, 0);
 
       return {
         ...prevCart,
@@ -323,10 +324,10 @@ export function CartProvider({ children }: CartProviderProps) {
         (sum, item) => sum + item.quantity,
         0,
       );
-      const totalAmount = updatedItems.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0,
-      );
+      const totalAmount = updatedItems.reduce((sum, item) => {
+        const price = item.discountedPrice !== undefined ? item.discountedPrice : item.unitPrice;
+        return sum + price * item.quantity;
+      }, 0);
 
       return {
         ...prevCart,
@@ -361,8 +362,15 @@ export function CartProvider({ children }: CartProviderProps) {
       const totalAvailable = stockInDatabase + currentItem.quantity;
 
       if (quantity > totalAvailable) {
-        alert(
+        toast.error(
           `Cannot set quantity to ${quantity}. Only ${totalAvailable} available in total (${stockInDatabase} in stock + ${currentItem.quantity} already in cart).`,
+          {
+            duration: 4000,
+            style: {
+              minWidth: "350px",
+              border: "1px solid #fee2e2",
+            },
+          },
         );
         return;
       }
@@ -402,10 +410,10 @@ export function CartProvider({ children }: CartProviderProps) {
         (sum, item) => sum + item.quantity,
         0,
       );
-      const totalAmount = updatedItems.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0,
-      );
+      const totalAmount = updatedItems.reduce((sum, item) => {
+        const price = item.discountedPrice !== undefined ? item.discountedPrice : item.unitPrice;
+        return sum + price * item.quantity;
+      }, 0);
 
       return {
         ...prevCart,
@@ -477,8 +485,9 @@ export function CartProvider({ children }: CartProviderProps) {
       const updatedItems = prevCart.items.map((item) => {
         if (item.groupName === groupName) {
           const newGroupDiscount = discountPercent;
+          const basePrice = item.isWholesalePricing && item.wholesalePrice !== undefined ? item.wholesalePrice : item.unitPrice;
           const discountedPrice = calculateDiscountedPrice(
-            item.unitPrice,
+            basePrice,
             newGroupDiscount,
             item.variantDiscount,
           );
@@ -515,8 +524,9 @@ export function CartProvider({ children }: CartProviderProps) {
       const updatedItems = prevCart.items.map((item) => {
         if (item.id === itemId) {
           const newVariantDiscount = discountPercent;
+          const basePrice = item.isWholesalePricing && item.wholesalePrice !== undefined ? item.wholesalePrice : item.unitPrice;
           const discountedPrice = calculateDiscountedPrice(
-            item.unitPrice,
+            basePrice,
             item.groupDiscount,
             newVariantDiscount,
           );
@@ -531,10 +541,10 @@ export function CartProvider({ children }: CartProviderProps) {
         return item;
       });
 
-      const totalAmount = updatedItems.reduce(
-        (sum, item) => sum + item.unitPrice * item.quantity,
-        0,
-      );
+      const totalAmount = updatedItems.reduce((sum, item) => {
+        const price = item.discountedPrice !== undefined ? item.discountedPrice : item.unitPrice;
+        return sum + price * item.quantity;
+      }, 0);
 
       return {
         ...prevCart,
@@ -549,16 +559,18 @@ export function CartProvider({ children }: CartProviderProps) {
     setCart((prevCart) => {
       const updatedItems = prevCart.items.map((item) => {
         if (item.groupName === groupName) {
+          const basePrice = item.isWholesalePricing && item.wholesalePrice !== undefined ? item.wholesalePrice : item.unitPrice;
+          
           // If there's a variant discount, recalculate with just that
-          // Otherwise, set discountedPrice to undefined (use unitPrice)
+          // Otherwise, set discountedPrice to undefined (use unitPrice) or wholesale price if applicable
           const discountedPrice =
             item.variantDiscount && item.variantDiscount > 0
               ? calculateDiscountedPrice(
-                  item.unitPrice,
+                  basePrice,
                   0, // Remove group discount
                   item.variantDiscount,
                 )
-              : undefined;
+              : (item.isWholesalePricing ? item.wholesalePrice : undefined);
 
           return {
             ...item,
@@ -591,16 +603,18 @@ export function CartProvider({ children }: CartProviderProps) {
     setCart((prevCart) => {
       const updatedItems = prevCart.items.map((item) => {
         if (item.id === itemId) {
+          const basePrice = item.isWholesalePricing && item.wholesalePrice !== undefined ? item.wholesalePrice : item.unitPrice;
+          
           // If there's a group discount, recalculate with just that
-          // Otherwise, set discountedPrice to undefined (use unitPrice)
+          // Otherwise, set discountedPrice to undefined (use unitPrice) or wholesale price if applicable
           const discountedPrice =
             item.groupDiscount && item.groupDiscount > 0
               ? calculateDiscountedPrice(
-                  item.unitPrice,
+                  basePrice,
                   item.groupDiscount,
                   0, // Remove variant discount
                 )
-              : undefined;
+              : (item.isWholesalePricing ? item.wholesalePrice : undefined);
 
           return {
             ...item,
@@ -636,11 +650,17 @@ export function CartProvider({ children }: CartProviderProps) {
     setCart((prevCart) => {
       const updatedItems = prevCart.items.map((item) => {
         if (item.groupName === groupName) {
+          // If there are existing percentage discounts, apply them on top of the wholesale price
+          const discountedPrice = calculateDiscountedPrice(
+            wholesalePricePerItem,
+            item.groupDiscount,
+            item.variantDiscount,
+          );
+
           return {
             ...item,
-            groupDiscount: 0, // Clear discount flags
-            variantDiscount: 0,
-            discountedPrice: wholesalePricePerItem,
+            wholesalePrice: wholesalePricePerItem,
+            discountedPrice,
             isWholesalePricing: true, // Mark as wholesale pricing
             // Keep unitPrice as original - don't change it
           };

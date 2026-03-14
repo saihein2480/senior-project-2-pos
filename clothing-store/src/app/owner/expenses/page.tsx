@@ -1,10 +1,11 @@
 "use client";
 
+import { toast } from "react-hot-toast";
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Alert } from "@/components/ui/Alert";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { ImageUpload } from "@/components/ui/ImageUpload";
@@ -18,10 +19,6 @@ function ExpensesContent() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
-  const [alert, setAlert] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
 
   // Form state
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -66,7 +63,7 @@ function ExpensesContent() {
       if (expensesData.success) setExpenses(expensesData.data);
     } catch (error) {
       console.error("Error fetching data:", error);
-      showAlert("error", "Failed to load data");
+      toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -76,14 +73,9 @@ function ExpensesContent() {
     fetchData();
   }, [fetchData]);
 
-  const showAlert = (type: "success" | "error", message: string) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 3000);
-  };
-
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
-      showAlert("error", "Please enter a category name");
+      toast.error("Please enter a category name");
       return;
     }
 
@@ -99,13 +91,13 @@ function ExpensesContent() {
         setCategories([data.data, ...categories]);
         setNewCategoryName("");
         setShowCategoryModal(false);
-        showAlert("success", "Category added successfully");
+        toast.success("Category added successfully");
       } else {
-        showAlert("error", "Failed to add category");
+        toast.error("Failed to add category");
       }
     } catch (error) {
       console.error("Error adding category:", error);
-      showAlert("error", "Failed to add category");
+      toast.error("Failed to add category");
     }
   };
 
@@ -113,7 +105,7 @@ function ExpensesContent() {
 
   const handleAddExpense = async () => {
     if (!selectedCategoryId || !amount || !date) {
-      showAlert("error", "Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       return;
     }
 
@@ -141,13 +133,13 @@ function ExpensesContent() {
         setImageUrl("");
         setAmount("");
         setDate(new Date().toISOString().split("T")[0]);
-        showAlert("success", "Expense added successfully");
+        toast.success("Expense added successfully");
       } else {
-        showAlert("error", "Failed to add expense");
+        toast.error("Failed to add expense");
       }
     } catch (error) {
       console.error("Error adding expense:", error);
-      showAlert("error", "Failed to add expense");
+      toast.error("Failed to add expense");
     } finally {
       setLoading(false);
     }
@@ -164,13 +156,13 @@ function ExpensesContent() {
       const data = await response.json();
       if (data.success) {
         setCategories(categories.filter((cat) => cat.id !== id));
-        showAlert("success", "Category deleted successfully");
+        toast.success("Category deleted successfully");
       } else {
-        showAlert("error", "Failed to delete category");
+        toast.error("Failed to delete category");
       }
     } catch (error) {
       console.error("Error deleting category:", error);
-      showAlert("error", "Failed to delete category");
+      toast.error("Failed to delete category");
     }
   };
 
@@ -189,13 +181,13 @@ function ExpensesContent() {
       const data = await response.json();
       if (data.success) {
         setExpenses(expenses.filter((expense) => expense.id !== id));
-        showAlert("success", "Expense deleted successfully");
+        toast.success("Expense deleted successfully");
       } else {
-        showAlert("error", "Failed to delete expense");
+        toast.error("Failed to delete expense");
       }
     } catch (error) {
       console.error("Error deleting expense:", error);
-      showAlert("error", "Failed to delete expense");
+      toast.error("Failed to delete expense");
     }
   };
 
@@ -256,12 +248,11 @@ function ExpensesContent() {
         ),
       );
       setSelectedExpenses([]);
-      showAlert(
-        "success",
+      toast.success(
         `Successfully deleted ${successCount} expense(s).${failCount > 0 ? ` Failed to delete ${failCount} item(s).` : ""}`,
       );
     } else {
-      showAlert("error", "Failed to delete any expenses. Please try again.");
+      toast.error("Failed to delete any expenses. Please try again.");
     }
 
     setIsProcessingBulkDelete(false);
@@ -276,7 +267,7 @@ function ExpensesContent() {
     if (!editingExpense) return;
 
     if (!editingExpense.categoryId || !editingExpense.amount) {
-      showAlert("error", "Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       return;
     }
 
@@ -299,13 +290,13 @@ function ExpensesContent() {
         await fetchData();
         setShowEditModal(false);
         setEditingExpense(null);
-        showAlert("success", "Expense updated successfully");
+        toast.success("Expense updated successfully");
       } else {
-        showAlert("error", "Failed to update expense");
+        toast.error("Failed to update expense");
       }
     } catch (error) {
       console.error("Error updating expense:", error);
-      showAlert("error", "Failed to update expense");
+      toast.error("Failed to update expense");
     } finally {
       setLoading(false);
     }
@@ -362,7 +353,7 @@ function ExpensesContent() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Desktop sidebar (hidden on small screens) */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -373,7 +364,7 @@ function ExpensesContent() {
       </div>
 
       {/* Mobile sidebar overlay */}
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => {
@@ -397,12 +388,6 @@ function ExpensesContent() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-screen-2xl mx-auto">
-            {alert && (
-              <div className="mb-4">
-                <Alert type={alert.type} message={alert.message} />
-              </div>
-            )}
-
             <div className="space-y-6">
               {/* Expense Form */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -638,7 +623,7 @@ function ExpensesContent() {
 
                 {/* Total Amount Display */}
                 {filteredExpenses.length > 0 && (
-                  <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="mb-4 p-4  border rounded-lg">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-gray-900">
                         Total Amount:
@@ -647,7 +632,7 @@ function ExpensesContent() {
                         {totalsByCurrency.THB > 0 && (
                           <div className="text-right">
                             <div className="text-sm text-gray-600">THB</div>
-                            <div className="text-xl font-bold text-blue-600">
+                            <div className="text-xl font-bold text-gray-900">
                               ฿{" "}
                               {totalsByCurrency.THB.toLocaleString("en-US", {
                                 minimumFractionDigits: 2,
@@ -659,7 +644,7 @@ function ExpensesContent() {
                         {totalsByCurrency.MMK > 0 && (
                           <div className="text-right">
                             <div className="text-sm text-gray-600">MMK</div>
-                            <div className="text-xl font-bold text-green-600">
+                            <div className="text-xl font-bold text-gray-900">
                               Ks{" "}
                               {totalsByCurrency.MMK.toLocaleString("en-US", {
                                 minimumFractionDigits: 2,
@@ -782,11 +767,16 @@ function ExpensesContent() {
                                   href={expense.imageUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  title="Open expense image"
+                                  aria-label="Open expense image"
                                   className="block"
                                 >
-                                  <img
+                                  <Image
                                     src={expense.imageUrl}
                                     alt="Expense"
+                                    width={64}
+                                    height={64}
+                                    unoptimized
                                     className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
                                   />
                                 </a>
@@ -896,7 +886,7 @@ function ExpensesContent() {
 
               {/* Add Category Modal */}
               {showCategoryModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
                   <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
                     <h3 className="text-lg font-semibold mb-4 text-gray-900">
                       Manage Categories

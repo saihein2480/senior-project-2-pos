@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "react-hot-toast";
 import { useState, useEffect, useCallback } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
@@ -63,7 +64,7 @@ function StaffContent() {
       }
     } catch (error) {
       console.error("Error fetching staff:", error);
-      showAlert("error", "Failed to load staff");
+      toast.error("Failed to load staff");
     } finally {
       setLoading(false);
     }
@@ -80,12 +81,12 @@ function StaffContent() {
 
   const handleAddStaff = async () => {
     if (!formData.email || !formData.password || !formData.displayName) {
-      showAlert("error", "Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       return;
     }
 
     if (formData.password.length < 6) {
-      showAlert("error", "Password must be at least 6 characters");
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
@@ -107,13 +108,13 @@ function StaffContent() {
           displayName: "",
           role: "staff",
         });
-        showAlert("success", "Staff account created successfully");
+        toast.success("Staff account created successfully");
       } else {
-        showAlert("error", data.error || "Failed to create staff account");
+        toast.error(data.error || "Failed to create staff account");
       }
     } catch (error) {
       console.error("Error adding staff:", error);
-      showAlert("error", "Failed to create staff account");
+      toast.error("Failed to create staff account");
     } finally {
       setLoading(false);
     }
@@ -141,13 +142,13 @@ function StaffContent() {
         );
         setShowEditModal(false);
         setEditingStaff(null);
-        showAlert("success", "Staff updated successfully");
+        toast.success("Staff updated successfully");
       } else {
-        showAlert("error", "Failed to update staff");
+        toast.error("Failed to update staff");
       }
     } catch (error) {
       console.error("Error updating staff:", error);
-      showAlert("error", "Failed to update staff");
+      toast.error("Failed to update staff");
     } finally {
       setLoading(false);
     }
@@ -179,7 +180,7 @@ function StaffContent() {
       }
     } catch (error) {
       console.error("Error toggling staff status:", error);
-      showAlert("error", "Failed to update staff status");
+      toast.error("Failed to update staff status");
     }
   };
 
@@ -194,13 +195,13 @@ function StaffContent() {
       const data = await response.json();
       if (data.success) {
         setStaff(staff.filter((s) => s.id !== id));
-        showAlert("success", "Staff deleted successfully");
+        toast.success("Staff deleted successfully");
       } else {
-        showAlert("error", "Failed to delete staff");
+        toast.error("Failed to delete staff");
       }
     } catch (error) {
       console.error("Error deleting staff:", error);
-      showAlert("error", "Failed to delete staff");
+      toast.error("Failed to delete staff");
     }
   };
 
@@ -242,7 +243,7 @@ function StaffContent() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -259,7 +260,7 @@ function StaffContent() {
         onItemClick={(item) => setActiveMenuItem(item.id)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        className="md:hidden"
+        className="lg:hidden"
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -504,38 +505,52 @@ function StaffContent() {
                 </h3>
                 <ul className="text-sm text-purple-800 space-y-1">
                   <li key="owner-1">✓ Full system access</li>
-                  <li key="owner-2">✓ Manage all users & roles</li>
-                  <li key="owner-3">✓ View all reports</li>
-                  <li key="owner-4">✓ Manage inventory & pricing</li>
+                  <li key="owner-2">✓ Manage staff accounts & roles</li>
+                  <li key="owner-3">✓ Manage shops/branches & shop reports</li>
+                  <li key="owner-4">
+                    ✓ Access all sales, inventory, barcode & expenses
+                  </li>
                 </ul>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-semibold text-blue-900 mb-2">Manager</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li key="manager-1">✓ Add/update products</li>
-                  <li key="manager-2">✓ Manage inventory</li>
-                  <li key="manager-3">✓ View sales reports</li>
-                  <li key="manager-4">✓ Handle returns & refunds</li>
-                  <li key="manager-5">✗ Cannot delete users</li>
+                  <li key="manager-1">
+                    ✓ Access dashboard, sales, inventory, expenses & barcode
+                  </li>
+                  <li key="manager-2">✓ Manage stocks & customers</li>
+                  <li key="manager-3">
+                    ✓ View sales reports & process payments
+                  </li>
+                  <li key="manager-4">✗ Cannot manage staff accounts</li>
+                  <li key="manager-5">
+                    ✗ Cannot access shops & branches management
+                  </li>
                 </ul>
               </div>
 
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <h3 className="font-semibold text-green-900 mb-2">Staff</h3>
                 <ul className="text-sm text-green-800 space-y-1">
-                  <li key="staff-1">✓ View product list</li>
-                  <li key="staff-2">✓ Create orders</li>
-                  <li key="staff-3">✓ Process payments</li>
-                  <li key="staff-4">✓ View own sales</li>
-                  <li key="staff-5">✗ Cannot edit prices</li>
+                  <li key="staff-1">
+                    ✓ Access home, transactions & payments
+                  </li>
+                  <li key="staff-2">✓ Access customer list</li>
+                  <li key="staff-3">✓ Access own settings page</li>
+                  <li key="staff-4">
+                    ✗ Cannot access dashboard,reports,expenses & barcode
+                  </li>
+                  <li key="staff-5">
+                    ✗ Cannot manage stocks, staff or branches
+                  </li>
                 </ul>
               </div>
             </div>
 
             {/* Add Staff Modal */}
             {showAddModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-6 w-full max-w-md">
                   <h3 className="text-lg font-semibold mb-4 text-gray-900">
                     Add New Staff

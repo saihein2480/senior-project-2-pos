@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { X, Search, User, Users } from 'lucide-react';
-import { Customer } from '@/types/customer';
-import { SelectedCustomer } from '@/types/cart';
+import React, { useState, useEffect } from "react";
+import { X, Search, User, Users } from "lucide-react";
+import { Customer } from "@/types/customer";
+import { SelectedCustomer } from "@/types/cart";
 
 interface CustomerSelectionModalProps {
   isOpen: boolean;
@@ -16,10 +16,10 @@ export function CustomerSelectionModal({
   isOpen,
   onClose,
   onSelectCustomer,
-  selectedCustomer
+  selectedCustomer,
 }: CustomerSelectionModalProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,27 +34,28 @@ export function CustomerSelectionModal({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/customers');
+      const response = await fetch("/api/customers");
       const data = await response.json();
-      
+
       if (data.success) {
         setCustomers(data.data || []);
       } else {
-        setError(data.error || 'Failed to fetch customers');
+        setError(data.error || "Failed to fetch customers");
       }
     } catch (error) {
-      console.error('Error fetching customers:', error);
-      setError('Failed to fetch customers');
+      console.error("Error fetching customers:", error);
+      setError("Failed to fetch customers");
     } finally {
       setIsLoading(false);
     }
   };
 
   // Filter customers based on search term
-  const filteredCustomers = customers.filter(customer =>
-    (customer.displayName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredCustomers = customers.filter(
+    (customer) =>
+      customer.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleSelectCustomer = (customer: Customer) => {
@@ -63,7 +64,7 @@ export function CustomerSelectionModal({
       email: customer.email,
       displayName: customer.displayName,
       customerImage: customer.customerImage,
-      customerType: customer.customerType
+      customerType: customer.customerType,
     };
     onSelectCustomer(selectedCustomerData);
     onClose();
@@ -77,7 +78,7 @@ export function CustomerSelectionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[100000]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -103,7 +104,7 @@ export function CustomerSelectionModal({
               placeholder="Search customers by name, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-500"
             />
           </div>
         </div>
@@ -115,8 +116,8 @@ export function CustomerSelectionModal({
             onClick={handleSelectUnknown}
             className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors mb-4 ${
               !selectedCustomer
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
             }`}
           >
             <div className="flex-shrink-0 h-12 w-12">
@@ -125,8 +126,12 @@ export function CustomerSelectionModal({
               </div>
             </div>
             <div className="ml-4 flex-1">
-              <div className="text-sm font-medium text-gray-900">Unknown Customer</div>
-              <div className="text-sm text-gray-500">Default customer for walk-in sales</div>
+              <div className="text-sm font-medium text-gray-900">
+                Unknown Customer
+              </div>
+              <div className="text-sm text-gray-500">
+                Default customer for walk-in sales
+              </div>
             </div>
             {!selectedCustomer && (
               <div className="flex-shrink-0">
@@ -160,7 +165,9 @@ export function CustomerSelectionModal({
             <div className="space-y-2">
               {filteredCustomers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  {searchTerm ? 'No customers found matching your search.' : 'No customers available.'}
+                  {searchTerm
+                    ? "No customers found matching your search."
+                    : "No customers available."}
                 </div>
               ) : (
                 filteredCustomers.map((customer) => (
@@ -169,8 +176,8 @@ export function CustomerSelectionModal({
                     onClick={() => handleSelectCustomer(customer)}
                     className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors ${
                       selectedCustomer?.uid === customer.uid
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                     }`}
                   >
                     <div className="flex-shrink-0 h-12 w-12">
@@ -188,11 +195,15 @@ export function CustomerSelectionModal({
                     </div>
                     <div className="ml-4 flex-1">
                       <div className="text-sm font-medium text-gray-900">
-                        {customer.displayName || 'No Name'}
+                        {customer.displayName || "No Name"}
                       </div>
-                      <div className="text-sm text-gray-500">{customer.email}</div>
+                      <div className="text-sm text-gray-500">
+                        {customer.email}
+                      </div>
                       {customer.phone && (
-                        <div className="text-xs text-gray-400">{customer.phone}</div>
+                        <div className="text-xs text-gray-400">
+                          {customer.phone}
+                        </div>
                       )}
                       {customer.customerType && (
                         <div className="mt-1">

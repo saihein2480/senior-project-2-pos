@@ -8,15 +8,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
-import {
-  Store,
-  User,
-  Package,
-  BarChart3,
-  ShoppingCart,
-  Filter,
-  X,
-} from "lucide-react";
+import { Store, User, Package, BarChart3, ShoppingCart, Filter, X } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -53,6 +46,7 @@ function OwnerHomeContent() {
   const { formatPrice, getCurrencySymbol } = useCurrency();
   const { businessSettings } = useSettings();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
   // API state for recent stocks
@@ -926,19 +920,19 @@ function OwnerHomeContent() {
 
       // Validate that color and size are selected
       if (!selectedVariant) {
-        alert("Please select a color");
+        toast.error("Please select a color");
         return;
       }
 
       if (!selectedSize) {
-        alert("Please select a size");
+        toast.error("Please select a size");
         return;
       }
 
       // Check if selected size has stock
       const stockForSize = getStockForSize(item, selectedSize);
       if (stockForSize === 0) {
-        alert("Selected size is out of stock");
+        toast.error("Selected size is out of stock");
         return;
       }
 
@@ -969,20 +963,36 @@ function OwnerHomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <Sidebar
-        activeItem="home"
-        onItemClick={() => {}}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        isCartModalOpen={isCartModalOpen}
-        className="h-screen"
-      />
+      {/* Desktop Sidebar (hidden on small screens) */}
+      <div className="hidden lg:block">
+        <Sidebar
+          activeItem="home"
+          onItemClick={() => {}}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isCartModalOpen={isCartModalOpen}
+        />
+      </div>
+
+      {/* Mobile Sidebar (overlay) */}
+      <div className="lg:hidden">
+        <Sidebar
+          activeItem="home"
+          onItemClick={() => setIsMobileSidebarOpen(false)}
+          isCollapsed={false}
+          isCartModalOpen={isCartModalOpen}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        />
+      </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top Navigation Bar */}
-        <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
+        <TopNavBar
+          onCartModalStateChange={setIsCartModalOpen}
+          onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
+        />
 
         {/* Main Content */}
         <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8">
@@ -1140,8 +1150,6 @@ function OwnerHomeContent() {
                       )}
                     </div>
                   </div>
-
-                  
                 </div>
 
                 {/* Clothing Grid */}
@@ -1282,12 +1290,17 @@ function OwnerHomeContent() {
                                 onTouchStart={() => {
                                   setTooltipItem(item.id);
                                   if (tooltipTimeoutRef.current) {
-                                    window.clearTimeout(tooltipTimeoutRef.current);
+                                    window.clearTimeout(
+                                      tooltipTimeoutRef.current,
+                                    );
                                   }
-                                  tooltipTimeoutRef.current = window.setTimeout(() => {
-                                    setTooltipItem(null);
-                                    tooltipTimeoutRef.current = null;
-                                  }, 2500);
+                                  tooltipTimeoutRef.current = window.setTimeout(
+                                    () => {
+                                      setTooltipItem(null);
+                                      tooltipTimeoutRef.current = null;
+                                    },
+                                    2500,
+                                  );
                                 }}
                               >
                                 {item.name}
@@ -1521,101 +1534,143 @@ function OwnerHomeContent() {
                       );
                     })
                   )}
-                  </div>
+                </div>
 
-                  {/* Pagination (moved to bottom) */}
-                  <div className="mt-6 flex items-center justify-center">
-                    <div className="flex items-center justify-center space-x-2 w-full px-2">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          title="First page"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                {/* Pagination (moved to bottom) */}
+                <div className="mt-6 flex items-center justify-center">
+                  <div className="flex items-center justify-center space-x-2 w-full px-2">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        title="First page"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        First
+                      </button>
+
+                      <button
+                        title="Previous page"
+                        onClick={() =>
+                          setCurrentPage((p) => Math.max(p - 1, 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          First
-                        </button>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 19l-7-7 7-7"
+                          />
+                        </svg>
+                      </button>
 
-                        <button
-                          title="Previous page"
-                          onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
+                      {(() => {
+                        const maxButtons = 5;
+                        let start = Math.max(
+                          1,
+                          currentPage - Math.floor(maxButtons / 2),
+                        );
+                        const end = Math.min(
+                          totalPages,
+                          start + maxButtons - 1,
+                        );
+                        if (end - start + 1 < maxButtons) {
+                          start = Math.max(1, end - maxButtons + 1);
+                        }
+                        const pages: number[] = [];
+                        for (let p = start; p <= end; p++) pages.push(p);
 
-                        {(() => {
-                          const maxButtons = 5;
-                          let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-                          const end = Math.min(totalPages, start + maxButtons - 1);
-                          if (end - start + 1 < maxButtons) {
-                            start = Math.max(1, end - maxButtons + 1);
-                          }
-                          const pages: number[] = [];
-                          for (let p = start; p <= end; p++) pages.push(p);
-
-                          return (
-                            <>
-                              {start > 1 && (
-                                <>
-                                  <button onClick={() => setCurrentPage(1)} className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">1</button>
-                                  <span className="px-2 text-gray-500">...</span>
-                                </>
-                              )}
-
-                              {pages.map((pageNumber) => (
+                        return (
+                          <>
+                            {start > 1 && (
+                              <>
                                 <button
-                                  key={pageNumber}
-                                  onClick={() => setCurrentPage(pageNumber)}
-                                  className={`px-2 py-1.5 text-sm font-medium transition-colors ${
-                                    currentPage === pageNumber
-                                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                                  }`}
+                                  onClick={() => setCurrentPage(1)}
+                                  className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                                 >
-                                  {pageNumber}
+                                  1
                                 </button>
-                              ))}
+                                <span className="px-2 text-gray-500">...</span>
+                              </>
+                            )}
 
-                              {end < totalPages && (
-                                <>
-                                  <span className="px-2 text-gray-500">...</span>
-                                  <button onClick={() => setCurrentPage(totalPages)} className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">{totalPages}</button>
-                                </>
-                              )}
-                            </>
-                          );
-                        })()}
+                            {pages.map((pageNumber) => (
+                              <button
+                                key={pageNumber}
+                                onClick={() => setCurrentPage(pageNumber)}
+                                className={`px-2 py-1.5 text-sm font-medium transition-colors ${
+                                  currentPage === pageNumber
+                                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                {pageNumber}
+                              </button>
+                            ))}
 
-                        <button
-                          title="Next page"
-                          onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                          disabled={currentPage === totalPages}
-                          className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            {end < totalPages && (
+                              <>
+                                <span className="px-2 text-gray-500">...</span>
+                                <button
+                                  onClick={() => setCurrentPage(totalPages)}
+                                  className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                >
+                                  {totalPages}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+
+                      <button
+                        title="Next page"
+                        onClick={() =>
+                          setCurrentPage((prev) =>
+                            Math.min(prev + 1, totalPages),
+                          )
+                        }
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </button>
 
-                        <button
-                          title="Last page"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                          className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Last
-                        </button>
-                      </div>
+                      <button
+                        title="Last page"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Last
+                      </button>
+                    </div>
 
-                      <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
-                        Page {currentPage} of {totalPages}
-                      </div>
+                    <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
+                      Page {currentPage} of {totalPages}
                     </div>
                   </div>
+                </div>
               </div>
             </div>
           </div>

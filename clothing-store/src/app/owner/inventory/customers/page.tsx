@@ -338,11 +338,11 @@ function CustomerPageContent() {
   return (
     <ProtectedRoute>
       <div className="flex h-screen bg-gray-50">
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <Sidebar activeItem="customers" onItemClick={() => {}} />
         </div>
 
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <Sidebar
             activeItem="customers"
             onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -840,3 +840,4 @@ function CustomerPageContent() {
 export default function CustomerPage() {
   return <CustomerPageContent />;
 }
+

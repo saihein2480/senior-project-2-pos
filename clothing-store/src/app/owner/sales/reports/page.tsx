@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -768,7 +769,7 @@ function ReportsPageContent() {
   const exportToCSV = () => {
     const transactions = reportData?.recentTransactions || [];
     if (transactions.length === 0) {
-      alert("No data to export");
+      toast.error("No data to export");
       return;
     }
 
@@ -961,7 +962,7 @@ function ReportsPageContent() {
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <Sidebar
             activeItem="reports"
             onItemClick={() => {}}
@@ -971,7 +972,7 @@ function ReportsPageContent() {
           />
         </div>
 
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <Sidebar
             activeItem="reports"
             onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -1001,7 +1002,7 @@ function ReportsPageContent() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <Sidebar
           activeItem="reports"
           onItemClick={() => {}}
@@ -1011,7 +1012,7 @@ function ReportsPageContent() {
         />
       </div>
 
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           activeItem="reports"
           onItemClick={() => setIsMobileSidebarOpen(false)}
@@ -1755,8 +1756,8 @@ function ReportsPageContent() {
                       <tr key={item.name} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                              <span className="text-white text-sm font-medium">
+                            <div className="flex-shrink-0 h-8 w-8 bg-gradient-to-r rounded-full flex items-center justify-center">
+                              <span className="text-gray-800 text-sm font-medium">
                                 {index + 1}
                               </span>
                             </div>
@@ -2188,13 +2189,13 @@ function ReportsPageContent() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span
-                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            className={`inline-flex px-2 py-1 text-xs  rounded-full ${
                               transaction.status === "completed"
-                                ? "bg-green-100 text-green-800"
+                                ? "bg-green-100 text-gray-800"
                                 : transaction.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
+                                  ? "bg-yellow-100 text-gray-800"
                                   : transaction.status === "cancelled"
-                                    ? "bg-red-100 text-red-800"
+                                    ? "bg-red-100 text-gray-800"
                                     : transaction.status === "refunded"
                                       ? "bg-gray-100 text-gray-800"
                                       : "bg-blue-100 text-blue-800"
@@ -2314,3 +2315,4 @@ export default function ReportsPage() {
     </ProtectedRoute>
   );
 }
+

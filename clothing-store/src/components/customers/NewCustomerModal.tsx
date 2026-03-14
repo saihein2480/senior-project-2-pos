@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import { useState, useEffect } from "react";
 import { X, User, Phone, MapPin, Upload, Tag } from "lucide-react";
 import { CreateCustomerRequest, Customer } from "@/types/customer";
@@ -145,14 +146,14 @@ export default function NewCustomerModal({
         "image/webp",
       ];
       if (!validTypes.includes(file.type)) {
-        alert("Please select a valid image file (PNG, JPG, JPEG, GIF, WebP)");
+        toast.error("Please select a valid image file (PNG, JPG, JPEG, GIF, WebP)");
         return;
       }
 
       // Validate file size (5MB limit)
       const maxSize = 5 * 1024 * 1024; // 5MB in bytes
       if (file.size > maxSize) {
-        alert("File size must be less than 5MB");
+        toast.error("File size must be less than 5MB");
         return;
       }
 

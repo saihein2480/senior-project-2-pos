@@ -10,6 +10,7 @@ import Image from "next/image";
 import { detectColorName } from "@/lib/colorUtils";
 import { CustomerSelectionModal } from "@/components/cart/CustomerSelectionModal";
 import { PaymentClearanceModal } from "@/components/payment/PaymentClearanceModal";
+import { toast } from "react-hot-toast";
 
 interface ShoppingCartModalProps {
   isOpen: boolean;
@@ -208,7 +209,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         // Store the cart discount percentage - it will be applied to subtotal after individual discounts
         setCartDiscountPercent(value);
       } else {
-        alert("Please enter a valid discount percentage (0-100)");
+        toast.error("Please enter a valid discount percentage (0-100)");
       }
     } else {
       // Custom amount discount — treat as a fixed numeric amount in the currently selected/display currency
@@ -218,7 +219,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setCartDiscountPercent(0);
         setDiscountAmount("");
       } else {
-        alert("Please enter a valid discount amount (0 or greater)");
+        toast.error("Please enter a valid discount amount (0 or greater)");
       }
     }
   };
@@ -227,7 +228,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const handleApplyGroupDiscount = () => {
     const value = parseFloat(groupDiscountAmount) || 0;
     if (!selectedGroupForDiscount) {
-      alert("Please select a group");
+      toast.error("Please select a group");
       return;
     }
 
@@ -245,10 +246,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           return copy;
         });
       } else {
-        alert("Please enter a valid discount percentage (0-100)");
+        toast.error("Please enter a valid discount percentage (0-100)");
       }
     } else {
-      // Custom amount discount - store fixed amount (in display currency) and do not convert
+      // Custom amount discount - store TOTAL fixed amount for the whole group (display currency)
       if (value >= 0) {
         setGroupFixedDiscounts((prev) => ({
           ...prev,
@@ -261,7 +262,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setGroupSearchTerm("");
         setShowGroupDropdown(false);
       } else {
-        alert("Please enter a valid discount amount (0 or greater)");
+        toast.error("Please enter a valid discount amount (0 or greater)");
       }
     }
   };
@@ -269,7 +270,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const handleApplyVariantDiscount = () => {
     const value = parseFloat(variantDiscountAmount) || 0;
     if (!selectedVariantForDiscount) {
-      alert("Please select a variant");
+      toast.error("Please select a variant");
       return;
     }
 
@@ -287,7 +288,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           return copy;
         });
       } else {
-        alert("Please enter a valid discount percentage (0-100)");
+        toast.error("Please enter a valid discount percentage (0-100)");
       }
     } else {
       // Custom amount discount - store fixed amount (in display currency) for this variant
@@ -303,7 +304,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setVariantSearchTerm("");
         setShowVariantDropdown(false);
       } else {
-        alert("Please enter a valid discount amount (0 or greater)");
+        toast.error("Please enter a valid discount amount (0 or greater)");
       }
     }
   };
@@ -398,7 +399,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
   const handleCheckout = () => {
     if (cart.items.length === 0) {
-      alert("Your cart is empty");
+      toast.error("Your cart is empty");
       return;
     }
 
@@ -444,12 +445,22 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     return total + item.unitPrice * item.quantity;
   }, 0);
 
+  // Calculate wholesale pricing savings
+  const wholesaleSavings = cart.items.reduce((total, item) => {
+    if (item.isWholesalePricing) {
+      const wPrice = item.wholesalePrice ?? item.unitPrice;
+      const savings = (item.unitPrice - wPrice) * item.quantity;
+      return total + Math.max(0, savings);
+    }
+    return total;
+  }, 0);
+
   // Calculate group discount savings
   const groupDiscountSavings = cart.items.reduce((total, item) => {
     if (item.groupDiscount && item.groupDiscount > 0) {
-      const originalItemTotal = item.unitPrice * item.quantity;
+      const basePrice = item.isWholesalePricing ? (item.wholesalePrice ?? item.unitPrice) : item.unitPrice;
       const groupDiscountAmount =
-        originalItemTotal * (item.groupDiscount / 100);
+        (basePrice * item.quantity) * (item.groupDiscount / 100);
       return total + groupDiscountAmount;
     }
     return total;
@@ -458,38 +469,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   // Calculate variant discount savings
   const variantDiscountSavings = cart.items.reduce((total, item) => {
     if (item.variantDiscount && item.variantDiscount > 0) {
-      // Calculate variant discount on the original price (not after group discount)
-      const originalItemTotal = item.unitPrice * item.quantity;
+      const basePrice = item.isWholesalePricing ? (item.wholesalePrice ?? item.unitPrice) : item.unitPrice;
       const variantDiscountAmount =
-        originalItemTotal * (item.variantDiscount / 100);
+        (basePrice * item.quantity) * (item.variantDiscount / 100);
       return total + variantDiscountAmount;
-    }
-    return total;
-  }, 0);
-
-  // Calculate wholesale pricing savings (items with wholesale pricing but no group/variant discounts)
-  const wholesaleSavings = cart.items.reduce((total, item) => {
-    // Check if item has wholesale pricing applied (discounted price exists, is less than unit price, and no discount percentages)
-    if (
-      item.discountedPrice !== undefined &&
-      item.discountedPrice < item.unitPrice &&
-      (!item.groupDiscount || item.groupDiscount === 0) &&
-      (!item.variantDiscount || item.variantDiscount === 0)
-    ) {
-      const originalItemTotal = item.unitPrice * item.quantity;
-      const wholesaleItemTotal = item.discountedPrice * item.quantity;
-      const savings = originalItemTotal - wholesaleItemTotal;
-      console.log(
-        "Wholesale item:",
-        item.groupName,
-        "Original:",
-        originalItemTotal,
-        "Wholesale:",
-        wholesaleItemTotal,
-        "Savings:",
-        savings,
-      );
-      return total + savings;
     }
     return total;
   }, 0);
@@ -527,11 +510,28 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     defaultCurrency as "THB" | "MMK",
   );
 
-  // Sum fixed group/variant discounts (values stored are per-item amounts in display currency)
-  const groupFixedTotal = cart.items.reduce((sum, ci) => {
-    const perItem = groupFixedDiscounts[ci.groupName] || 0;
-    return sum + perItem * ci.quantity;
-  }, 0);
+  // Group fixed discounts are stored as TOTAL amount per group (display currency).
+  // We distribute that amount across all units in the same group for per-item display math.
+  const groupQuantities = cart.items.reduce(
+    (acc, item) => {
+      acc[item.groupName] = (acc[item.groupName] || 0) + item.quantity;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const getGroupFixedPerUnit = (groupName: string): number => {
+    const groupTotalFixed = groupFixedDiscounts[groupName] || 0;
+    const totalQty = groupQuantities[groupName] || 0;
+    return totalQty > 0 ? groupTotalFixed / totalQty : 0;
+  };
+
+  const groupFixedTotal = Object.entries(groupFixedDiscounts).reduce(
+    (sum, [groupName, fixedAmount]) => {
+      return groupQuantities[groupName] ? sum + fixedAmount : sum;
+    },
+    0,
+  );
 
   const variantFixedTotal = cart.items.reduce((sum, ci) => {
     const perItem = variantFixedDiscounts[ci.id] || 0;
@@ -595,6 +595,34 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     currencyRate,
     defaultCurrency as "THB" | "MMK",
   );
+
+  const discountBreakdownForPayment = {
+    wholesaleSavings,
+    groupPercentSavings: groupDiscountSavings,
+    groupFixedTotal: SettingsService.convertPrice(
+      groupFixedTotal,
+      selectedCurrency as "THB" | "MMK",
+      defaultCurrency as "THB" | "MMK",
+      currencyRate,
+      defaultCurrency as "THB" | "MMK",
+    ),
+    variantPercentSavings: variantDiscountSavings,
+    variantFixedTotal: SettingsService.convertPrice(
+      variantFixedTotal,
+      selectedCurrency as "THB" | "MMK",
+      defaultCurrency as "THB" | "MMK",
+      currencyRate,
+      defaultCurrency as "THB" | "MMK",
+    ),
+    cartDiscount: SettingsService.convertPrice(
+      displayCartDiscount,
+      selectedCurrency as "THB" | "MMK",
+      defaultCurrency as "THB" | "MMK",
+      currencyRate,
+      defaultCurrency as "THB" | "MMK",
+    ),
+    cartDiscountPercent,
+  };
 
   return (
     <div
@@ -761,9 +789,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 const perItemVariantFixed =
                                   variantFixedDiscounts[item.id] || 0;
 
-                                // Group fixed discount per item (display currency)
-                                const perItemGroupFixed =
-                                  groupFixedDiscounts[item.groupName] || 0;
+                                // Group fixed discount share per item (display currency)
+                                const perItemGroupFixed = getGroupFixedPerUnit(
+                                  item.groupName,
+                                );
 
                                 const effectiveDisplayUnit = Math.max(
                                   0,
@@ -964,29 +993,93 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                               const savings =
                                                 currentTotal - wholesaleTotal;
 
-                                              if (
-                                                confirm(
-                                                  `Apply wholesale pricing to all "${item.groupName}" items?\n\n` +
-                                                    `Current Total: ${formatPrice(
-                                                      currentTotal,
-                                                    )}\n` +
-                                                    `Wholesale Total: ${formatPrice(
-                                                      wholesaleTotal,
-                                                    )}\n` +
-                                                    `(${totalGroupQuantity} items = ${formatPrice(
-                                                      wholesalePricePerItem,
-                                                    )}/item)\n\n` +
-                                                    `Total Savings: ${formatPrice(
-                                                      savings,
-                                                    )}`,
-                                                )
-                                              ) {
-                                                // Apply wholesale price directly to all items in the group
-                                                applyWholesalePricing(
-                                                  item.groupName,
-                                                  wholesalePricePerItem,
-                                                );
-                                              }
+                                              toast(
+                                                (t) => (
+                                                  <div className="flex flex-col gap-3 p-1 w-[320px]">
+                                                    <div className="text-sm font-semibold text-gray-900 border-b pb-2">
+                                                      Apply wholesale pricing?
+                                                    </div>
+                                                    <div className="text-sm text-gray-700 space-y-1">
+                                                      <p>
+                                                        All{" "}
+                                                        <span className="font-semibold">
+                                                          &quot;{item.groupName}
+                                                          &quot;
+                                                        </span>{" "}
+                                                        items.
+                                                      </p>
+                                                      <div className="bg-gray-50 p-2 rounded flex flex-col gap-1 mt-2 border border-gray-100">
+                                                        <div className="flex justify-between">
+                                                          <span>
+                                                            Current Total:
+                                                          </span>
+                                                          <span className="font-semibold">
+                                                            {formatPrice(
+                                                              currentTotal,
+                                                            )}
+                                                          </span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                          <span>
+                                                            Wholesale Total:
+                                                          </span>
+                                                          <span className="font-semibold text-blue-600">
+                                                            {formatPrice(
+                                                              wholesaleTotal,
+                                                            )}
+                                                          </span>
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 text-right">
+                                                          ({totalGroupQuantity}{" "}
+                                                          items ={" "}
+                                                          {formatPrice(
+                                                            wholesalePricePerItem,
+                                                          )}
+                                                          /item)
+                                                        </div>
+                                                      </div>
+                                                      <div className="flex justify-between mt-2 pt-2 border-t font-semibold text-green-600">
+                                                        <span>
+                                                          Total Savings:
+                                                        </span>
+                                                        <span>
+                                                          {formatPrice(savings)}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                    <div className="flex gap-2 mt-2 pt-2">
+                                                      <button
+                                                        onClick={() =>
+                                                          toast.dismiss(t.id)
+                                                        }
+                                                        className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium rounded-md transition-colors"
+                                                      >
+                                                        Cancel
+                                                      </button>
+                                                      <button
+                                                        onClick={() => {
+                                                          toast.dismiss(t.id);
+                                                          applyWholesalePricing(
+                                                            item.groupName,
+                                                            wholesalePricePerItem,
+                                                          );
+                                                          toast.success(
+                                                            "Wholesale pricing applied",
+                                                            { duration: 2000 },
+                                                          );
+                                                        }}
+                                                        className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-md transition-colors"
+                                                      >
+                                                        Confirm
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ),
+                                                {
+                                                  duration: Infinity,
+                                                  position: "top-center",
+                                                },
+                                              );
                                             }}
                                             className="ml-2 px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
                                           >
@@ -1004,11 +1097,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             {/* Right Column - Quantity & Subtotal */}
                             <div className="flex flex-col justify-between">
                               {/* Quantity Controls */}
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-end w-full gap-3">
                                 <span className="text-xs font-medium text-gray-700">
                                   Quantity:
                                 </span>
-                                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                                <div className="flex items-center space-x-2 bg-gray-100 rounded-sm p-1">
                                   <button
                                     onClick={() =>
                                       updateQuantity(
@@ -1037,8 +1130,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               </div>
 
                               {/* Item Subtotal */}
-                              <div className="mt-2 bg-blue-50 p-2 rounded-lg">
-                                <div className="text-xs font-medium text-gray-700 mb-1">
+                              <div className="mt-2  p-2 bg-blue-50 rounded-lg">
+                                <div className="text-xs font-medium  text-gray-700 mb-1">
                                   Item Total:
                                 </div>
                                 {(() => {
@@ -1059,7 +1152,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                   const perItemVariantFixed =
                                     variantFixedDiscounts[item.id] || 0;
                                   const perItemGroupFixed =
-                                    groupFixedDiscounts[item.groupName] || 0;
+                                    getGroupFixedPerUnit(item.groupName);
 
                                   const effectiveDisplayUnit = Math.max(
                                     0,
@@ -1097,7 +1190,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             </div>
                           </div>
                         </div>
-                       </div>
+                      </div>
                     </div>
                   ));
                 })()}
@@ -1658,6 +1751,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         discount={discountForPayment}
         tax={taxForPayment}
         total={grandTotalForPayment}
+        discountBreakdown={discountBreakdownForPayment}
       />
     </div>
   );

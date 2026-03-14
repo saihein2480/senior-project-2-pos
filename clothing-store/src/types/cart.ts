@@ -22,6 +22,7 @@ export interface CartItem {
   variantDiscount?: number; // Percentage discount applied to specific color/size variant
   discountedPrice?: number; // Final price after applying discounts
   isWholesalePricing?: boolean; // Flag to indicate if wholesale pricing is applied
+  wholesalePrice?: number; // The wholesale price per item if wholesale pricing is applied
 }
 
 export interface SelectedCustomer {

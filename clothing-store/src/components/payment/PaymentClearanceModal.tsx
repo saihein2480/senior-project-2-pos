@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from 'react-hot-toast';
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { X, User, CreditCard, Wallet, QrCode, Eye, Truck } from "lucide-react";
@@ -8,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SelectedCustomer } from "@/types/cart";
 import { CartItem } from "@/types/cart";
 import { transactionService } from "@/services/transactionService";
+import type { DiscountBreakdown } from "@/services/transactionService";
 import { SettingsService } from "@/services/settingsService";
 import { detectColorName } from "@/lib/colorUtils";
 
@@ -39,6 +41,7 @@ interface PaymentClearanceModalProps {
   discount: number;
   tax: number;
   total: number;
+  discountBreakdown?: DiscountBreakdown;
 }
 
 type PaymentMethod = "cash" | "scan" | "wallet" | "cod";
@@ -53,6 +56,7 @@ export function PaymentClearanceModal({
   discount,
   tax,
   total,
+  discountBreakdown,
 }: PaymentClearanceModalProps) {
   const router = useRouter();
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
@@ -80,8 +84,10 @@ export function PaymentClearanceModal({
     branchName: string;
     businessName: string;
     invoiceFooterMessage: string;
+    invoiceFooterImage: string;
     showBusinessLogo: boolean;
     businessLogo: string;
+    autoPrintReceipt: boolean;
     sellingCurrency: string;
     exchangeRate: number;
     sellingTotal: number;
@@ -89,6 +95,8 @@ export function PaymentClearanceModal({
   } | null>(null);
   const [receiptSize, setReceiptSize] = useState<ReceiptPaperSize>("80mm");
   const amountInputRef = useRef<HTMLInputElement | null>(null);
+  const autoPrintedTxnRef = useRef<string | null>(null);
+  const handlePrintReceiptRef = useRef<(() => Promise<void>) | null>(null);
 
   // Get receipt width in pixels based on paper size
   const getReceiptWidth = (size: ReceiptPaperSize): string => {
@@ -228,7 +236,7 @@ export function PaymentClearanceModal({
       selectedPaymentMethod === "cash" &&
       amountPaid < totalInSellingCurrency
     ) {
-      alert("Insufficient payment amount");
+      toast.error("Insufficient payment amount");
       return;
     }
 
@@ -280,8 +288,10 @@ export function PaymentClearanceModal({
         branchName: currentBranch,
         businessName: settings?.businessName || "Shop",
         invoiceFooterMessage: settings?.invoiceFooterMessage || "",
+        invoiceFooterImage: settings?.invoiceFooterImage || "",
         showBusinessLogo: settings?.showBusinessLogoOnInvoice ?? true,
         businessLogo: settings?.businessLogo || "",
+        autoPrintReceipt: settings?.autoPrintReceiptAfterCheckout ?? true,
         sellingCurrency: selectedCurrency,
         exchangeRate: currentExchangeRate,
         sellingTotal: sellingTotal,
@@ -294,7 +304,7 @@ export function PaymentClearanceModal({
     } catch (error) {
       setIsProcessing(false);
       console.error("Error preparing receipt:", error);
-      alert(
+      toast.error(
         `Error preparing receipt: ${
           error instanceof Error ? error.message : "Unknown error"
         }. Please try again.`,
@@ -331,6 +341,7 @@ export function PaymentClearanceModal({
         sellingCurrency: selectedCurrency,
         exchangeRate: receiptData.exchangeRate,
         sellingTotal: receiptData.sellingTotal,
+        discountBreakdown,
       });
 
       console.log(
@@ -350,7 +361,7 @@ export function PaymentClearanceModal({
     } catch (error) {
       setIsProcessing(false);
       console.error("Error recording transaction:", error);
-      alert(
+      toast.error(
         `Error recording transaction: ${
           error instanceof Error ? error.message : "Unknown error"
         }. Please try again.`,
@@ -377,7 +388,7 @@ export function PaymentClearanceModal({
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      alert("Please allow popups to print the receipt");
+      toast.error("Please allow popups to print the receipt");
       return;
     }
 
@@ -386,22 +397,28 @@ export function PaymentClearanceModal({
       switch (size) {
         case "44mm":
           return {
-            width: "44mm",
+            width: "40mm",
             fontSize: "9px",
             titleSize: "13px",
             detailSize: "8px",
           };
         case "57mm":
+          return {
+            width: "44mm",
+            fontSize: "9px",
+            titleSize: "13px",
+            detailSize: "8px",
+          };
         case "58mm":
           return {
-            width: size,
+            width: "44mm",
             fontSize: "10px",
             titleSize: "14px",
             detailSize: "9px",
           };
         case "69mm":
           return {
-            width: "69mm",
+            width: "60mm",
             fontSize: "11px",
             titleSize: "15px",
             detailSize: "10px",
@@ -409,7 +426,7 @@ export function PaymentClearanceModal({
         case "76mm":
         case "78mm":
           return {
-            width: size,
+            width: "68mm",
             fontSize: "11px",
             titleSize: "15px",
             detailSize: "10px",
@@ -417,7 +434,7 @@ export function PaymentClearanceModal({
         case "80mm":
         case "82.5mm":
           return {
-            width: size,
+            width: "72mm",
             fontSize: "12px",
             titleSize: "16px",
             detailSize: "11px",
@@ -425,21 +442,21 @@ export function PaymentClearanceModal({
         case "112mm":
         case "114mm":
           return {
-            width: size,
+            width: "100mm",
             fontSize: "14px",
             titleSize: "18px",
             detailSize: "12px",
           };
         case "210mm":
           return {
-            width: "210mm",
+            width: "190mm",
             fontSize: "16px",
             titleSize: "20px",
             detailSize: "14px",
           };
         default:
           return {
-            width: "80mm",
+            width: "72mm",
             fontSize: "12px",
             titleSize: "16px",
             detailSize: "11px",
@@ -468,7 +485,7 @@ export function PaymentClearanceModal({
               }
             }
             body {
-              font-family: 'Courier New', monospace;
+              font-family: 'Noto Sans Myanmar', 'Noto Sans Thai', 'Segoe UI', Arial, sans-serif;
               width: ${width};
               margin: 0 auto;
               padding: 8px;
@@ -480,6 +497,13 @@ export function PaymentClearanceModal({
               margin-bottom: 10px;
               border-bottom: 1px dashed #000;
               padding-bottom: 8px;
+            }
+            .logo {
+              max-width: 120px;
+              max-height: 60px;
+              margin: 0 auto 6px;
+              object-fit: contain;
+              display: block;
             }
             .title {
               font-size: ${titleSize};
@@ -551,6 +575,11 @@ export function PaymentClearanceModal({
         </head>
         <body>
           <div class="header">
+            ${
+              receiptData.showBusinessLogo && receiptData.businessLogo
+                ? `<img class="logo" src="${receiptData.businessLogo}" alt="Business Logo" />`
+                : ""
+            }
             <div class="title">${receiptData.businessName || "RECEIPT"}</div>
             <div class="branch">${receiptData.branchName || "Main Branch"}</div>
             <div class="datetime">${new Date(receiptData.timestamp).toLocaleString()}</div>
@@ -650,6 +679,11 @@ export function PaymentClearanceModal({
                 ? `<div style="margin-top: 8px; font-size: ${detailSize}; text-align: center;">${receiptData.invoiceFooterMessage}</div>`
                 : ""
             }
+            ${
+              receiptData.invoiceFooterImage
+                ? `<div style="margin-top: 8px; text-align: center;"><img src="${receiptData.invoiceFooterImage}" alt="Invoice Footer" style="max-width: 100%; max-height: 80px; object-fit: contain;" /></div>`
+                : ""
+            }
           </div>
         </body>
       </html>
@@ -670,6 +704,21 @@ export function PaymentClearanceModal({
       router.push("/owner/home");
     }, 250);
   };
+  handlePrintReceiptRef.current = handlePrintReceipt;
+
+  useEffect(() => {
+    // Auto-print exactly once per transaction when enabled
+    if (!showReceipt || !receiptData?.autoPrintReceipt) {
+      return;
+    }
+
+    if (autoPrintedTxnRef.current === receiptData.transactionId) {
+      return;
+    }
+
+    autoPrintedTxnRef.current = receiptData.transactionId;
+    void handlePrintReceiptRef.current?.();
+  }, [showReceipt, receiptData?.transactionId, receiptData?.autoPrintReceipt]);
 
   if (!isOpen) return null;
 
@@ -703,10 +752,21 @@ export function PaymentClearanceModal({
             <div className="bg-gray-100 border-2 border-gray-300 rounded-lg shadow-sm flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
               <div
                 className={`mx-auto bg-white ${getReceiptWidth(receiptSize)} p-3 sm:p-4 lg:p-5 xl:p-6 text-black`}
-                style={{ fontFamily: '"Courier New", monospace' }}
+                style={{
+                  fontFamily:
+                    '"Noto Sans Myanmar", "Noto Sans Thai", "Segoe UI", Arial, sans-serif',
+                }}
               >
                 {/* Header */}
                 <div className="text-center border-b border-dashed border-black pb-2 mb-2">
+                  {receiptData.showBusinessLogo && receiptData.businessLogo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={receiptData.businessLogo}
+                      alt="Business Logo"
+                      className="mx-auto mb-2 max-h-14 object-contain"
+                    />
+                  )}
                   <div
                     className={`font-bold text-black ${receiptSize === "58mm" ? "text-sm lg:text-base xl:text-lg" : "text-base lg:text-lg xl:text-xl"}`}
                   >
@@ -858,6 +918,14 @@ export function PaymentClearanceModal({
                       {receiptData.invoiceFooterMessage}
                     </div>
                   )}
+                  {receiptData.invoiceFooterImage && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={receiptData.invoiceFooterImage}
+                      alt="Invoice Footer"
+                      className="mx-auto mt-2 max-h-20 object-contain"
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -866,6 +934,7 @@ export function PaymentClearanceModal({
             <div className="flex gap-2 sm:gap-3 lg:gap-4 pt-3 lg:pt-4 flex-shrink-0">
               <button
                 onClick={handlePrintReceipt}
+                disabled={isProcessing}
                 className="flex-1 bg-blue-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-blue-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
               >
                 <span className="text-white">Print Receipt</span>
@@ -875,6 +944,7 @@ export function PaymentClearanceModal({
                   await handleConfirmPayment();
                   router.push("/owner/home");
                 }}
+                disabled={isProcessing}
                 className="flex-1 bg-gray-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-gray-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
               >
                 <span className="text-white">Skip Print</span>

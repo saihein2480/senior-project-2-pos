@@ -17,6 +17,16 @@ import { db } from "@/lib/firebase";
 import { SelectedCustomer, CartItem } from "@/types/cart";
 import { StockService } from "@/services/stockService";
 
+export interface DiscountBreakdown {
+  wholesaleSavings: number;
+  groupPercentSavings: number;
+  groupFixedTotal: number;
+  variantPercentSavings: number;
+  variantFixedTotal: number;
+  cartDiscount: number;
+  cartDiscountPercent: number;
+}
+
 export interface Transaction {
   id?: string;
   transactionId: string;
@@ -51,6 +61,7 @@ export interface Transaction {
   rejectedAt?: Timestamp;
   rejectReason?: string;
   rejectedBy?: string;
+  discountBreakdown?: DiscountBreakdown;
 }
 
 export interface RefundItem {

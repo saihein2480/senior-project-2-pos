@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
+import { SettingsService } from "@/services/settingsService";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -28,25 +29,27 @@ interface BarcodeLabelSettings {
   showPrice: boolean;
 }
 
+const DEFAULT_LABEL_SETTINGS: BarcodeLabelSettings = {
+  labelWidth: 50,
+  labelHeight: 30,
+  labelGap: 3,
+  standard: "EAN-13",
+  gs1CompanyPrefix: "8851234",
+  autoSequence: 1,
+  showCompany: true,
+  showDates: false,
+  showPrice: true,
+};
+
 function PrintSettingsContent() {
   const router = useRouter();
-  const [activeMenuItem, setActiveMenuItem] = useState("barcode-settings");
+  const [activeMenuItem, setActiveMenuItem] = useState("print-settings");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
   // Barcode Label Settings state
   const [barcodeLabelSettings, setBarcodeLabelSettings] =
-    useState<BarcodeLabelSettings>({
-      labelWidth: 50,
-      labelHeight: 30,
-      labelGap: 3,
-      standard: "EAN-13",
-      gs1CompanyPrefix: "8851234",
-      autoSequence: 1,
-      showCompany: true,
-      showDates: false,
-      showPrice: true,
-    });
+    useState<BarcodeLabelSettings>(DEFAULT_LABEL_SETTINGS);
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -62,9 +65,34 @@ function PrintSettingsContent() {
   const loadSettings = async () => {
     try {
       setIsLoading(true);
-      const savedLabelSettings = localStorage.getItem("labelSettings");
-      if (savedLabelSettings) {
-        setBarcodeLabelSettings(JSON.parse(savedLabelSettings));
+      let loadedSettings: BarcodeLabelSettings | null = null;
+
+      // 1) Try shared cloud settings first
+      try {
+        const businessSettings = await SettingsService.getBusinessSettings();
+        if (businessSettings?.labelSettings) {
+          loadedSettings = {
+            ...DEFAULT_LABEL_SETTINGS,
+            ...businessSettings.labelSettings,
+          };
+        }
+      } catch (cloudError) {
+        console.warn("Could not load cloud label settings:", cloudError);
+      }
+
+      // 2) Fallback to local browser settings
+      if (!loadedSettings) {
+        const savedLabelSettings = localStorage.getItem("labelSettings");
+        if (savedLabelSettings) {
+          loadedSettings = {
+            ...DEFAULT_LABEL_SETTINGS,
+            ...JSON.parse(savedLabelSettings),
+          };
+        }
+      }
+
+      if (loadedSettings) {
+        setBarcodeLabelSettings(loadedSettings);
       }
     } catch (err) {
       console.error("Error loading settings:", err);
@@ -78,10 +106,39 @@ function PrintSettingsContent() {
     try {
       setIsSaving(true);
       setError(null);
+
+      // Keep local backup for offline fallback
       localStorage.setItem(
         "labelSettings",
         JSON.stringify(barcodeLabelSettings),
       );
+
+      // Save into shared business settings for all allowed roles/devices
+      const existingSettings = await SettingsService.getBusinessSettings();
+      if (existingSettings) {
+        await SettingsService.saveBusinessSettings({
+          businessName: existingSettings.businessName,
+          shortName: existingSettings.shortName,
+          defaultCurrency: existingSettings.defaultCurrency,
+          taxRate: existingSettings.taxRate,
+          registeredBy: existingSettings.registeredBy,
+          registeredAt: existingSettings.registeredAt,
+          businessLogo: existingSettings.businessLogo,
+          showBusinessLogoOnInvoice:
+            existingSettings.showBusinessLogoOnInvoice,
+          autoPrintReceiptAfterCheckout:
+            existingSettings.autoPrintReceiptAfterCheckout,
+          invoiceFooterMessage: existingSettings.invoiceFooterMessage,
+          invoiceFooterImage: existingSettings.invoiceFooterImage,
+          receiptPaperSize: existingSettings.receiptPaperSize,
+          enableDarkMode: existingSettings.enableDarkMode,
+          enableSoundEffects: existingSettings.enableSoundEffects,
+          currencyRate: existingSettings.currencyRate,
+          currentBranch: existingSettings.currentBranch,
+          labelSettings: barcodeLabelSettings,
+        });
+      }
+
       setSuccess("Settings saved successfully!");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -486,7 +543,7 @@ function PrintSettingsContent() {
 
 export default function PrintSettingsPage() {
   return (
-    <ProtectedRoute requiredRole="owner">
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <PrintSettingsContent />
     </ProtectedRoute>
   );
