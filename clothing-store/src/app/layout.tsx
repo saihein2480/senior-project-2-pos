@@ -8,6 +8,7 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { InstallPrompt } from "@/components/ui/InstallPrompt";
+import { NumberInputGuard } from "@/components/ui/NumberInputGuard";
 import { Toaster } from "react-hot-toast";
 
 const inter = Inter({
@@ -54,6 +55,7 @@ export default function RootLayout({
           </AuthProvider>
         </LanguageProvider>
         <InstallPrompt />
+        <NumberInputGuard />
         <Toaster position="top-center" />
         <SpeedInsights />
       </body>

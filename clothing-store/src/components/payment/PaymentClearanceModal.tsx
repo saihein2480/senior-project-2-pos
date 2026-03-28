@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { X, User, CreditCard, Wallet, QrCode, Eye, Truck } from "lucide-react";
@@ -1155,8 +1155,8 @@ export function PaymentClearanceModal({
                 ref={amountInputRef}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setCalculatorDisplay(value || "0");
-                  setAmountPaid(parseFloat(value) || 0);
+                  setCalculatorDisplay(value);
+                  setAmountPaid(value === "" ? 0 : parseFloat(value));
                 }}
                 placeholder="0"
                 className="w-full text-xl font-bold text-gray-900 bg-transparent text-right border-none outline-none"

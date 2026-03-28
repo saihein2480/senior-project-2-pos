@@ -1,5 +1,5 @@
 "use client";
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -564,7 +564,9 @@ export default function TransactionsPage() {
       });
 
       if (validationErrors.length > 0) {
-        toast.error("Refund validation failed:\n\n" + validationErrors.join("\n"));
+        toast.error(
+          "Refund validation failed:\n\n" + validationErrors.join("\n"),
+        );
         return;
       }
 
@@ -652,7 +654,9 @@ export default function TransactionsPage() {
       console.error("Error cancelling transaction:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
-      toast.error(`Failed to cancel transaction: ${errorMessage}. Please try again.`);
+      toast.error(
+        `Failed to cancel transaction: ${errorMessage}. Please try again.`,
+      );
     } finally {
       setIsProcessingCancel(false);
     }
@@ -1757,11 +1761,27 @@ export default function TransactionsPage() {
                                   min="0"
                                   max={availableToRefund}
                                   value={
-                                    refundItems[`${item.id}___${index}`] || 0
+                                    Object.prototype.hasOwnProperty.call(
+                                      refundItems,
+                                      `${item.id}___${index}`,
+                                    )
+                                      ? refundItems[`${item.id}___${index}`]
+                                      : ""
                                   }
                                   onChange={(e) => {
-                                    const inputValue =
-                                      parseInt(e.target.value) || 0;
+                                    if (e.target.value === "") {
+                                      setRefundItems((prev) => {
+                                        const next = { ...prev };
+                                        delete next[`${item.id}___${index}`];
+                                        return next;
+                                      });
+                                      return;
+                                    }
+
+                                    const inputValue = parseInt(
+                                      e.target.value,
+                                      10,
+                                    );
                                     const validatedValue = Math.min(
                                       Math.max(inputValue, 0),
                                       availableToRefund,
@@ -1773,8 +1793,14 @@ export default function TransactionsPage() {
                                   }}
                                   onBlur={(e) => {
                                     // Additional validation on blur to ensure value is within bounds
-                                    const inputValue =
-                                      parseInt(e.target.value) || 0;
+                                    if (e.target.value === "") {
+                                      return;
+                                    }
+
+                                    const inputValue = parseInt(
+                                      e.target.value,
+                                      10,
+                                    );
                                     if (inputValue > availableToRefund) {
                                       setRefundItems((prev) => ({
                                         ...prev,

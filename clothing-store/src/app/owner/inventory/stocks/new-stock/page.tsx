@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -991,12 +991,16 @@ function NewStockContent() {
                           <input
                             aria-label="Enter minimum quantity"
                             type="number"
-                            value={tier.minQuantity}
+                            value={
+                              tier.minQuantity === 0 ? "" : tier.minQuantity
+                            }
                             onChange={(e) =>
                               updateWholesaleTier(
                                 tier.id,
                                 "minQuantity",
-                                parseInt(e.target.value) || 0,
+                                e.target.value === ""
+                                  ? 0
+                                  : parseInt(e.target.value, 10),
                               )
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
@@ -1009,12 +1013,14 @@ function NewStockContent() {
                           <input
                             aria-label="Enter price"
                             type="number"
-                            value={tier.price}
+                            value={tier.price === 0 ? "" : tier.price}
                             onChange={(e) =>
                               updateWholesaleTier(
                                 tier.id,
                                 "price",
-                                parseFloat(e.target.value) || 0,
+                                e.target.value === ""
+                                  ? 0
+                                  : parseFloat(e.target.value),
                               )
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
@@ -1233,12 +1239,21 @@ function NewStockContent() {
                                           <input
                                             type="number"
                                             min="0"
-                                            value={sizeQty.quantity}
+                                            value={
+                                              sizeQty.quantity === 0
+                                                ? ""
+                                                : sizeQty.quantity
+                                            }
                                             onChange={(e) =>
                                               updateSizeQuantity(
                                                 variant.id,
                                                 sizeQty.size,
-                                                parseInt(e.target.value) || 0,
+                                                e.target.value === ""
+                                                  ? 0
+                                                  : parseInt(
+                                                      e.target.value,
+                                                      10,
+                                                    ),
                                               )
                                             }
                                             className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
@@ -1397,7 +1412,9 @@ function NewStockContent() {
                         setNewCategoryName("");
                       } catch (error) {
                         console.error("Error adding category:", error);
-                        toast.error("Failed to add category. Please try again.");
+                        toast.error(
+                          "Failed to add category. Please try again.",
+                        );
                       }
                     }
                   }

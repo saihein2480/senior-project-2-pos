@@ -124,8 +124,7 @@ function PrintSettingsContent() {
           registeredBy: existingSettings.registeredBy,
           registeredAt: existingSettings.registeredAt,
           businessLogo: existingSettings.businessLogo,
-          showBusinessLogoOnInvoice:
-            existingSettings.showBusinessLogoOnInvoice,
+          showBusinessLogoOnInvoice: existingSettings.showBusinessLogoOnInvoice,
           autoPrintReceiptAfterCheckout:
             existingSettings.autoPrintReceiptAfterCheckout,
           invoiceFooterMessage: existingSettings.invoiceFooterMessage,
@@ -269,11 +268,18 @@ function PrintSettingsContent() {
                   <input
                     title="number"
                     type="number"
-                    value={barcodeLabelSettings.labelWidth}
+                    value={
+                      barcodeLabelSettings.labelWidth === 0
+                        ? ""
+                        : barcodeLabelSettings.labelWidth
+                    }
                     onChange={(e) =>
                       setBarcodeLabelSettings((prev) => ({
                         ...prev,
-                        labelWidth: parseInt(e.target.value) || 50,
+                        labelWidth:
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value, 10),
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
@@ -288,11 +294,18 @@ function PrintSettingsContent() {
                   <input
                     title="number"
                     type="number"
-                    value={barcodeLabelSettings.labelHeight}
+                    value={
+                      barcodeLabelSettings.labelHeight === 0
+                        ? ""
+                        : barcodeLabelSettings.labelHeight
+                    }
                     onChange={(e) =>
                       setBarcodeLabelSettings((prev) => ({
                         ...prev,
-                        labelHeight: parseInt(e.target.value) || 30,
+                        labelHeight:
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value, 10),
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
@@ -307,11 +320,18 @@ function PrintSettingsContent() {
                   <input
                     title="number"
                     type="number"
-                    value={barcodeLabelSettings.labelGap}
+                    value={
+                      barcodeLabelSettings.labelGap === 0
+                        ? ""
+                        : barcodeLabelSettings.labelGap
+                    }
                     onChange={(e) =>
                       setBarcodeLabelSettings((prev) => ({
                         ...prev,
-                        labelGap: parseInt(e.target.value) || 3,
+                        labelGap:
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value, 10),
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
@@ -382,11 +402,18 @@ function PrintSettingsContent() {
                   <input
                     title="number"
                     type="number"
-                    value={barcodeLabelSettings.autoSequence}
+                    value={
+                      barcodeLabelSettings.autoSequence === 0
+                        ? ""
+                        : barcodeLabelSettings.autoSequence
+                    }
                     onChange={(e) =>
                       setBarcodeLabelSettings((prev) => ({
                         ...prev,
-                        autoSequence: parseInt(e.target.value) || 1,
+                        autoSequence:
+                          e.target.value === ""
+                            ? 0
+                            : parseInt(e.target.value, 10),
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"

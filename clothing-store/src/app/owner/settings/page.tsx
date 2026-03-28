@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
@@ -566,11 +566,13 @@ function OwnerSettingsContent() {
                         <Input
                           label="Tax Rate (%) (e.g., 5 for 5%)"
                           type="number"
-                          value={settings.taxRate}
+                          value={settings.taxRate === 0 ? "" : settings.taxRate}
                           onChange={(e) =>
                             handleInputChange(
                               "taxRate",
-                              parseFloat(e.target.value) || 0,
+                              e.target.value === ""
+                                ? 0
+                                : parseFloat(e.target.value),
                             )
                           }
                           placeholder="0"
@@ -845,11 +847,17 @@ function OwnerSettingsContent() {
                             type="number"
                             step="0.01"
                             min="0"
-                            value={settings.currencyRate}
+                            value={
+                              settings.currencyRate === 0
+                                ? ""
+                                : settings.currencyRate
+                            }
                             onChange={(e) =>
                               handleInputChange(
                                 "currencyRate",
-                                parseFloat(e.target.value) || 0,
+                                e.target.value === ""
+                                  ? 0
+                                  : parseFloat(e.target.value),
                               )
                             }
                             className="text-right"
@@ -945,4 +953,3 @@ export default function OwnerSettingsPage() {
     </ProtectedRoute>
   );
 }
-
