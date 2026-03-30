@@ -831,10 +831,9 @@ function OwnerHomeContent() {
   // Filter items based on search term and shop (memoized for performance)
   const filteredInventory = useMemo(() => {
     const filtered = displayInventory.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = item.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
       // Get current branch from settings and filter by it
       const currentBranch = businessSettings?.currentBranch || "Main Branch";
@@ -1008,7 +1007,7 @@ function OwnerHomeContent() {
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="Search items, groups, IDs..."
+                        placeholder="Search by group name..."
                         value={searchTerm}
                         onChange={handleSearchChange}
                         className="pl-10 pr-4 py-2 w-60 xl:w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
