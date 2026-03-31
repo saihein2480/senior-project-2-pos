@@ -193,16 +193,11 @@ function InventoryStocksContent() {
   // Filter groups based on search term and filters
   const filteredGroups = stockGroups.filter((group) => {
     // Search filter
+    const normalizedSearch = searchTerm.toLowerCase();
     const matchesSearch =
-      group.groupName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      group.groupId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      group.groupName.toLowerCase().includes(normalizedSearch) ||
       group.variants.some(
-        (variant) =>
-          variant.color.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          variant.sizes.some((size) =>
-            size.size.toLowerCase().includes(searchTerm.toLowerCase()),
-          ) ||
-          variant.barcode?.toLowerCase().includes(searchTerm.toLowerCase()),
+        (variant) => variant.barcode?.toLowerCase().includes(normalizedSearch),
       );
 
     // Shop filter
@@ -541,7 +536,7 @@ function InventoryStocksContent() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search by Group, Item ID, Barcode, Color..."
+                    placeholder="Search by Group Name or Barcode..."
                     value={searchTerm}
                     onChange={handleSearchChange}
                     className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-80 text-gray-900"
