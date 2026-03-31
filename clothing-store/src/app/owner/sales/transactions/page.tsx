@@ -56,6 +56,9 @@ export default function TransactionsPage() {
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<
     "all" | "cash" | "scan" | "wallet" | "cod"
   >("all");
+  const [filterWholesale, setFilterWholesale] = useState<
+    "all" | "with_wholesale" | "without_wholesale"
+  >("all");
   const [dateRange, setDateRange] = useState<
     "today" | "7d" | "30d" | "90d" | "all" | "custom"
   >("30d");
@@ -195,6 +198,67 @@ export default function TransactionsPage() {
     }
   };
 
+  const getTransactionWholesaleAmount = (transaction: Transaction) => {
+    const wholesaleSavingsTHB =
+      transaction.discountBreakdown?.wholesaleSavings || 0;
+    const refundedAmount =
+      transaction.refunds?.reduce(
+        (sum, refund) => sum + refund.totalAmount,
+        0,
+      ) || 0;
+    const netRatio =
+      transaction.total > 0
+        ? Math.max(0, 1 - Math.min(1, refundedAmount / transaction.total))
+        : 1;
+    const netWholesaleTHB = wholesaleSavingsTHB * netRatio;
+
+    const sellingCurrency =
+      transaction.sellingCurrency === "MMK" ? "MMK" : "THB";
+
+    if (netWholesaleTHB <= 0) {
+      return {
+        amount: 0,
+        currency: sellingCurrency as "THB" | "MMK",
+        hasWholesale: false,
+      };
+    }
+
+    if (sellingCurrency === "MMK") {
+      const effectiveExchangeRate =
+        transaction.exchangeRate ||
+        (transaction.sellingTotal && transaction.total
+          ? transaction.sellingTotal / transaction.total
+          : 1);
+      return {
+        amount: netWholesaleTHB * effectiveExchangeRate,
+        currency: "MMK" as const,
+        hasWholesale: true,
+      };
+    }
+
+    return {
+      amount: netWholesaleTHB,
+      currency: "THB" as const,
+      hasWholesale: true,
+    };
+  };
+
+  const getTransactionOriginalTotalPrice = (transaction: Transaction) => {
+    const refundedQuantities: { [itemIndex: number]: number } = {};
+    transaction.refunds?.forEach((refund) => {
+      refund.items.forEach((ri) => {
+        refundedQuantities[ri.itemIndex] =
+          (refundedQuantities[ri.itemIndex] || 0) + ri.quantity;
+      });
+    });
+
+    return transaction.items.reduce((sum, item, index) => {
+      const refundedQty = refundedQuantities[index] || 0;
+      const netQty = Math.max(0, item.quantity - refundedQty);
+      return sum + item.originalPrice * netQty;
+    }, 0);
+  };
+
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
       transaction.transactionId
@@ -209,6 +273,12 @@ export default function TransactionsPage() {
     const matchesPaymentMethod =
       filterPaymentMethod === "all" ||
       transaction.paymentMethod === filterPaymentMethod;
+    const hasWholesale =
+      (transaction.discountBreakdown?.wholesaleSavings || 0) > 0;
+    const matchesWholesale =
+      filterWholesale === "all" ||
+      (filterWholesale === "with_wholesale" && hasWholesale) ||
+      (filterWholesale === "without_wholesale" && !hasWholesale);
 
     // Branch filter - show all if "all" selected, otherwise filter by branch name
     const matchesBranch =
@@ -260,6 +330,7 @@ export default function TransactionsPage() {
       matchesSearch &&
       matchesStatus &&
       matchesPaymentMethod &&
+      matchesWholesale &&
       matchesDateRange &&
       matchesBranch
     );
@@ -839,6 +910,7 @@ export default function TransactionsPage() {
       "Customer Name",
       "Items",
       "Total",
+      "Wholesale Amount",
       "Profit",
       "Tax",
       "Branch",
@@ -879,6 +951,7 @@ export default function TransactionsPage() {
         }, 0) || 0;
 
       const netProfit = Math.max(0, transactionProfit - refundedProfit);
+      const wholesale = getTransactionWholesaleAmount(transaction);
 
       return [
         transaction.transactionId || "",
@@ -886,6 +959,9 @@ export default function TransactionsPage() {
         transaction.customer?.displayName || "Walk-in Customer",
         transaction.items.length.toString(),
         formatPrice(netTotal),
+        wholesale.hasWholesale
+          ? SettingsService.formatPrice(wholesale.amount, wholesale.currency)
+          : "-",
         formatPrice(netProfit),
         formatPrice(transaction.tax || 0),
         transaction.branchName || "N/A",
@@ -1088,6 +1164,27 @@ export default function TransactionsPage() {
                   <option value="cod">{t.cod}</option>
                 </select>
 
+                <select
+                  aria-label="Filter by wholesale amount"
+                  value={filterWholesale}
+                  onChange={(e) => {
+                    setFilterWholesale(
+                      e.target.value as
+                        | "all"
+                        | "with_wholesale"
+                        | "without_wholesale",
+                    );
+                    setCurrentPage(1);
+                  }}
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                >
+                  <option value="all">All Wholesale</option>
+                  <option value="with_wholesale">With Wholesale Amount</option>
+                  <option value="without_wholesale">
+                    Without Wholesale Amount
+                  </option>
+                </select>
+
                 {/* Branch Filter */}
                 <select
                   aria-label="Filter by branch"
@@ -1156,7 +1253,7 @@ export default function TransactionsPage() {
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
-                <div className="flex items-center gap-2 lg:col-span-2">
+                <div className="flex items-center gap-2 lg:col-span-2 flex-wrap">
                   <input
                     type="date"
                     value={startDate}
@@ -1183,16 +1280,14 @@ export default function TransactionsPage() {
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"
                   />
+                  <button
+                    onClick={exportToCSV}
+                    className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </button>
                 </div>
-
-                {/* Export Button */}
-                <button
-                  onClick={exportToCSV}
-                  className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm flex items-center"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </button>
               </div>
             </div>
 
@@ -1294,6 +1389,15 @@ export default function TransactionsPage() {
                             </th>
                             <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               {t.total}
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Original Total Price
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Discount Price
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Wholesale Amount
                             </th>
                             <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               {t.profit}
@@ -1444,6 +1548,39 @@ export default function TransactionsPage() {
                                           </div>
                                         </div>
                                       </div>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {formatPrice(
+                                    getTransactionOriginalTotalPrice(
+                                      transaction,
+                                    ),
+                                  )}
+                                </td>
+                                <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-sm">
+                                  {(transaction.discount || 0) > 0 ? (
+                                    <span className="text-red-600 font-medium">
+                                      -{formatPrice(transaction.discount || 0)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {(() => {
+                                    const wholesale =
+                                      getTransactionWholesaleAmount(
+                                        transaction,
+                                      );
+                                    if (!wholesale.hasWholesale) {
+                                      return (
+                                        <span className="text-gray-400">-</span>
+                                      );
+                                    }
+                                    return SettingsService.formatPrice(
+                                      wholesale.amount,
+                                      wholesale.currency,
                                     );
                                   })()}
                                 </td>

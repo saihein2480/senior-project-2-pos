@@ -66,6 +66,8 @@ interface ReportData {
     date: string;
     profitTHB: number;
     profitMMK: number;
+    wholesaleSalesTHB?: number;
+    wholesaleSalesMMK?: number;
     // Inventory totals
     totalStockSellValueTHB?: number;
     totalStockSellValueMMK?: number;
@@ -129,6 +131,9 @@ function ReportsPageContent() {
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<
     "all" | "cash" | "scan" | "wallet" | "cod"
   >("all");
+  const [filterWholesale, setFilterWholesale] = useState<
+    "all" | "with_wholesale" | "without_wholesale"
+  >("all");
   const [refreshing, setRefreshing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -162,6 +167,7 @@ function ReportsPageContent() {
     filterBranch,
     filterStatus,
     filterPaymentMethod,
+    filterWholesale,
     searchTerm,
     startDate,
     endDate,
@@ -274,6 +280,16 @@ function ReportsPageContent() {
         filteredTransactions = filteredTransactions.filter(
           (t) => t.paymentMethod === filterPaymentMethod,
         );
+      }
+
+      // Filter by wholesale transaction amount
+      if (filterWholesale !== "all") {
+        filteredTransactions = filteredTransactions.filter((t) => {
+          const hasWholesale = (t.discountBreakdown?.wholesaleSavings || 0) > 0;
+          return filterWholesale === "with_wholesale"
+            ? hasWholesale
+            : !hasWholesale;
+        });
       }
 
       // Filter by search term
@@ -645,6 +661,8 @@ function ReportsPageContent() {
       [key: string]: {
         profitTHB: number;
         profitMMK: number;
+        wholesaleSalesTHB: number;
+        wholesaleSalesMMK: number;
         expenseTHB: number;
         expenseMMK: number;
         totalSalesTHB: number;
@@ -658,6 +676,8 @@ function ReportsPageContent() {
       dailyStatusMap[d] = {
         profitTHB: 0,
         profitMMK: 0,
+        wholesaleSalesTHB: 0,
+        wholesaleSalesMMK: 0,
         expenseTHB: 0,
         expenseMMK: 0,
         totalSalesTHB: 0,
@@ -680,6 +700,8 @@ function ReportsPageContent() {
 
       const sellingCurrency = normalizeCurrency(transaction.sellingCurrency);
       const exchangeRate = transaction.exchangeRate || 1;
+      const isWholesaleTransaction =
+        (transaction.discountBreakdown?.wholesaleSavings || 0) > 0;
 
       // Compute refunded quantities map for this transaction
       const refundedQuantities: { [itemIndex: number]: number } = {};
@@ -706,6 +728,9 @@ function ReportsPageContent() {
           dailyStatusMap[dateKey].profitTHB += profitTHB;
           dailyStatusMap[dateKey].totalSalesTHB += salesAmountTHB;
           dailyStatusMap[dateKey].originalPriceTHB += originalAmountTHB;
+          if (isWholesaleTransaction) {
+            dailyStatusMap[dateKey].wholesaleSalesTHB += salesAmountTHB;
+          }
         } else {
           // Convert THB amounts to MMK using the transaction's exchange rate
           dailyStatusMap[dateKey].profitMMK += profitTHB * exchangeRate;
@@ -713,6 +738,10 @@ function ReportsPageContent() {
             salesAmountTHB * exchangeRate;
           dailyStatusMap[dateKey].originalPriceMMK +=
             originalAmountTHB * exchangeRate;
+          if (isWholesaleTransaction) {
+            dailyStatusMap[dateKey].wholesaleSalesMMK +=
+              salesAmountTHB * exchangeRate;
+          }
         }
       });
     });
@@ -731,6 +760,8 @@ function ReportsPageContent() {
       date,
       profitTHB: v.profitTHB,
       profitMMK: v.profitMMK,
+      wholesaleSalesTHB: v.wholesaleSalesTHB,
+      wholesaleSalesMMK: v.wholesaleSalesMMK,
       expenseTHB: v.expenseTHB,
       expenseMMK: v.expenseMMK,
       totalSalesTHB: v.totalSalesTHB,
@@ -830,11 +861,18 @@ function ReportsPageContent() {
       "Customer Name",
       "Items",
       "Total",
+      "Original Total Price",
+      "Discount Price",
+      "Refund Amount",
+      "Wholesale Amount",
       "Profit",
+      "Profit Margin %",
+      "Discount %",
       "Tax",
       "Branch",
       "Selling Currency",
       "Payment Method",
+      "Sold By",
       "Status",
     ];
 
@@ -870,6 +908,14 @@ function ReportsPageContent() {
         }, 0) || 0;
 
       const netProfit = Math.max(0, transactionProfit - refundedProfit);
+      const wholesale = getTransactionWholesaleAmount(transaction);
+      const originalTotal = getTransactionOriginalTotalPrice(transaction);
+      const profitMarginPct = netTotal > 0 ? (netProfit / netTotal) * 100 : 0;
+      const discountPct =
+        originalTotal > 0
+          ? ((transaction.discount || 0) / originalTotal) * 100
+          : 0;
+      const soldBy = user?.email?.split("@")[0] || "System";
       const statusMap: { [key: string]: string } = {
         completed: "Completed",
         pending: "Pending",
@@ -884,11 +930,22 @@ function ReportsPageContent() {
         transaction.customer?.displayName || "Walk-in Customer",
         transaction.items.length.toString(),
         formatPrice(netTotal),
+        formatPrice(originalTotal),
+        transaction.discount > 0
+          ? `-${formatPrice(transaction.discount)}`
+          : "-",
+        refundedAmount > 0 ? `-${formatPrice(refundedAmount)}` : "-",
+        wholesale.hasWholesale
+          ? SettingsService.formatPrice(wholesale.amount, wholesale.currency)
+          : "-",
         formatPrice(netProfit),
+        `${profitMarginPct.toFixed(1)}%`,
+        `${discountPct.toFixed(1)}%`,
         formatPrice(transaction.tax || 0),
         transaction.branchName || "N/A",
         transaction.sellingCurrency || "THB",
         transaction.paymentMethod?.toUpperCase() || "N/A",
+        soldBy,
         statusMap[transaction.status] || transaction.status,
       ];
     });
@@ -970,6 +1027,103 @@ function ReportsPageContent() {
       (businessSettings?.defaultCurrency as "THB" | "MMK" | undefined) || "THB",
     );
     return SettingsService.formatPrice(converted, "MMK");
+  };
+
+  const getTransactionWholesaleAmount = (transaction: Transaction) => {
+    const wholesaleSavingsTHB =
+      transaction.discountBreakdown?.wholesaleSavings || 0;
+    const refundedAmount =
+      transaction.refunds?.reduce(
+        (sum, refund) => sum + refund.totalAmount,
+        0,
+      ) || 0;
+    const netRatio =
+      transaction.total > 0
+        ? Math.max(0, 1 - Math.min(1, refundedAmount / transaction.total))
+        : 1;
+    const netWholesaleTHB = wholesaleSavingsTHB * netRatio;
+
+    const sellingCurrency =
+      transaction.sellingCurrency === "MMK" ? "MMK" : "THB";
+
+    if (netWholesaleTHB <= 0) {
+      return {
+        amount: 0,
+        currency: sellingCurrency as "THB" | "MMK",
+        hasWholesale: false,
+      };
+    }
+
+    if (sellingCurrency === "MMK") {
+      const effectiveExchangeRate =
+        transaction.exchangeRate ||
+        (transaction.sellingTotal && transaction.total
+          ? transaction.sellingTotal / transaction.total
+          : 1);
+      return {
+        amount: netWholesaleTHB * effectiveExchangeRate,
+        currency: "MMK" as const,
+        hasWholesale: true,
+      };
+    }
+
+    return {
+      amount: netWholesaleTHB,
+      currency: "THB" as const,
+      hasWholesale: true,
+    };
+  };
+
+  const getTransactionOriginalTotalPrice = (transaction: Transaction) => {
+    const refundedQuantities: { [itemIndex: number]: number } = {};
+    transaction.refunds?.forEach((refund) => {
+      refund.items.forEach((ri) => {
+        refundedQuantities[ri.itemIndex] =
+          (refundedQuantities[ri.itemIndex] || 0) + ri.quantity;
+      });
+    });
+
+    return transaction.items.reduce((sum, item, index) => {
+      const refundedQty = refundedQuantities[index] || 0;
+      const netQty = Math.max(0, item.quantity - refundedQty);
+      return sum + item.originalPrice * netQty;
+    }, 0);
+  };
+
+  const getTransactionRefundAmount = (transaction: Transaction) => {
+    return (
+      transaction.refunds?.reduce(
+        (sum, refund) => sum + refund.totalAmount,
+        0,
+      ) || 0
+    );
+  };
+
+  const getTransactionNetProfit = (transaction: Transaction) => {
+    const totalProfit = transaction.items.reduce((sum, item) => {
+      const sellingPrice = item.discountedPrice || item.unitPrice;
+      return sum + (sellingPrice - item.originalPrice) * item.quantity;
+    }, 0);
+
+    const refundedProfit =
+      transaction.refunds?.reduce((refundTotal, refund) => {
+        return (
+          refundTotal +
+          refund.items.reduce((refundItemTotal, refundItem) => {
+            const originalItem = transaction.items[refundItem.itemIndex];
+            if (!originalItem) return refundItemTotal;
+            const itemSellingPrice =
+              originalItem.discountedPrice || originalItem.unitPrice;
+            return (
+              refundItemTotal +
+              (itemSellingPrice - originalItem.originalPrice) *
+                refundItem.quantity
+            );
+          }, 0)
+        );
+      }, 0) || 0;
+
+    return totalProfit - refundedProfit;
   };
 
   // Compute displayed daily status based on `dailyRange` and custom dates
@@ -1520,6 +1674,9 @@ function ReportsPageContent() {
                         {t.totalSale}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Wholesale Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t.originalPrice}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1563,6 +1720,15 @@ function ReportsPageContent() {
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
                                 row.totalSalesMMK || 0,
+                                "MMK",
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div>{formatPrice(row.wholesaleSalesTHB || 0)}</div>
+                            <div className="text-xs text-gray-500">
+                              {SettingsService.formatPrice(
+                                row.wholesaleSalesMMK || 0,
                                 "MMK",
                               )}
                             </div>
@@ -1965,6 +2131,28 @@ function ReportsPageContent() {
                   <option value="cod">COD</option>
                 </select>
 
+                {/* Wholesale Filter */}
+                <select
+                  aria-label="Filter by wholesale amount"
+                  value={filterWholesale}
+                  onChange={(e) => {
+                    setFilterWholesale(
+                      e.target.value as
+                        | "all"
+                        | "with_wholesale"
+                        | "without_wholesale",
+                    );
+                    setCurrentPage(1);
+                  }}
+                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                >
+                  <option value="all">All</option>
+                  <option value="with_wholesale">With Wholesale Amount</option>
+                  <option value="without_wholesale">
+                    Without Wholesale Amount
+                  </option>
+                </select>
+
                 {/* Branch Filter */}
                 <select
                   aria-label="Filter by branch"
@@ -2033,7 +2221,7 @@ function ReportsPageContent() {
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
-                <div className="flex items-center gap-2 lg:col-span-2">
+                <div className="flex items-center gap-2 lg:col-span-2 flex-wrap">
                   <input
                     type="date"
                     value={startDate}
@@ -2060,16 +2248,14 @@ function ReportsPageContent() {
                     max={new Date().toISOString().split("T")[0]}
                     aria-label="End Date"
                   />
+                  <button
+                    onClick={exportToCSV}
+                    className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </button>
                 </div>
-
-                {/*Export Buttons */}
-                <button
-                  onClick={exportToCSV}
-                  className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm flex items-center"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </button>
               </div>
             </div>
 
@@ -2094,25 +2280,40 @@ function ReportsPageContent() {
                         {t.items}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {t.subtotal}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {t.discount}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {t.tax}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t.total}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Original Total Price
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Discount Price
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Refund Amount
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Wholesale Amount
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t.profit}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {t.paymentMethod}
+                        Profit Margin %
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Discount %
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t.tax}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t.branch}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t.sellingCurrency}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t.paymentMethod}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t.soldBy}
@@ -2149,21 +2350,6 @@ function ReportsPageContent() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {formatPrice(transaction.subtotal)}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          {transaction.discount > 0 ? (
-                            <span className="text-red-600 font-medium">
-                              -{formatPrice(transaction.discount)}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {formatPrice(transaction.tax)}
-                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
                           {(() => {
                             const refundedAmount =
@@ -2187,6 +2373,46 @@ function ReportsPageContent() {
                             }
 
                             return formatPrice(transaction.total);
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {formatPrice(
+                            getTransactionOriginalTotalPrice(transaction),
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          {(transaction.discount || 0) > 0 ? (
+                            <span className="text-red-600 font-medium">
+                              -{formatPrice(transaction.discount || 0)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          {(() => {
+                            const refundedAmount =
+                              getTransactionRefundAmount(transaction);
+                            return refundedAmount > 0 ? (
+                              <span className="text-red-600 font-medium">
+                                -{formatPrice(refundedAmount)}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {(() => {
+                            const wholesale =
+                              getTransactionWholesaleAmount(transaction);
+                            if (!wholesale.hasWholesale) {
+                              return <span className="text-gray-400">-</span>;
+                            }
+                            return SettingsService.formatPrice(
+                              wholesale.amount,
+                              wholesale.currency,
+                            );
                           })()}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
@@ -2253,6 +2479,62 @@ function ReportsPageContent() {
                             );
                           })()}
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {(() => {
+                            const refundedAmount =
+                              getTransactionRefundAmount(transaction);
+                            const netTotal = Math.max(
+                              0,
+                              transaction.total - refundedAmount,
+                            );
+                            const netProfit =
+                              getTransactionNetProfit(transaction);
+                            const margin =
+                              netTotal > 0 ? (netProfit / netTotal) * 100 : 0;
+                            return `${margin.toFixed(1)}%`;
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {(() => {
+                            const originalTotal =
+                              getTransactionOriginalTotalPrice(transaction);
+                            const discountPct =
+                              originalTotal > 0
+                                ? ((transaction.discount || 0) /
+                                    originalTotal) *
+                                  100
+                                : 0;
+                            return `${discountPct.toFixed(1)}%`;
+                          })()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {formatPrice(transaction.tax || 0)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {transaction.branchName || "Main Branch"}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {transaction.sellingCurrency &&
+                          transaction.exchangeRate &&
+                          transaction.sellingTotal ? (
+                            <div className="space-y-1">
+                              <div className="font-medium">
+                                {transaction.sellingCurrency === "MMK"
+                                  ? "Ks"
+                                  : transaction.sellingCurrency}{" "}
+                                {transaction.sellingTotal.toLocaleString()}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {t.rate}: 1 THB = {transaction.exchangeRate}{" "}
+                                {transaction.sellingCurrency === "MMK"
+                                  ? "Ks"
+                                  : transaction.sellingCurrency}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <div className="flex items-center">
                             {getPaymentMethodIcon(transaction.paymentMethod)}
@@ -2260,9 +2542,6 @@ function ReportsPageContent() {
                               {transaction.paymentMethod}
                             </span>
                           </div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {transaction.branchName || "Main Branch"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex items-center">
