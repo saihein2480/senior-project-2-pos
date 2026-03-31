@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -37,6 +37,8 @@ interface ReportData {
   totalRevenue: number;
   totalRevenueMMK: number;
   totalRevenueTHB: number;
+  totalWholesaleRevenueTHB: number;
+  totalWholesaleRevenueMMK: number;
   totalProfit: number;
   totalNetTHB?: number;
   totalNetMMK?: number;
@@ -363,6 +365,52 @@ function ReportsPageContent() {
             0,
           ) || 0;
         return sum + Math.max(0, t.total - refundedAmount);
+      }, 0);
+
+    // Wholesale-order sales totals (orders where wholesale pricing was applied)
+    const wholesaleRevenueTransactions = revenueTransactions.filter(
+      (t) => (t.discountBreakdown?.wholesaleSavings || 0) > 0,
+    );
+
+    const totalWholesaleRevenueTHB = wholesaleRevenueTransactions
+      .filter(
+        (t) =>
+          !!t.sellingCurrency && normalizeCurrency(t.sellingCurrency) === "THB",
+      )
+      .reduce((sum, t) => {
+        const refundedAmount =
+          t.refunds?.reduce(
+            (refundSum, refund) => refundSum + refund.totalAmount,
+            0,
+          ) || 0;
+        return sum + Math.max(0, t.total - refundedAmount);
+      }, 0);
+
+    const totalWholesaleRevenueMMK = wholesaleRevenueTransactions
+      .filter(
+        (t) =>
+          !!t.sellingCurrency && normalizeCurrency(t.sellingCurrency) === "MMK",
+      )
+      .reduce((sum, t) => {
+        const refundedAmount =
+          t.refunds?.reduce(
+            (refundSum, refund) => refundSum + refund.totalAmount,
+            0,
+          ) || 0;
+
+        // MMK totals should be computed in MMK selling currency, not base total currency.
+        const effectiveExchangeRate =
+          t.exchangeRate ||
+          (t.sellingTotal && t.total ? t.sellingTotal / t.total : 1);
+
+        const grossMMK =
+          typeof t.sellingTotal === "number"
+            ? t.sellingTotal
+            : t.total * effectiveExchangeRate;
+
+        const refundedMMK = refundedAmount * effectiveExchangeRate;
+
+        return sum + Math.max(0, grossMMK - refundedMMK);
       }, 0);
 
     // Calculate total profit (Original Price - Unit Price for each item)
@@ -740,6 +788,8 @@ function ReportsPageContent() {
       totalRevenue,
       totalRevenueMMK,
       totalRevenueTHB,
+      totalWholesaleRevenueTHB,
+      totalWholesaleRevenueMMK,
       totalProfit,
       totalNetTHB,
       totalNetMMK,
@@ -1149,6 +1199,45 @@ function ReportsPageContent() {
                     <p className="text-2xl font-bold text-red-600">
                       {SettingsService.formatPrice(
                         reportData?.totalExpenseMMK || 0,
+                        "MMK",
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <hr className="text-gray-300 p-3"></hr>
+            </div>
+
+            {/* Wholesale Sales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Wholesale Sales (THB)
+                    </p>
+                    <p className="text-2xl font-bold text-indigo-600">
+                      {SettingsService.formatPrice(
+                        reportData?.totalWholesaleRevenueTHB || 0,
+                        "THB",
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Wholesale Sales (MMK)
+                    </p>
+                    <p className="text-2xl font-bold text-indigo-600">
+                      {SettingsService.formatPrice(
+                        reportData?.totalWholesaleRevenueMMK || 0,
                         "MMK",
                       )}
                     </p>
@@ -2315,4 +2404,3 @@ export default function ReportsPage() {
     </ProtectedRoute>
   );
 }
-

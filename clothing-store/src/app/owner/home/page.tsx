@@ -8,7 +8,15 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
-import { Store, User, Package, BarChart3, ShoppingCart, Filter, X } from "lucide-react";
+import {
+  Store,
+  User,
+  Package,
+  BarChart3,
+  ShoppingCart,
+  Filter,
+  X,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
