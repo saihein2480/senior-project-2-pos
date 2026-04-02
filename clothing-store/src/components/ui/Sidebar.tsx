@@ -26,12 +26,14 @@ import {
   ChevronLeft,
   Store,
   Building2,
+  Wallet,
 } from "lucide-react";
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { UserRole } from "@/types/auth";
+import { useOnlineOrdersNotification } from "@/hooks/useOnlineOrdersNotification";
 
 const iconMap = {
   Home,
@@ -53,6 +55,7 @@ const iconMap = {
   UserCheck,
   Building2,
   Store,
+  Wallet,
 };
 
 interface SidebarProps extends NavigationProps {
@@ -85,6 +88,8 @@ export function Sidebar({
   const { businessSettings, isLoading } = useSettings();
   const businessName = businessSettings?.businessName;
   const businessLogo = businessSettings?.businessLogo;
+
+  const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
 
   // Get user role from auth context
   const { user } = useAuth();
@@ -136,6 +141,20 @@ export function Sidebar({
           href: "/owner/sales/payments",
           roles: ["owner", "manager", "staff"],
         },
+        {
+          id: "online-orders",
+          label: "Online Orders",
+          icon: "ShoppingCart",
+          href: "/owner/sales/online-orders",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "online-transactions",
+          label: "Online Transactions",
+          icon: "Wallet",
+          href: "/owner/sales/online-transactions",
+          roles: ["owner", "manager"],
+        },
       ],
     },
     {
@@ -166,6 +185,13 @@ export function Sidebar({
       icon: "Receipt",
       href: "/owner/expenses",
       roles: ["owner", "manager"], // Only owner and manager
+    },
+    {
+      id: "online-promotions",
+      label: "Online Promotions",
+      icon: "Tag",
+      href: "/owner/online-promotions",
+      roles: ["owner", "manager"],
     },
     {
       id: "barcode",
@@ -376,11 +402,21 @@ export function Sidebar({
           <div className="relative">
             <Link
               href={item.href}
-              onClick={() => onItemClick?.(item)}
+              onClick={() => {
+                onItemClick?.(item);
+                if (item.id === "online-orders") markAsSeen();
+              }}
               className={itemClasses}
             >
               {renderIcon(item.icon, iconClasses)}
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="flex-1 text-left flex items-center justify-between">
+                <span>{item.label}</span>
+                {item.id === "online-orders" && unseenOrdersCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-2">
+                    {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
+                  </span>
+                )}
+              </span>
             </Link>
             {hasChildren && (
               <button
@@ -402,13 +438,21 @@ export function Sidebar({
         ) : (
           <button onClick={handleMainClick} className={itemClasses}>
             {renderIcon(item.icon, iconClasses)}
-            <span className="flex-1 text-left">{item.label}</span>
+            <span className="flex-1 text-left flex items-center justify-between">
+              <span>{item.label}</span>
+              {item.id === "sales" && unseenOrdersCount > 0 && !isExpanded && (
+                <span
+                  className="w-2 h-2 bg-red-500 rounded-full mr-2"
+                  title="New online order"
+                ></span>
+              )}
+            </span>
             {hasChildren && (
               <div className="ml-2">
                 {isExpanded ? (
-                  <ChevronDown className="w-3 h-3" />
+                  <ChevronDown className="w-4 h-4" />
                 ) : (
-                  <ChevronRight className="w-3 h-3" />
+                  <ChevronRight className="w-4 h-4" />
                 )}
               </div>
             )}

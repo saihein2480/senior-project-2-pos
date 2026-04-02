@@ -13,8 +13,11 @@ import {
   Store,
   User,
   Menu,
+  Bell,
 } from "lucide-react";
 import { ShoppingCartModal } from "./ShoppingCartModal";
+import { useOnlineOrdersNotification } from "@/hooks/useOnlineOrdersNotification";
+import Link from "next/link";
 
 interface TopNavBarProps {
   onCartModalStateChange?: (isOpen: boolean) => void;
@@ -42,6 +45,8 @@ export function TopNavBar({
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
 
   const languages = [
     { name: "English", flag: "🇺🇸", code: "EN", value: "en" as const },
@@ -279,6 +284,20 @@ export function TopNavBar({
                 {getCartItemCount()}
               </span>
             </div>
+
+            {/* Notifications */}
+            <Link
+              href="/owner/sales/online-orders"
+              className="relative cursor-pointer"
+              onClick={() => markAsSeen()}
+            >
+              <Bell className="h-6 w-6 text-gray-700 hover:text-gray-900" />
+              {unseenOrdersCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
+                </span>
+              )}
+            </Link>
 
             {/* User Profile Dropdown */}
             <div className="relative" ref={profileDropdownRef}>

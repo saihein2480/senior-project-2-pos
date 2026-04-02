@@ -1,6 +1,6 @@
 "use client";
 
-import { toast } from 'react-hot-toast';
+import { toast } from "react-hot-toast";
 import { useState, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -196,8 +196,8 @@ function InventoryStocksContent() {
     const normalizedSearch = searchTerm.toLowerCase();
     const matchesSearch =
       group.groupName.toLowerCase().includes(normalizedSearch) ||
-      group.variants.some(
-        (variant) => variant.barcode?.toLowerCase().includes(normalizedSearch),
+      group.variants.some((variant) =>
+        variant.barcode?.toLowerCase().includes(normalizedSearch),
       );
 
     // Shop filter
@@ -329,7 +329,9 @@ function InventoryStocksContent() {
     const csvContent = [
       headers.join(","),
       ...rows.map((row) =>
-        row.map((cell, columnIndex) => formatCsvCell(cell, columnIndex)).join(","),
+        row
+          .map((cell, columnIndex) => formatCsvCell(cell, columnIndex))
+          .join(","),
       ),
     ].join("\n");
 
@@ -1269,4 +1271,3 @@ export default function InventoryStocksPage() {
     </ProtectedRoute>
   );
 }
-
