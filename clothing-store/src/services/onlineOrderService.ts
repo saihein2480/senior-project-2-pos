@@ -114,32 +114,30 @@ class OnlineOrderService {
     variantHint?: string;
   }> {
     if (order.cartItems && order.cartItems.length > 0) {
-      return order.cartItems
-        .map((item) => {
-          const stockId = String(item.productId || "").trim();
-          const quantity = Math.max(0, Number(item.quantity || 0));
+      const restorations: Array<{
+        stockId: string;
+        colorName: string;
+        size: string;
+        quantity: number;
+        variantHint?: string;
+      }> = [];
 
-          if (!stockId || quantity <= 0) return null;
+      order.cartItems.forEach((item) => {
+        const stockId = String(item.productId || "").trim();
+        const quantity = Math.max(0, Number(item.quantity || 0));
 
-          return {
-            stockId,
-            colorName: String(item.color || "").trim(),
-            size: String(item.size || "").trim(),
-            quantity,
-            variantHint: String(item.variantId || "").trim() || undefined,
-          };
-        })
-        .filter(
-          (
-            item,
-          ): item is {
-            stockId: string;
-            colorName: string;
-            size: string;
-            quantity: number;
-            variantHint?: string;
-          } => !!item,
-        );
+        if (!stockId || quantity <= 0) return;
+
+        restorations.push({
+          stockId,
+          colorName: String(item.color || "").trim(),
+          size: String(item.size || "").trim(),
+          quantity,
+          variantHint: String(item.variantId || "").trim() || undefined,
+        });
+      });
+
+      return restorations;
     }
 
     const stockId = String(order.product?.productId || "").trim();
@@ -244,6 +242,7 @@ class OnlineOrderService {
     status: string,
   ): Promise<void> {
     if (!db || !orderIds.length || !status) return;
+    const firestore = db;
 
     if (this.isCancelledStatus(status)) {
       for (const orderId of orderIds) {
@@ -252,11 +251,11 @@ class OnlineOrderService {
       return;
     }
 
-    const batch = writeBatch(db);
+    const batch = writeBatch(firestore);
     const updatedAt = new Date().toISOString();
 
     orderIds.forEach((orderId) => {
-      batch.update(doc(db, "onlineOrders", orderId), {
+      batch.update(doc(firestore, "onlineOrders", orderId), {
         status,
         updatedAt,
       });

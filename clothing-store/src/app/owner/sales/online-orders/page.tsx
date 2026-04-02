@@ -81,7 +81,7 @@ function getOrderStatusLabel(row: OnlineOrder): string {
   if (normalized === "delivered") return "Delivered";
   if (normalized === "cancelled") return "Cancelled";
 
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return "Unknown";
 }
 
 function getPaymentStatusLabel(row: OnlineOrder): string {
