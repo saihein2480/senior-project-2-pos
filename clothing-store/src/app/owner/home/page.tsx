@@ -1522,7 +1522,7 @@ function OwnerHomeContent() {
                                 !selectedColors[item.id] ||
                                 !selectedSizes[item.id]
                               }
-                              className={`w-full py-2 px-3 text-sm font-medium rounded transition-colors flex items-center justify-center space-x-2 ${
+                              className={`w-full py-2 px-2 text-sm font-medium rounded transition-colors flex items-center justify-center space-x-2 ${
                                 isOutOfStock
                                   ? "bg-red-100 text-red-400 cursor-not-allowed border border-red-200"
                                   : selectedColors[item.id] &&

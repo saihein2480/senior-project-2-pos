@@ -6,6 +6,8 @@ import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ShopService } from "@/services/shopService";
+import { toast } from "react-hot-toast";
 import {
   LogOut,
   ChevronDown,
@@ -36,14 +38,18 @@ export function TopNavBar({
     defaultCurrency,
     getCurrencySymbol,
   } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { businessSettings, refreshSettings } = useSettings();
   const { language, setLanguage, t } = useLanguage();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
+  const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
+  const [shops, setShops] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingShops, setIsLoadingShops] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
@@ -68,6 +74,72 @@ export function TopNavBar({
     setIsCurrencyDropdownOpen(false);
     console.log("Currency changed to:", currency);
   };
+
+  const handleBranchChange = async (branchName: string) => {
+    try {
+      console.log("User object:", user);
+      console.log("User UID:", user?.uid);
+      console.log("Attempting to change branch to:", branchName);
+
+      // Use email as fallback identifier if uid is not available
+      const userId = user?.uid || user?.email;
+
+      if (!userId) {
+        console.error("No user identification available (uid or email)");
+        toast.error("User not authenticated", {
+          duration: 2,
+          position: "top-right",
+        });
+        return;
+      }
+
+      // Save branch selection to localStorage
+      const storageKey = `userBranch_${userId}`;
+      localStorage.setItem(storageKey, branchName);
+      console.log("Saved to localStorage:", storageKey, branchName);
+
+      // Immediately close dropdown
+      setIsBranchDropdownOpen(false);
+      console.log("Dropdown closed");
+
+      // Refresh settings to reflect the new branch
+      console.log("Refreshing settings...");
+      await refreshSettings();
+      console.log("Settings refreshed");
+
+      // Show success notification
+      toast.success(`Switched to ${branchName}`, {
+        duration: 2,
+        position: "top-right",
+      });
+    } catch (error) {
+      console.error("Error switching branch:", error);
+      toast.error("Failed to switch branch", {
+        duration: 2,
+        position: "top-right",
+      });
+    }
+  };
+
+  // Load shops on component mount
+  useEffect(() => {
+    const loadShops = async () => {
+      try {
+        setIsLoadingShops(true);
+        console.log("Loading shops...");
+        const shopsData = await ShopService.getAllShops();
+        console.log("Shops loaded:", shopsData);
+        setShops(shopsData || []);
+      } catch (error) {
+        console.error("Error loading shops:", error);
+        setShops([]);
+      } finally {
+        setIsLoadingShops(false);
+      }
+    };
+
+    loadShops();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -98,6 +170,12 @@ export function TopNavBar({
       ) {
         setIsCurrencyDropdownOpen(false);
       }
+      if (
+        branchDropdownRef.current &&
+        !branchDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsBranchDropdownOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -124,14 +202,88 @@ export function TopNavBar({
             </h1>
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6">
-            {/* Current Branch/Shop Display */}
-            <div className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white border rounded-full border-gray-300 ">
-              <Store className="w-4 h-4 text-gray-600" />
-              <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] sm:max-w-none truncate">
-                {businessSettings?.currentBranch === "No Branch"
-                  ? t.noBranch
-                  : businessSettings?.currentBranch || t.mainBranch}
-              </span>
+            {/* Branch Selector */}
+            <div className="relative" ref={branchDropdownRef}>
+              <button
+                onClick={(e) => {
+                  console.log(
+                    "Branch button clicked, current state:",
+                    isBranchDropdownOpen,
+                  );
+                  e.stopPropagation();
+                  setIsBranchDropdownOpen(!isBranchDropdownOpen);
+                  console.log("Dropdown toggled to:", !isBranchDropdownOpen);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={isBranchDropdownOpen}
+                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-full hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                title="Click to change branch"
+              >
+                <Store className="w-4 h-4 text-gray-600" />
+                <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] sm:max-w-none truncate">
+                  {businessSettings?.currentBranch === "No Branch"
+                    ? t.noBranch
+                    : businessSettings?.currentBranch || t.mainBranch}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-600 transition-transform ${
+                    isBranchDropdownOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isBranchDropdownOpen && (
+                <div
+                  role="menu"
+                  aria-orientation="vertical"
+                  className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-2xl border border-gray-300 py-1 z-[9999]"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {isLoadingShops ? (
+                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                      Loading branches...
+                    </div>
+                  ) : shops.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
+                      No branches available
+                    </div>
+                  ) : (
+                    <>
+                      {shops.map((shop) => {
+                        const isSelected =
+                          businessSettings?.currentBranch === shop.name;
+                        return (
+                          <button
+                            key={shop.id}
+                            role="menuitem"
+                            type="button"
+                            onClick={(e) => {
+                              console.log("Branch clicked:", shop.name);
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleBranchChange(shop.name);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors cursor-pointer ${
+                              isSelected
+                                ? "bg-blue-100 text-gray-900 font-medium"
+                                : "text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Store className="w-4 h-4" />
+                              <span>{shop.name}</span>
+                            </div>
+                            {isSelected && (
+                              <span className="text-blue-600 text-lg">✓</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             {/* Date Display */}
             <div className="hidden lg:block text-sm text-gray-600">
@@ -144,12 +296,12 @@ export function TopNavBar({
             </div>
 
             {/* Main Currency Title */}
-            <div className="hidden md:flex items-center space-x-1 px-3 py-2 bg-white flex-shrink-0">
+            {/* <div className="hidden md:flex items-center space-x-1 px-3 py-2 bg-white flex-shrink-0">
               <span className="text-sm text-gray-600 whitespace-nowrap">
                 {t.mainCurrency} {getCurrencySymbol(defaultCurrency)}{" "}
                 {defaultCurrency}
               </span>
-            </div>
+            </div> */}
 
             {/* Currency Selector (clean pill + simple dropdown) */}
             <div className="relative" ref={currencyDropdownRef}>

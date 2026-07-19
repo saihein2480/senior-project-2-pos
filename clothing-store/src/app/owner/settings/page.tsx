@@ -97,8 +97,9 @@ function OwnerSettingsContent() {
           setSettings((prev) => ({ ...prev, ...result.data }));
 
           // For all users, load user-specific branch from localStorage
-          if (user?.uid) {
-            const userBranch = localStorage.getItem(`userBranch_${user.uid}`);
+          if (user) {
+            const userId = user.uid || user.email;
+            const userBranch = localStorage.getItem(`userBranch_${userId}`);
             if (userBranch) {
               setSettings((prev) => ({ ...prev, currentBranch: userBranch }));
             }
@@ -195,8 +196,9 @@ function OwnerSettingsContent() {
 
     try {
       // Save branch to localStorage for all users (user-specific)
-      if (user?.uid && settings.currentBranch) {
-        localStorage.setItem(`userBranch_${user.uid}`, settings.currentBranch);
+      if (user && settings.currentBranch) {
+        const userId = user.uid || user.email;
+        localStorage.setItem(`userBranch_${userId}`, settings.currentBranch);
       }
 
       // Staff: only save branch (already done above)
@@ -520,7 +522,7 @@ function OwnerSettingsContent() {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
+                        {/* <div>
                           <label className="block text-sm font-normal text-gray-900 mb-2">
                             Main Currency
                           </label>
@@ -562,7 +564,7 @@ function OwnerSettingsContent() {
                               </svg>
                             </div>
                           </div>
-                        </div>
+                        </div> */}
                         <Input
                           label="Tax Rate (%) (e.g., 5 for 5%)"
                           type="number"
@@ -577,56 +579,56 @@ function OwnerSettingsContent() {
                           }
                           placeholder="0"
                         />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-normal text-gray-900 mb-2">
-                            <Store className="inline h-4 w-4 mr-1 mb-1" />
-                            Current Branch/Shop
-                          </label>
-                          <div className="relative">
-                            <select
-                              title="CurrentBranch"
-                              value={settings.currentBranch || "No Branch"}
-                              onChange={(e) =>
-                                handleInputChange(
-                                  "currentBranch",
-                                  e.target.value,
-                                )
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
-                            >
-                              {/* Show 'No Branch' if selected, or if there are no shops */}
-                              {(settings.currentBranch === "No Branch" ||
-                                noShops) && (
-                                <option value="No Branch">No Branch</option>
-                              )}
-                              {shops.map((shop) => (
-                                <option key={shop.id} value={shop.name}>
-                                  {shop.name}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                              <svg
-                                className="w-4 h-4 text-dark-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
+                        {/* Current Branch Selector */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <label className="block text-sm font-normal text-gray-900 mb-2">
+                              <Store className="inline h-4 w-4 mr-1 mb-1" />
+                              Current Branch/Shop
+                            </label>
+                            <div className="relative">
+                              <select
+                                title="CurrentBranch"
+                                value={settings.currentBranch || "No Branch"}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    "currentBranch",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 9l-7 7-7-7"
-                                />
-                              </svg>
+                                {/* Show 'No Branch' if selected, or if there are no shops */}
+                                {(settings.currentBranch === "No Branch" ||
+                                  noShops) && (
+                                  <option value="No Branch">No Branch</option>
+                                )}
+                                {shops.map((shop) => (
+                                  <option key={shop.id} value={shop.name}>
+                                    {shop.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                <svg
+                                  className="w-4 h-4 text-dark-400"
+                                  fill="none"
+                                  stroke="black"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 9l-7 7-7-7"
+                                  />
+                                </svg>
+                              </div>
                             </div>
+                            {/* <p className="text-xs text-gray-500 mt-1">
+                              Select the branch for new transactions
+                            </p> */}
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Select the branch for new transactions
-                          </p>
                         </div>
                       </div>
 

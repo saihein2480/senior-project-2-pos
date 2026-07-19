@@ -1161,7 +1161,7 @@ function OwnerDashboardContent() {
                 {/* Key Performance Indicators */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {/* Total Revenue */}
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
+                  {/* <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1172,10 +1172,10 @@ function OwnerDashboardContent() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Total Profit */}
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1186,10 +1186,10 @@ function OwnerDashboardContent() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Total Orders */}
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1200,10 +1200,10 @@ function OwnerDashboardContent() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Total Customers */}
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
+                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1214,15 +1214,15 @@ function OwnerDashboardContent() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
 
-                <div>
+                {/* <div>
                   <hr className="text-gray-300 p-3"></hr>
-                </div>
+                </div> */}
 
                 {/* Currency Specific Totals */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between mb-4">
                       <div>
@@ -1280,14 +1280,14 @@ function OwnerDashboardContent() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
-                <div>
+                {/* <div>
                   <hr className="text-gray-300 p-3"></hr>
-                </div>
+                </div> */}
 
                 {/* Advanced Financial Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                   <div className="bg-white p-6 shadow-sm border border-gray-200">
                     <div>
                       <p className="text-sm font-medium text-gray-500 mb-4">
@@ -1348,16 +1348,16 @@ function OwnerDashboardContent() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
-                <div>
+                {/* <div>
                   <hr className="text-gray-300 p-3"></hr>
-                </div>
+                </div> */}
 
                 {/* Secondary Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   {/* Average Order Value */}
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
+                  {/* <div className="bg-white p-6  shadow-sm border border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-500">
@@ -1369,7 +1369,7 @@ function OwnerDashboardContent() {
                       </div>
                       <BarChart3 className="h-6 w-6 text-gray-400" />
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Items Sold */}
                   <div className="bg-white p-6  shadow-sm border border-gray-200">
@@ -1417,12 +1417,12 @@ function OwnerDashboardContent() {
                   </div>
                 </div>
 
-                <div>
+                {/* <div>
                   <hr className="text-gray-300 p-3"></hr>
-                </div>
+                </div> */}
 
                 {/* Order Status Breakdown */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
                     {t.orderStatusDistribution}
                   </h2>
@@ -1531,10 +1531,10 @@ function OwnerDashboardContent() {
                       <XCircle className="h-8 w-8 text-indigo-600" />
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Revenue by Payment Method */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">
                     {t.paymentMethodDistribution}
                   </h2>
@@ -1623,7 +1623,7 @@ function OwnerDashboardContent() {
                       <Calendar className="h-6 w-6 text-gray-600" />
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Data Visualization Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

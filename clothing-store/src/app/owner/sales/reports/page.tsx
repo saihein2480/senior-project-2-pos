@@ -30,6 +30,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Settings,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
 
@@ -138,6 +142,51 @@ function ReportsPageContent() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Metrics visibility settings
+  const [hiddenMetrics, setHiddenMetrics] = useState<Set<string>>(new Set());
+  const [showMetricsSettings, setShowMetricsSettings] = useState(false);
+
+  const metricsConfig = [
+    { id: "totalSales", label: "Total Sales" },
+    { id: "totalProfit", label: "Total Profit" },
+    { id: "totalTransactions", label: "Total Transactions" },
+    { id: "totalCustomers", label: "Total Customers" },
+    { id: "totalSalesTHB", label: "Total Sales (฿)" },
+    { id: "totalSalesMMK", label: "Total Sales (Ks)" },
+    { id: "totalExpenseTHB", label: "Total Expense (฿)" },
+    { id: "totalExpenseMMK", label: "Total Expense (Ks)" },
+    { id: "wholesaleTHB", label: "Wholesale Sales (THB)" },
+    { id: "wholesaleMMK", label: "Wholesale Sales (MMK)" },
+    { id: "stockValueUnit", label: "Remaining Stock Value (Unit Price)" },
+    {
+      id: "stockValueOriginal",
+      label: "Remaining Stock Value (Original Price)",
+    },
+    { id: "totalNetProfit", label: "Total Net Profit" },
+  ];
+
+  // Load hidden metrics from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("reportMetricsHidden");
+    if (stored) {
+      setHiddenMetrics(new Set(JSON.parse(stored)));
+    }
+  }, []);
+
+  // Save hidden metrics to localStorage
+  const toggleMetricVisibility = (metricId: string) => {
+    const newHidden = new Set(hiddenMetrics);
+    if (newHidden.has(metricId)) {
+      newHidden.delete(metricId);
+    } else {
+      newHidden.add(metricId);
+    }
+    setHiddenMetrics(newHidden);
+    localStorage.setItem("reportMetricsHidden", JSON.stringify([...newHidden]));
+  };
+
+  const isMetricHidden = (metricId: string) => hiddenMetrics.has(metricId);
 
   // Tooltip for small touch/mouse hints on table cells
   const [cellTooltip, setCellTooltip] = useState<{
@@ -1235,236 +1284,288 @@ function ReportsPageContent() {
 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-screen-2xl mx-auto">
-            {/* Header
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Reports & Analytics
-              </h1>
-              <p className="text-gray-600">
-                Comprehensive business insights and performance metrics
-              </p>
-            </div> */}
-
-            {/* Key Metrics - row 1 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalSales}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatPrice(reportData?.totalRevenue || 0)}
-                    </p>
-                  </div>
-                </div>
+            {/* Header with Metrics Settings Button */}
+            <div className="mb-6 flex justify-between items-center">
+              <div>
+                {/* <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  Reports & Analytics
+                </h1>
+                <p className="text-gray-600">
+                  Comprehensive business insights and performance metrics
+                </p> */}
               </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalProfit}
-                    </p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {formatPrice(reportData?.totalProfit || 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalTransactions}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {reportData?.totalTransactions || 0}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalCustomers}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {reportData?.totalCustomers || 0}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => setShowMetricsSettings(!showMetricsSettings)}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
+                title="Show/Hide Metrics"
+              >
+                <Settings className="w-4 h-4" />
+                Metrics
+              </button>
             </div>
 
-            <div>
-              <hr className="text-gray-300 p-3"></hr>
-            </div>
-
-            {/* Key Metrics - row 2 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalSalesThb}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatPrice(reportData?.totalRevenueTHB || 0)}
-                    </p>
-                  </div>
+            {/* Metrics Settings Panel */}
+            {showMetricsSettings && (
+              <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-gray-900">
+                    Show/Hide Metrics
+                  </h3>
+                  <button
+                    onClick={() => setShowMetricsSettings(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {metricsConfig.map((metric) => (
+                    <button
+                      key={metric.id}
+                      onClick={() => toggleMetricVisibility(metric.id)}
+                      className={`p-3 rounded-lg border-2 transition-all text-sm font-medium text-left ${
+                        isMetricHidden(metric.id)
+                          ? "border-gray-200 bg-gray-50 text-gray-500"
+                          : "border-blue-500 bg-blue-50 text-blue-700"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isMetricHidden(metric.id) ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                        {metric.label}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalSalesMmk}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatInMMK(reportData?.totalRevenueMMK || 0)}
-                    </p>
+            )}
+
+            {/* All Metrics - Single Grid Container */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+              {!isMetricHidden("totalSales") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalSales}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatPrice(reportData?.totalRevenue || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalExpenseThb}
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {formatPrice(reportData?.totalExpenseTHB || 0)}
-                    </p>
+              {!isMetricHidden("totalProfit") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalProfit}
+                      </p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {formatPrice(reportData?.totalProfit || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalExpenseMmk}
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {SettingsService.formatPrice(
-                        reportData?.totalExpenseMMK || 0,
-                        "MMK",
-                      )}
-                    </p>
+              {!isMetricHidden("totalTransactions") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalTransactions}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {reportData?.totalTransactions || 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
 
-            <div>
-              <hr className="text-gray-300 p-3"></hr>
-            </div>
-
-            {/* Wholesale Sales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      Wholesale Sales (THB)
-                    </p>
-                    <p className="text-2xl font-bold text-indigo-600">
-                      {SettingsService.formatPrice(
-                        reportData?.totalWholesaleRevenueTHB || 0,
-                        "THB",
-                      )}
-                    </p>
+              {!isMetricHidden("totalCustomers") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalCustomers}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {reportData?.totalCustomers || 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      Wholesale Sales (MMK)
-                    </p>
-                    <p className="text-2xl font-bold text-indigo-600">
-                      {SettingsService.formatPrice(
-                        reportData?.totalWholesaleRevenueMMK || 0,
-                        "MMK",
-                      )}
-                    </p>
+              {!isMetricHidden("totalSalesTHB") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalSalesThb}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatPrice(reportData?.totalRevenueTHB || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
 
-            <div>
-              <hr className="text-gray-300 p-3"></hr>
-            </div>
-
-            {/* Inventory Totals */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.remainingStockValueUnit}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatPrice(reportData?.totalStockSellValueTHB || 0)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {SettingsService.formatPrice(
-                        reportData?.totalStockSellValueMMK || 0,
-                        "MMK",
-                      )}
-                    </p>
+              {!isMetricHidden("totalSalesMMK") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalSalesMmk}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatInMMK(reportData?.totalRevenueMMK || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.remainingStockValueOriginal}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatPrice(reportData?.totalStockOriginalTHB || 0)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {SettingsService.formatPrice(
-                        reportData?.totalStockOriginalMMK || 0,
-                        "MMK",
-                      )}
-                    </p>
+              {!isMetricHidden("totalExpenseTHB") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalExpenseThb}
+                      </p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {formatPrice(reportData?.totalExpenseTHB || 0)}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      {t.totalNetProfit}
-                    </p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {formatPrice(reportData?.totalNetTHB || 0)}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {SettingsService.formatPrice(
-                        reportData?.totalNetMMK || 0,
-                        "MMK",
-                      )}
-                    </p>
+              )}
+
+              {!isMetricHidden("totalExpenseMMK") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalExpenseMmk}
+                      </p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {SettingsService.formatPrice(
+                          reportData?.totalExpenseMMK || 0,
+                          "MMK",
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
 
-            <div>
-              <hr className="text-gray-300 p-3"></hr>
+              {!isMetricHidden("wholesaleTHB") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Wholesale Sales (THB)
+                      </p>
+                      <p className="text-2xl font-bold text-indigo-600">
+                        {SettingsService.formatPrice(
+                          reportData?.totalWholesaleRevenueTHB || 0,
+                          "THB",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isMetricHidden("wholesaleMMK") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        Wholesale Sales (MMK)
+                      </p>
+                      <p className="text-2xl font-bold text-indigo-600">
+                        {SettingsService.formatPrice(
+                          reportData?.totalWholesaleRevenueMMK || 0,
+                          "MMK",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isMetricHidden("stockValueUnit") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.remainingStockValueUnit}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatPrice(reportData?.totalStockSellValueTHB || 0)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {SettingsService.formatPrice(
+                          reportData?.totalStockSellValueMMK || 0,
+                          "MMK",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isMetricHidden("stockValueOriginal") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.remainingStockValueOriginal}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatPrice(reportData?.totalStockOriginalTHB || 0)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {SettingsService.formatPrice(
+                          reportData?.totalStockOriginalMMK || 0,
+                          "MMK",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isMetricHidden("totalNetProfit") && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">
+                        {t.totalNetProfit}
+                      </p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {formatPrice(reportData?.totalNetTHB || 0)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {SettingsService.formatPrice(
+                          reportData?.totalNetMMK || 0,
+                          "MMK",
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Charts and Tables */}
@@ -1982,7 +2083,7 @@ function ReportsPageContent() {
             </div>
 
             {/* Top Selling Items */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
+            {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
                   {t.topSellingProducts}
@@ -2061,7 +2162,7 @@ function ReportsPageContent() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </div> */}
 
             {/* Filters and Search */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">

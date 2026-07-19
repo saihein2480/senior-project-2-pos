@@ -339,10 +339,23 @@ function EditStockContent() {
                 ...prev,
                 [newVariant.id]: extractedColors,
               }));
+
+              // Show feedback if colors were detected
+              if (extractedColors && extractedColors.length > 0) {
+                toast.success(`Detected ${extractedColors.length} colors`);
+              } else {
+                toast.info(
+                  "No colors detected. You can manually enter a color code.",
+                  { duration: 4000 },
+                );
+              }
             } catch (error) {
               console.error(
                 "Failed to extract colors from uploaded image:",
                 error,
+              );
+              toast.error(
+                "Could not analyze image for colors. Please enter color manually.",
               );
             }
           } else {
@@ -442,8 +455,21 @@ function EditStockContent() {
           ...prev,
           [id]: extractedColors,
         }));
+
+        // Show feedback
+        if (extractedColors && extractedColors.length > 0) {
+          toast.success(`Detected ${extractedColors.length} colors`);
+        } else {
+          toast.info(
+            "No colors detected. You can manually enter a color code.",
+            { duration: 4000 },
+          );
+        }
       } catch (error) {
         console.error("Failed to extract colors from image:", error);
+        toast.error(
+          "Could not analyze image for colors. Please enter color manually.",
+        );
       }
     } else {
       // Clear detected colors if image is removed

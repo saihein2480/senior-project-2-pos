@@ -49,8 +49,15 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         setTaxRate(settings.taxRate || 0);
 
         // For all users, override currentBranch with user-specific branch from localStorage
-        if (user?.uid) {
-          const userBranch = localStorage.getItem(`userBranch_${user.uid}`);
+        if (user) {
+          const userId = user.uid || user.email;
+          const userBranch = localStorage.getItem(`userBranch_${userId}`);
+          console.log(
+            "Loading branch for user:",
+            userId,
+            "Found branch:",
+            userBranch,
+          );
           if (userBranch) {
             setBusinessSettings({ ...settings, currentBranch: userBranch });
           } else {

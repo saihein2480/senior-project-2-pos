@@ -805,24 +805,55 @@ function OnlineOrdersContent() {
       .replace(/'/g, "&#039;");
 
   const getInvoiceItems = (row: OnlineOrder) => {
+    const orderTotalMmk = Math.max(0, Number(row.amountMmk || 0));
+
     if (row.cartItems && row.cartItems.length > 0) {
-      return row.cartItems.map((item) => ({
-        name: item.productName || "-",
-        variant: [item.color, item.size].filter(Boolean).join(", "),
-        quantity: item.quantity || 1,
-        amountMmk: null as number | null,
-      }));
+      const totalThb = row.cartItems.reduce(
+        (sum, item) =>
+          sum +
+          Number(item.priceTHB || 0) * Math.max(1, Number(item.quantity || 1)),
+        0,
+      );
+      const totalQty = row.cartItems.reduce(
+        (sum, item) => sum + Math.max(1, Number(item.quantity || 1)),
+        0,
+      );
+
+      return row.cartItems.map((item) => {
+        const quantity = Math.max(1, Number(item.quantity || 1));
+        const itemThbTotal = Number(item.priceTHB || 0) * quantity;
+        const lineTotalMmk =
+          totalThb > 0
+            ? (itemThbTotal / totalThb) * orderTotalMmk
+            : totalQty > 0
+              ? (quantity / totalQty) * orderTotalMmk
+              : 0;
+
+        return {
+          name: item.productName || "-",
+          variant: [item.color, item.size].filter(Boolean).join(", "),
+          quantity,
+          unitPrice: quantity > 0 ? lineTotalMmk / quantity : lineTotalMmk,
+          lineTotal: lineTotalMmk,
+          currency: "MMK" as const,
+        };
+      });
     }
 
     if (row.product) {
+      const quantity = Math.max(1, Number(row.product.quantity || 1));
+      const lineTotalMmk = orderTotalMmk;
+
       return [
         {
           name: row.product.productName || "-",
           variant: [row.product.color, row.product.size]
             .filter(Boolean)
             .join(", "),
-          quantity: row.product.quantity || 1,
-          amountMmk: null as number | null,
+          quantity,
+          unitPrice: quantity > 0 ? lineTotalMmk / quantity : lineTotalMmk,
+          lineTotal: lineTotalMmk,
+          currency: "MMK" as const,
         },
       ];
     }
@@ -832,7 +863,12 @@ function OnlineOrdersContent() {
         name: item.name || "-",
         variant: "",
         quantity: item.quantity || 1,
-        amountMmk: Number(item.amount || 0),
+        unitPrice:
+          Math.max(1, Number(item.quantity || 1)) > 0
+            ? Number(item.amount || 0) / Math.max(1, Number(item.quantity || 1))
+            : Number(item.amount || 0),
+        lineTotal: Number(item.amount || 0),
+        currency: "MMK" as const,
       }));
     }
 
@@ -934,6 +970,12 @@ function OnlineOrdersContent() {
     const amount = Number(row.amountMmk || 0);
     const formatMmk = (value: number) =>
       `${Math.round(value).toLocaleString()} MMK`;
+    const formatPrice = (value: number, currency: "THB" | "MMK") => {
+      if (currency === "THB") {
+        return `THB ${Number(value || 0).toFixed(2)}`;
+      }
+      return `${Math.round(Number(value || 0)).toLocaleString()} MMK`;
+    };
     const toAbsoluteUrl = (url: string) => {
       const raw = (url || "").trim();
       if (!raw) return "";
@@ -979,17 +1021,14 @@ function OnlineOrdersContent() {
               const variantText = item.variant
                 ? ` - ${escapeHtml(item.variant)}`
                 : "";
-              const lineAmount =
-                item.amountMmk && item.amountMmk > 0
-                  ? formatMmk(item.amountMmk)
-                  : "-";
+              const lineAmountText = formatPrice(item.lineTotal, item.currency);
 
               return `
                 <div class="item">
                   <div class="item-name">${escapeHtml(item.name)}${variantText}</div>
                   <div class="item-line">
-                    <span>${escapeHtml(String(item.quantity))} x ${lineAmount}</span>
-                    <span>${lineAmount}</span>
+                    <span>${escapeHtml(String(item.quantity))} item${item.quantity > 1 ? "s" : ""}</span>
+                    <span>${escapeHtml(lineAmountText)}</span>
                   </div>
                 </div>
               `;
