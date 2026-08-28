@@ -60,10 +60,20 @@ function OnlineTransactionsContent() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<
-    "all" | "completed" | "pending" | "failed" | "cancelled"
+    | "all"
+    | "completed"
+    | "pending"
+    | "failed"
+    | "cancelled"
+    | "pending_refund"
+    | "refunded"
+    | "partially_refunded"
   >("all");
   const [filterOrderStatus, setFilterOrderStatus] = useState<
     "all" | Exclude<OrderWorkflowStatus, "unknown">
+  >("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<
+    "all" | "cod" | "scan"
   >("all");
   const [orderStatusByOrderRef, setOrderStatusByOrderRef] = useState<
     Record<string, OrderWorkflowStatus>
@@ -112,6 +122,7 @@ function OnlineTransactionsContent() {
     searchTerm,
     filterStatus,
     filterOrderStatus,
+    filterPaymentMethod,
     dateRange,
     startDate,
     endDate,
@@ -139,13 +150,19 @@ function OnlineTransactionsContent() {
 
     const matchesStatus =
       filterStatus === "all" ||
-      (row.status || "").toLowerCase() === filterStatus;
+      (row.paymentStatus || row.status || "").toLowerCase() === filterStatus;
 
     const resolvedOrderStatus = row.onlineOrderId
       ? (orderStatusByOrderRef[row.onlineOrderId] ?? "unknown")
       : "unknown";
     const matchesOrderStatus =
       filterOrderStatus === "all" || resolvedOrderStatus === filterOrderStatus;
+
+    const paymentMethod = (row.paymentMethod || "").toLowerCase();
+    const matchesPaymentMethod =
+      filterPaymentMethod === "all" ||
+      (filterPaymentMethod === "cod" && paymentMethod === "cod") ||
+      (filterPaymentMethod === "scan" && (paymentMethod === "scan" || paymentMethod === "wallet"));
 
     let matchesDateRange = true;
     if (dateRange !== "all") {
@@ -186,7 +203,7 @@ function OnlineTransactionsContent() {
     }
 
     return (
-      matchesSearch && matchesStatus && matchesOrderStatus && matchesDateRange
+      matchesSearch && matchesStatus && matchesOrderStatus && matchesPaymentMethod && matchesDateRange
     );
   });
 
@@ -289,7 +306,7 @@ function OnlineTransactionsContent() {
             </div>
 
             <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="relative">
                   <Search
                     size={16}
@@ -300,7 +317,7 @@ function OnlineTransactionsContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search transaction, order ref, or customer..."
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                 </div>
 
@@ -318,16 +335,22 @@ function OnlineTransactionsContent() {
                           | "completed"
                           | "pending"
                           | "failed"
-                          | "cancelled",
+                          | "cancelled"
+                          | "pending_refund"
+                          | "refunded"
+                          | "partially_refunded",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="all">All Status</option>
                     <option value="completed">Completed</option>
                     <option value="pending">Pending</option>
                     <option value="failed">Failed</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="pending_refund">Pending Refund</option>
+                    <option value="refunded">Fully Refunded</option>
+                    <option value="partially_refunded">Partially Refunded</option>
                   </select>
                 </div>
 
@@ -349,7 +372,7 @@ function OnlineTransactionsContent() {
                           | "cancelled",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="all">All Order Status</option>
                     <option value="pending">Pending</option>
@@ -357,6 +380,26 @@ function OnlineTransactionsContent() {
                     <option value="delivering">Delivering</option>
                     <option value="delivered">Delivered</option>
                     <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <Filter
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <select
+                    value={filterPaymentMethod}
+                    onChange={(e) =>
+                      setFilterPaymentMethod(
+                        e.target.value as "all" | "cod" | "scan"
+                      )
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                  >
+                    <option value="all">All Payment Methods</option>
+                    <option value="cod">💵 Cash on Delivery</option>
+                    <option value="scan">📱 QR Scan</option>
                   </select>
                 </div>
 
@@ -378,7 +421,7 @@ function OnlineTransactionsContent() {
                           | "custom",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="today">Today</option>
                     <option value="7d">Last 7 days</option>
@@ -396,13 +439,13 @@ function OnlineTransactionsContent() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                 </div>
               )}
@@ -415,6 +458,7 @@ function OnlineTransactionsContent() {
                     <th className="px-4 py-3">Transaction ID</th>
                     <th className="px-4 py-3">Order Ref</th>
                     <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Payment Method</th>
                     <th className="px-4 py-3">Total (THB)</th>
                     <th className="px-4 py-3">Total (MMK)</th>
                     <th className="px-4 py-3">Payment Status</th>
@@ -425,7 +469,7 @@ function OnlineTransactionsContent() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         Loading online transactions...
@@ -434,42 +478,86 @@ function OnlineTransactionsContent() {
                   ) : currentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         No matching online transactions found.
                       </td>
                     </tr>
                   ) : (
-                    currentRows.map((row) => (
-                      <tr key={row.id} className="border-t border-gray-100">
-                        <td className="px-4 py-3 font-medium text-gray-900">
-                          {row.transactionId || row.id}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {row.onlineOrderId || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {row.customer?.displayName ||
-                            row.customer?.email ||
-                            "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {Number(row.total || 0).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {Number(row.sellingTotal || 0).toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {row.status || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {row.timestamp
-                            ? new Date(row.timestamp).toLocaleString()
-                            : "-"}
-                        </td>
-                      </tr>
-                    ))
+                    currentRows.map((row) => {
+                      const method = (row.paymentMethod || "").toLowerCase();
+                      let paymentMethodLabel = "-";
+                      
+                      if (method === "cod") paymentMethodLabel = "💵 COD";
+                      else if (method === "cash") paymentMethodLabel = "💵 Cash";
+                      else if (method === "scan" || method === "wallet") paymentMethodLabel = "📱 QR Scan";
+                      else if (method) {
+                        paymentMethodLabel = method.charAt(0).toUpperCase() + method.slice(1);
+                      }
+                      
+                      return (
+                        <tr key={row.id} className="border-t border-gray-100">
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            {row.transactionId || row.id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {row.onlineOrderId || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {row.customer?.displayName ||
+                              row.customer?.email ||
+                              "-"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {paymentMethodLabel}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {Number(row.total || 0).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {Number(row.sellingTotal || 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                (row.paymentStatus || row.status || "").toLowerCase() === "pending_refund"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase() === "refund_rejected"
+                                  ? "bg-red-100 text-red-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase() === "refunded"
+                                  ? "bg-purple-100 text-purple-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase() === "partially_refunded"
+                                  ? "bg-purple-100 text-purple-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase().includes("success") ||
+                                    (row.paymentStatus || row.status || "").toLowerCase().includes("completed")
+                                  ? "bg-green-100 text-green-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase().includes("fail")
+                                  ? "bg-red-100 text-red-800"
+                                  : (row.paymentStatus || row.status || "").toLowerCase().includes("cancel")
+                                  ? "bg-gray-100 text-gray-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}
+                            >
+                              {(row.paymentStatus || row.status || "").toLowerCase() === "pending_refund"
+                                ? "Pending Refund"
+                                : (row.paymentStatus || row.status || "").toLowerCase() === "refund_rejected"
+                                ? "Refund Rejected"
+                                : (row.paymentStatus || row.status || "").toLowerCase() === "refunded"
+                                ? "Fully Refunded"
+                                : (row.paymentStatus || row.status || "").toLowerCase() === "partially_refunded"
+                                ? "Partially Refunded"
+                                : row.paymentStatus || row.status || "-"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">
+                            {row.timestamp
+                              ? new Date(row.timestamp).toLocaleString()
+                              : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

@@ -83,7 +83,7 @@ export function CustomerSelectionModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <Users className="h-6 w-6 text-blue-600" />
+            <Users className="h-6 w-6 text-cyan-600" />
             <h2 className="text-xl font-bold text-gray-900">Select Customer</h2>
           </div>
           <button
@@ -104,7 +104,7 @@ export function CustomerSelectionModal({
               placeholder="Search customers by name, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white placeholder-gray-500"
             />
           </div>
         </div>
@@ -116,7 +116,7 @@ export function CustomerSelectionModal({
             onClick={handleSelectUnknown}
             className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors mb-4 ${
               !selectedCustomer
-                ? "border-blue-500 bg-blue-50"
+                ? "border-blue-500 bg-cyan-50"
                 : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
             }`}
           >
@@ -135,7 +135,7 @@ export function CustomerSelectionModal({
             </div>
             {!selectedCustomer && (
               <div className="flex-shrink-0">
-                <div className="h-4 w-4 rounded-full bg-blue-500"></div>
+                <div className="h-4 w-4 rounded-full bg-cyan-500"></div>
               </div>
             )}
           </div>
@@ -153,7 +153,7 @@ export function CustomerSelectionModal({
               <p className="text-red-600">{error}</p>
               <button
                 onClick={fetchCustomers}
-                className="mt-2 text-blue-600 hover:text-blue-800"
+                className="mt-2 text-cyan-600 hover:text-blue-800"
               >
                 Try again
               </button>
@@ -176,7 +176,7 @@ export function CustomerSelectionModal({
                     onClick={() => handleSelectCustomer(customer)}
                     className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-colors ${
                       selectedCustomer?.uid === customer.uid
-                        ? "border-blue-500 bg-blue-50"
+                        ? "border-blue-500 bg-cyan-50"
                         : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                     }`}
                   >
@@ -207,7 +207,7 @@ export function CustomerSelectionModal({
                       )}
                       {customer.customerType && (
                         <div className="mt-1">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-blue-800">
                             {customer.customerType}
                           </span>
                         </div>
@@ -215,7 +215,7 @@ export function CustomerSelectionModal({
                     </div>
                     {selectedCustomer?.uid === customer.uid && (
                       <div className="flex-shrink-0">
-                        <div className="h-4 w-4 rounded-full bg-blue-500"></div>
+                        <div className="h-4 w-4 rounded-full bg-cyan-500"></div>
                       </div>
                     )}
                   </div>
@@ -229,7 +229,7 @@ export function CustomerSelectionModal({
         <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-400"
           >
             Cancel
           </button>

@@ -20,7 +20,7 @@ export function Button({
     "inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variantClasses = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700",
+    primary: "bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white shadow-md border-0",
     secondary: "bg-gray-500 text-white hover:bg-gray-600",
     outline: "border border-gray-300 text-gray-900 hover:bg-gray-50",
   };

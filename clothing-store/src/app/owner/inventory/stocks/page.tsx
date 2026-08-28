@@ -522,271 +522,331 @@ function InventoryStocksContent() {
         />
 
         {/* Page Title */}
-        <div className="bg-white border-b border-gray-200 px-4 md:px-8 lg:px-12 py-4">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Inventory Stocks
-          </h1>
+        <div className="bg-wite border-b border-gray-200 px-4 md:px-8 lg:px-12 py-6">
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Inventory Stocks
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage and track all your product inventory
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-screen-2xl mx-auto">
-            {/* Controls */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    placeholder="Search by Group Name or Barcode..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-80 text-gray-900"
-                  />
-                </div>
+            {/* Category Tabs */}
+            <div className="mb-6 flex flex-col gap-4">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                {/* All Categories Tab */}
+                <button
+                  onClick={() => {
+                    setSelectedCategory("all");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap transition-all border-0 ${
+                    selectedCategory === "all"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                      : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                  }`}
+                >
+                  All Categories
+                </button>
 
-                {/* Filter Dropdown */}
-                <div className="relative filter-dropdown-container">
-                  <Button
-                    variant="outline"
-                    className="flex items-center"
-                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                {/* Individual Category Tabs */}
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => {
+                      setSelectedCategory(category);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap transition-all border-0 ${
+                      selectedCategory === category
+                        ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                        : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                    }`}
                   >
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filter
-                    {hasActiveFilters && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
-                        {
-                          [
-                            selectedShop !== "all",
-                            selectedCategory !== "all",
-                            selectedStockStatus !== "all",
-                            priceRange.min !== "" || priceRange.max !== "",
-                          ].filter(Boolean).length
-                        }
-                      </span>
-                    )}
-                  </Button>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  {showFilterDropdown && (
-                    <div className="absolute z-50 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900">
-                          Filters
-                        </h3>
-                        {hasActiveFilters && (
-                          <button
-                            onClick={clearFilters}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            {/* Search and Filter Controls */}
+            <div className="mb-6 flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="relative flex-1 sm:max-w-md">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Search by Group Name or Barcode..."
+                      value={searchTerm}
+                      onChange={handleSearchChange}
+                      className="w-full pl-12 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pink-400 focus:border-transparent shadow-sm"
+                    />
+                  </div>
+
+                  {/* Filter Dropdown */}
+                  <div className="relative filter-dropdown-container">
+                    <Button
+                      variant="outline"
+                      className="flex items-center gap-2 whitespace-nowrap"
+                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    >
+                      <Filter className="h-4 w-4" />
+                      Filter
+                      {hasActiveFilters && (
+                        <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded-full">
+                          {
+                            [
+                              selectedShop !== "all",
+                              selectedCategory !== "all",
+                              selectedStockStatus !== "all",
+                              priceRange.min !== "" || priceRange.max !== "",
+                            ].filter(Boolean).length
+                          }
+                        </span>
+                      )}
+                    </Button>
+
+                    {showFilterDropdown && (
+                      <div className="absolute z-50 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-5 right-0">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Filters
+                          </h3>
+                          {hasActiveFilters && (
+                            <button
+                              onClick={clearFilters}
+                              className="text-xs text-cyan-600 hover:text-blue-800 font-semibold hover:bg-cyan-50 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              Clear all
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Shop Filter */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2.5">
+                            Shop
+                          </label>
+                          <select
+                            title="selectedShop"
+                            value={selectedShop}
+                            onChange={(e) => {
+                              setSelectedShop(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
                           >
-                            Clear all
-                          </button>
-                        )}
-                      </div>
+                            <option value="all">All Shops</option>
+                            {shops.map((shop) => (
+                              <option key={shop.id} value={shop.id}>
+                                {shop.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                      {/* Shop Filter */}
-                      <div className="mb-4">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Shop
-                        </label>
-                        <select
-                          title="selectedShop"
-                          value={selectedShop}
-                          onChange={(e) => {
-                            setSelectedShop(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                        >
-                          <option value="all">All Shops</option>
-                          {shops.map((shop) => (
-                            <option key={shop.id} value={shop.id}>
-                              {shop.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Category Filter */}
-                      <div className="mb-4">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Category
-                        </label>
-                        <select
-                          title="selectedCategory"
-                          value={selectedCategory}
-                          onChange={(e) => {
-                            setSelectedCategory(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                        >
-                          <option value="all">All Categories</option>
-                          {categories.map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Stock Status Filter */}
-                      <div className="mb-4">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Stock Status
-                        </label>
-                        <select
-                          title="selectedStockStatus"
-                          value={selectedStockStatus}
-                          onChange={(e) => {
-                            setSelectedStockStatus(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                        >
-                          <option value="all">All Status</option>
-                          <option value="in-stock">In Stock</option>
-                          <option value="low-stock">Low Stock (≤10)</option>
-                          <option value="out-of-stock">Out of Stock</option>
-                        </select>
-                      </div>
-
-                      {/* Price Range Filter */}
-                      <div className="mb-2">
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Price Range ({defaultCurrency})
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="number"
-                            placeholder="Min"
-                            value={priceRange.min}
+                        {/* Category Filter */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2.5">
+                            Category
+                          </label>
+                          <select
+                            title="selectedCategory"
+                            value={selectedCategory}
                             onChange={(e) => {
-                              setPriceRange({
-                                ...priceRange,
-                                min: e.target.value,
-                              });
+                              setSelectedCategory(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                          />
-                          <span className="text-gray-500">-</span>
-                          <input
-                            type="number"
-                            placeholder="Max"
-                            value={priceRange.max}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
+                          >
+                            <option value="all">All Categories</option>
+                            {categories.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Stock Status Filter */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2.5">
+                            Stock Status
+                          </label>
+                          <select
+                            title="selectedStockStatus"
+                            value={selectedStockStatus}
                             onChange={(e) => {
-                              setPriceRange({
-                                ...priceRange,
-                                max: e.target.value,
-                              });
+                              setSelectedStockStatus(e.target.value);
                               setCurrentPage(1);
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                          />
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
+                          >
+                            <option value="all">All Status</option>
+                            <option value="in-stock">In Stock</option>
+                            <option value="low-stock">Low Stock (≤10)</option>
+                            <option value="out-of-stock">Out of Stock</option>
+                          </select>
+                        </div>
+
+                        {/* Price Range Filter */}
+                        <div className="mb-1">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2.5">
+                            Price Range ({defaultCurrency})
+                          </label>
+                          <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden transition-all focus-within:ring-2 focus-within:ring-pink-400 focus-within:border-transparent">
+                            <input
+                              type="number"
+                              placeholder="Min"
+                              value={priceRange.min}
+                              onChange={(e) => {
+                                setPriceRange({
+                                  ...priceRange,
+                                  min: e.target.value,
+                                });
+                                setCurrentPage(1);
+                              }}
+                              className="w-1/2 min-w-0 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                            />
+                            <span className="h-4 w-px bg-gray-200" />
+                            <input
+                              type="number"
+                              placeholder="Max"
+                              value={priceRange.max}
+                              onChange={(e) => {
+                                setPriceRange({
+                                  ...priceRange,
+                                  max: e.target.value,
+                                });
+                                setCurrentPage(1);
+                              }}
+                              className="w-1/2 min-w-0 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center space-x-3">
-                <Button
-                  variant="outline"
-                  className="flex items-center"
-                  onClick={exportToCSV}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-                <Button
-                  className="flex items-center"
-                  onClick={() =>
-                    router.push("/owner/inventory/stocks/new-stock")
-                  }
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Stock
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2 whitespace-nowrap"
+                    onClick={exportToCSV}
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    className="flex items-center gap-2 whitespace-nowrap bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white shadow-md border-0"
+                    onClick={() =>
+                      router.push("/owner/inventory/stocks/new-stock")
+                    }
+                  >
+                    <Plus className="h-4 w-4" />
+                    New Stock
+                  </Button>
+                </div>
               </div>
             </div>
 
             {/* Bulk Actions Bar */}
             {selectedStocks.length > 0 && (
-              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-blue-900">
+              <div className="mb-4 bg-gradient-to-r from-pink-50 to-pink-100 border border-pink-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-pink-200 rounded-lg flex items-center justify-center">
+                    <Package className="h-5 w-5 text-pink-700" />
+                  </div>
+                  <span className="text-sm font-semibold text-pink-900">
                     {selectedStocks.length} stock item(s) selected
                   </span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={handleBulkDelete}
                     disabled={isProcessingBulkDelete}
-                    className="flex items-center px-4 py-2 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                   >
                     {isProcessingBulkDelete ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                         Deleting...
                       </>
                     ) : (
                       <>
-                        <Trash2 className="h-4 w-4 mr-2" />
+                        <Trash2 className="h-4 w-4" />
                         Delete Selected
                       </>
                     )}
                   </button>
                   <button
                     onClick={() => setSelectedStocks([])}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-medium"
+                    className="px-4 py-2.5 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-semibold rounded-lg shadow-sm"
                   >
-                    Clear Selection
+                    Clear
                   </button>
                 </div>
               </div>
             )}
 
             {/* Stock Groups Display */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               {isLoading ? (
-                <div className="px-6 py-8 text-center">
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-2 text-gray-600">
+                <div className="px-6 py-12 text-center">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
+                    <span className="text-gray-600 font-medium">
                       Loading stocks...
                     </span>
                   </div>
                 </div>
               ) : error ? (
-                <div className="px-6 py-8 text-center">
-                  <div className="text-red-600">
-                    <p className="font-medium">Error loading stocks</p>
-                    <p className="text-sm text-red-500 mt-1">{error}</p>
+                <div className="px-6 py-12 text-center">
+                  <div className="inline-flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                      <AlertTriangle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-red-900">
+                        Error loading stocks
+                      </p>
+                      <p className="text-sm text-red-600 mt-1">{error}</p>
+                    </div>
                   </div>
                 </div>
               ) : currentGroups.length === 0 ? (
-                <div className="px-6 py-8 text-center">
-                  <div className="text-gray-500">
-                    <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <p className="font-medium">No stocks found</p>
-                    <p className="text-sm mt-1">
-                      {searchTerm
-                        ? "Try adjusting your search criteria"
-                        : "Start by adding your first stock item"}
-                    </p>
+                <div className="px-6 py-12 text-center">
+                  <div className="inline-flex flex-col items-center gap-3">
+                    <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Package className="h-7 w-7 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        No stocks found
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {searchTerm
+                          ? "Try adjusting your search criteria"
+                          : "Start by adding your first stock item"}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
                       <tr>
-                        <th
-                          scope="col"
-                          className="py-3.5 pl-4 pr-3 w-12 sm:pl-6"
-                        >
+                        <th scope="col" className="py-4 pl-4 pr-3 w-12 sm:pl-6">
                           <input
                             type="checkbox"
                             checked={
@@ -794,55 +854,55 @@ function InventoryStocksContent() {
                               selectedStocks.length === currentGroups.length
                             }
                             onChange={toggleSelectAll}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                            className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
                             aria-label="Select all stocks"
                           />
                         </th>
                         <th
                           scope="col"
-                          className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
+                          className="py-4 pl-4 pr-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide sm:pl-6"
                         >
                           Product
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Shop
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Category
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Stock Info
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Unit Price
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Original Price
                         </th>
                         <th
                           scope="col"
-                          className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                          className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
                           Date
                         </th>
                         <th
                           scope="col"
-                          className="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                          className="relative py-4 pl-3 pr-4 sm:pr-6"
                         >
                           <span className="sr-only">Actions</span>
                         </th>
@@ -851,7 +911,7 @@ function InventoryStocksContent() {
                     <tbody className="divide-y divide-gray-200 bg-white">
                       {currentGroups.map((group) => (
                         <Fragment key={group.groupId}>
-                          <tr className="hover:bg-gray-50 transition-colors">
+                          <tr className="hover:bg-pink-50/50 transition-colors duration-150">
                             {/* Checkbox Column */}
                             <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
                               <input
@@ -860,14 +920,14 @@ function InventoryStocksContent() {
                                 onChange={() =>
                                   toggleSelectStock(group.groupId)
                                 }
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                                className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
                                 aria-label={`Select ${group.groupName}`}
                               />
                             </td>
                             {/* Product Column */}
                             <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
-                              <div className="flex items-center space-x-3">
-                                <div className="h-12 w-12 flex-shrink-0 relative rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                              <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 flex-shrink-0 relative rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm">
                                   <Image
                                     src={group.groupImage}
                                     alt={group.groupName}
@@ -877,7 +937,7 @@ function InventoryStocksContent() {
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-medium text-gray-900 truncate">
+                                  <div className="font-semibold text-gray-900 truncate text-sm">
                                     {group.groupName}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-0.5">
@@ -888,61 +948,54 @@ function InventoryStocksContent() {
                             </td>
 
                             {/* Shop Column */}
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                              <div className="flex items-center">
-                                <Store className="h-4 w-4 mr-1.5 text-gray-400" />
-                                <span className="text-gray-900 font-medium">
-                                  {shopLookup.get(group.shop) || group.shop}
-                                </span>
+                            <td className="whitespace-nowrap px-3 py-4 text-sm">
+                              <div className="flex items-center gap-2 text-gray-900 font-medium">
+                                <Store className="h-4 w-4 text-gray-400" />
+                                {shopLookup.get(group.shop) || group.shop}
                               </div>
                             </td>
 
                             {/* Category Column */}
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <td className="whitespace-nowrap px-3 py-4 text-sm">
                               {group.category ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-pink-100 text-pink-800">
                                   {group.category}
                                 </span>
                               ) : (
-                                <span className="text-gray-400 text-xs">-</span>
+                                <span className="text-gray-400 text-xs">—</span>
                               )}
                             </td>
 
                             {/* Stock Info Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
                               <div className="space-y-1">
-                                <div className="flex items-center text-gray-900">
-                                  <Package className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
-                                  <span className="font-semibold">
-                                    {group.totalQuantity}
-                                  </span>
-                                  <span className="ml-1 text-gray-500">
+                                <div className="flex items-center gap-2 text-gray-900 font-semibold">
+                                  <Package className="h-3.5 w-3.5 text-gray-400" />
+                                  <span>{group.totalQuantity}</span>
+                                  <span className="text-gray-500 font-normal">
                                     items
                                   </span>
                                 </div>
-                                <div className="flex items-center space-x-3 text-xs text-gray-500">
-                                  <span className="flex items-center">
-                                    <Palette className="h-3 w-3 mr-1" />
-                                    {group.variants.length} colors
-                                  </span>
-                                  <span className="flex items-center">
-                                    <Ruler className="h-3 w-3 mr-1" />
-                                    {group.sizeSummary}
-                                  </span>
+                                <div className="flex items-center gap-2 text-xs text-gray-600">
+                                  <Palette className="h-3 w-3 text-gray-400" />
+                                  <span>{group.variants.length} colors</span>
+                                  <span className="text-gray-400">•</span>
+                                  <Ruler className="h-3 w-3 text-gray-400" />
+                                  <span>{group.sizeSummary}</span>
                                 </div>
                               </div>
                             </td>
 
                             {/* Unit Price Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
-                              <div className="font-semibold text-gray-900">
+                              <div className="font-bold text-gray-900">
                                 {group.formattedPrice}
                               </div>
                             </td>
 
                             {/* Original Price Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
-                              <div className="font-medium text-gray-600">
+                              <div className="font-semibold text-gray-600">
                                 {defaultCurrency === "THB"
                                   ? `฿${group.originalPrice.toLocaleString()}`
                                   : `${group.originalPrice.toLocaleString()} Ks`}
@@ -950,23 +1003,23 @@ function InventoryStocksContent() {
                             </td>
 
                             {/* Date Column */}
-                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-600">
                               {group.formattedReleaseDate}
                             </td>
 
                             {/* Actions Column */}
                             <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                              <div className="flex items-center justify-end space-x-2">
+                              <div className="flex items-center justify-end gap-1">
                                 <button
                                   onClick={() => handleEditGroup(group)}
-                                  className="text-blue-600 hover:text-blue-900 p-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                                  className="p-2 text-cyan-600 hover:text-blue-900 hover:bg-cyan-50 rounded-lg transition-colors"
                                   title="Edit"
                                 >
                                   <Edit className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteGroup(group)}
-                                  className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -975,7 +1028,7 @@ function InventoryStocksContent() {
                                   onClick={() =>
                                     toggleGroupExpansion(group.groupId)
                                   }
-                                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                   title={
                                     expandedGroups.has(group.groupId)
                                       ? "Collapse"
@@ -994,23 +1047,24 @@ function InventoryStocksContent() {
 
                           {/* Expandable Variants Row */}
                           {expandedGroups.has(group.groupId) && (
-                            <tr className="bg-gray-50">
-                              <td colSpan={7} className="px-4 py-4 sm:px-6">
+                            <tr className="bg-gradient-to-b from-pink-50/30 to-transparent">
+                              <td colSpan={9} className="px-4 py-6 sm:px-6">
                                 <div className="space-y-4">
                                   {/* Color Variants */}
                                   <div>
-                                    <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">
+                                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                      <Palette className="h-4 w-4" />
                                       Color Variants
                                     </h4>
-                                    <div className="space-y-3">
+                                    <div className="grid grid-cols-4 gap-4">
                                       {group.variants.map(
                                         (variant, variantIndex) => (
                                           <div
                                             key={variantIndex}
-                                            className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm"
+                                            className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
                                           >
-                                            <div className="flex items-center space-x-3 mb-3">
-                                              <div className="h-10 w-10 relative rounded-md overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0">
+                                            <div className="flex items-center gap-3 mb-4">
+                                              <div className="h-10 w-10 relative rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 shadow-sm">
                                                 <Image
                                                   src={
                                                     variant.image ||
@@ -1023,38 +1077,40 @@ function InventoryStocksContent() {
                                                 />
                                               </div>
                                               <div
-                                                className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0"
+                                                className="w-6 h-6 rounded-full border-3 border-gray-300 flex-shrink-0 shadow-sm"
                                                 style={variant.colorStyle}
                                               ></div>
-                                              <span className="font-medium text-gray-900 text-sm">
-                                                {variant.color}
-                                              </span>
-                                              {variant.barcode && (
-                                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                                  {variant.barcode}
+                                              <div className="flex-1">
+                                                <span className="font-semibold text-gray-900 text-sm block">
+                                                  {variant.color}
                                                 </span>
-                                              )}
+                                                {variant.barcode && (
+                                                  <span className="text-xs text-gray-600 font-mono">
+                                                    {variant.barcode}
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
 
                                             {/* Size Grid */}
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+                                            <div className="grid grid-cols-4 gap-2">
                                               {variant.sizes.map(
                                                 (sizeInfo, sizeIndex) => (
                                                   <div
                                                     key={sizeIndex}
-                                                    className="flex items-center justify-between px-2.5 py-1.5 bg-gray-50 rounded-md border border-gray-200"
+                                                    className="flex flex-col items-center justify-center px-2 py-2 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-cyan-50 transition-all"
                                                   >
-                                                    <span className="text-xs font-medium text-gray-700">
+                                                    <span className="text-xs font-semibold text-gray-700 mb-1">
                                                       {sizeInfo.size}
                                                     </span>
                                                     <span
-                                                      className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                                      className={`text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center ${
                                                         sizeInfo.quantity > 10
-                                                          ? "text-green-700"
+                                                          ? "bg-green-100 text-green-700"
                                                           : sizeInfo.quantity >
                                                               0
-                                                            ? " text-yellow-700"
-                                                            : " text-red-700"
+                                                            ? "bg-yellow-100 text-yellow-700"
+                                                            : "bg-red-100 text-red-700"
                                                       }`}
                                                     >
                                                       {sizeInfo.quantity}
@@ -1087,12 +1143,12 @@ function InventoryStocksContent() {
               )}
 
               {/* Pagination */}
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="bg-white px-4 py-4 flex items-center justify-between border-t border-gray-200 sm:px-6">
                 <div className="flex-1 flex justify-between sm:hidden">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
                   >
                     Previous
                   </button>
@@ -1101,14 +1157,16 @@ function InventoryStocksContent() {
                       setCurrentPage(Math.min(totalPages, currentPage + 1))
                     }
                     disabled={currentPage === totalPages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
                   >
                     Next
                   </button>
                 </div>
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div className="flex items-center space-x-2">
-                    <p className="text-sm text-gray-700">Rows per page:</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-700">
+                      Rows per page:
+                    </p>
                     <select
                       title="Select number of rows per page"
                       value={rowsPerPage}
@@ -1116,14 +1174,14 @@ function InventoryStocksContent() {
                         setRowsPerPage(Number(e.target.value));
                         setCurrentPage(1);
                       }}
-                      className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 hover:border-gray-400 focus:ring-2 focus:ring-cyan-400 transition-all"
                     >
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
                       <option value={100}>100</option>
                     </select>
-                    <p className="text-sm text-gray-700">
+                    <p className="text-sm font-medium text-gray-700">
                       Showing {startIndex + 1}–
                       {Math.min(endIndex, filteredGroups.length)} of{" "}
                       {filteredGroups.length} stock groups
@@ -1131,7 +1189,7 @@ function InventoryStocksContent() {
                   </div>
                   <div>
                     <nav
-                      className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                      className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px border border-gray-300"
                       aria-label="Pagination"
                     >
                       <button
@@ -1140,7 +1198,7 @@ function InventoryStocksContent() {
                           setCurrentPage(Math.max(1, currentPage - 1))
                         }
                         disabled={currentPage === 1}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-lg border-r border-gray-300 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
@@ -1150,7 +1208,7 @@ function InventoryStocksContent() {
                           setCurrentPage(Math.min(totalPages, currentPage + 1))
                         }
                         disabled={currentPage === totalPages}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-lg bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>

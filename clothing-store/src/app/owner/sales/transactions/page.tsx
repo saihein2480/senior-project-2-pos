@@ -52,9 +52,10 @@ export default function TransactionsPage() {
     | "cancelled"
     | "refunded"
     | "partially_refunded"
+    | "pending_refund"
   >("all");
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<
-    "all" | "cash" | "scan" | "wallet" | "cod"
+    "all" | "cash" | "scan" | "cod"
   >("all");
   const [filterWholesale, setFilterWholesale] = useState<
     "all" | "with_wholesale" | "without_wholesale"
@@ -190,6 +191,19 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
       const data = await transactionService.getTransactions();
+      console.log("Loaded transactions:", data.length);
+      // Log a sample transaction to see its fields
+      if (data.length > 0) {
+        console.log("Sample transaction fields:", Object.keys(data[0]));
+        const sampleWithPaymentStatus = data.find(t => t.paymentStatus);
+        if (sampleWithPaymentStatus) {
+          console.log("Found transaction with paymentStatus:", {
+            id: sampleWithPaymentStatus.id,
+            status: sampleWithPaymentStatus.status,
+            paymentStatus: sampleWithPaymentStatus.paymentStatus,
+          });
+        }
+      }
       setTransactions(data);
     } catch (error) {
       console.error("Error loading transactions:", error);
@@ -268,8 +282,10 @@ export default function TransactionsPage() {
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase());
 
+    // Use paymentStatus if available, otherwise fall back to status
+    const displayStatus = transaction.paymentStatus || transaction.status;
     const matchesStatus =
-      filterStatus === "all" || transaction.status === filterStatus;
+      filterStatus === "all" || displayStatus === filterStatus;
     const matchesPaymentMethod =
       filterPaymentMethod === "all" ||
       transaction.paymentMethod === filterPaymentMethod;
@@ -461,8 +477,6 @@ export default function TransactionsPage() {
         return <CreditCard className="h-4 w-4 text-gray-900" />;
       case "scan":
         return <Smartphone className="h-4 w-4 text-gray-900" />;
-      case "wallet":
-        return <Wallet className="h-4 w-4 text-gray-900" />;
       case "cod":
         return <Truck className="h-4 w-4 text-gray-900" />;
       default:
@@ -477,6 +491,8 @@ export default function TransactionsPage() {
         return `${baseClasses} bg-green-100 text-green-800`;
       case "pending":
         return `${baseClasses} bg-yellow-100 text-yellow-800`;
+      case "pending_refund":
+        return `${baseClasses} bg-amber-100 text-amber-800`;
       case "cancelled":
         return `${baseClasses} bg-red-100 text-red-800`;
       case "refunded":
@@ -487,10 +503,44 @@ export default function TransactionsPage() {
     }
   };
 
+  const getDeliveryStatusBadge = (deliveryStatus?: string) => {
+    if (!deliveryStatus) return null;
+    
+    const baseClasses = "px-2 py-1 text-xs font-medium rounded-full";
+    switch (deliveryStatus) {
+      case "pending":
+        return `${baseClasses} bg-amber-100 text-amber-800`;
+      case "confirmed":
+        return `${baseClasses} bg-blue-100 text-blue-800`;
+      case "shipped":
+        return `${baseClasses} bg-indigo-100 text-indigo-800`;
+      case "delivered":
+        return `${baseClasses} bg-emerald-100 text-emerald-800`;
+      case "cancelled":
+        return `${baseClasses} bg-red-100 text-red-800`;
+      default:
+        return `${baseClasses} bg-gray-100 text-gray-800`;
+    }
+  };
+
+  const getDeliveryStatusText = (deliveryStatus?: string) => {
+    if (!deliveryStatus) return "-";
+    
+    const statusMap: Record<string, string> = {
+      pending: "Pending",
+      confirmed: "Confirmed",
+      shipped: "Shipped",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+    };
+    return statusMap[deliveryStatus] || deliveryStatus;
+  };
+
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
-      refunded: t.refunded,
+      refunded: "Fully Refunded",
       partially_refunded: t.partiallyRefunded,
+      pending_refund: "Pending Refund",
       completed: t.completed,
       pending: t.pending,
       cancelled: t.cancelled,
@@ -669,6 +719,18 @@ export default function TransactionsPage() {
         "Manual refund processed by owner", // reason
         "Owner", // processedBy
       );
+
+      // If this refund was from a customer request, mark it as approved
+      const refundRequest = (selectedTransaction as any).refundRequest;
+      if (refundRequest?.status === "pending") {
+        const { db } = await import("@/lib/firebase");
+        const { doc, updateDoc } = await import("firebase/firestore");
+        await updateDoc(doc(db!, "transactions", selectedTransaction.id), {
+          "refundRequest.status": "approved",
+          "refundRequest.approvedAt": new Date().toISOString(),
+          "refundRequest.approvedBy": user?.email || "Owner",
+        });
+      }
 
       toast.error(
         `Refund processed successfully!\nRefund ID: ${refundId}\nAmount: ${formatPrice(
@@ -1000,7 +1062,7 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Desktop sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1030,72 +1092,92 @@ export default function TransactionsPage() {
           onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-screen-2xl mx-auto">
-            {/* Header
-            <div className="mb-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Transactions
-              </h1>
-              <p className="text-gray-600">
-                View and manage all sales transactions
-              </p>
-            </div> */}
-
-            {/* Summary Stats */}
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.totalTransactions}
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {filteredTransactions.length}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.totalSales}
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatPrice(calculateNetRevenue(revenueTransactions))}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.totalProfit}
-                </h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {formatPrice(calculateTotalProfit(revenueTransactions))}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.completed}
-                </h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {completedTransactionsCount}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.totalSalesThb}
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatPrice(calculateNetRevenue(revenueTransactionsTHB))}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500">
-                  {t.totalSalesMmk}
-                </h3>
-                <p className="text-2xl font-bold text-gray-900">
-                  {formatInMMK(calculateNetRevenue(revenueTransactionsMMK))}
+            <div className="mb-6 flex flex-col gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                  {t.transactions}
+                </h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  View and manage all sales transactions.
                 </p>
               </div>
             </div>
 
+            {/* Summary Stats - Focused on Transaction Management */}
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-sm font-medium text-blue-100">
+                      Total Transactions
+                    </p>
+                    <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <Filter className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold">{filteredTransactions.length}</p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-sm font-medium text-emerald-100">
+                      Completed
+                    </p>
+                    <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold">{completedTransactionsCount}</p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-sm font-medium text-amber-100">
+                      Pending / COD
+                    </p>
+                    <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold">
+                    {filteredTransactions.filter(t => t.status === "pending").length}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="text-sm font-medium text-red-100">
+                      Cancelled / Refunded
+                    </p>
+                    <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <X className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold">
+                    {filteredTransactions.filter(t => 
+                      t.status === "cancelled" || 
+                      t.status === "refunded" || 
+                      t.status === "partially_refunded"
+                    ).length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
                 <div className="relative">
@@ -1108,7 +1190,7 @@ export default function TransactionsPage() {
                       setSearchTerm(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                   />
                 </div>
 
@@ -1124,17 +1206,19 @@ export default function TransactionsPage() {
                         | "pending"
                         | "cancelled"
                         | "refunded"
-                        | "partially_refunded",
+                        | "partially_refunded"
+                        | "pending_refund",
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                 >
                   <option value="all">{t.allStatus}</option>
                   <option value="completed">{t.completed}</option>
                   <option value="pending">{t.pending}</option>
+                  <option value="pending_refund">Pending Refund</option>
                   <option value="cancelled">{t.cancelled}</option>
-                  <option value="refunded">{t.refunded}</option>
+                  <option value="refunded">Fully Refunded</option>
                   <option value="partially_refunded">
                     {t.partiallyRefunded}
                   </option>
@@ -1150,17 +1234,15 @@ export default function TransactionsPage() {
                         | "all"
                         | "cash"
                         | "scan"
-                        | "wallet"
                         | "cod",
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                 >
                   <option value="all">{t.allPaymentMethods}</option>
                   <option value="cash">{t.cash}</option>
                   <option value="scan">{t.scanPayment}</option>
-                  <option value="wallet">{t.wallet}</option>
                   <option value="cod">{t.cod}</option>
                 </select>
 
@@ -1176,7 +1258,7 @@ export default function TransactionsPage() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                 >
                   <option value="all">All Wholesale</option>
                   <option value="with_wholesale">With Wholesale Amount</option>
@@ -1193,7 +1275,7 @@ export default function TransactionsPage() {
                     setFilterBranch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                 >
                   <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
@@ -1242,7 +1324,7 @@ export default function TransactionsPage() {
                       }
                     }
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900 bg-white"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                 >
                   <option value="today">{t.today}</option>
                   <option value="7d">{t.last7Days}</option>
@@ -1253,36 +1335,45 @@ export default function TransactionsPage() {
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
-                <div className="flex items-center gap-2 lg:col-span-2 flex-wrap">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setDateRange("custom");
-                      setCurrentPage(1);
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    max={endDate}
-                    aria-label="Start Date"
-                  />
-                  <span className="text-gray-500">to</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setDateRange("custom");
-                      setCurrentPage(1);
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    min={startDate}
-                    max={new Date().toISOString().split("T")[0]}
-                    aria-label="End Date"
-                  />
+                <div className="lg:col-span-2 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-pink-300">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setDateRange("custom");
+                          setCurrentPage(1);
+                        }}
+                        className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900"
+                        max={endDate}
+                        aria-label="Start Date"
+                      />
+                    </div>
+
+                    <span className="text-gray-300">—</span>
+
+                    <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-pink-300">
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setDateRange("custom");
+                          setCurrentPage(1);
+                        }}
+                        className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900"
+                        min={startDate}
+                        max={new Date().toISOString().split("T")[0]}
+                        aria-label="End Date"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     onClick={exportToCSV}
-                    className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm"
+                    className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 px-4 py-2.5 text-sm rounded-xl shadow-sm"
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Export
@@ -1293,56 +1384,60 @@ export default function TransactionsPage() {
 
             {/* Bulk Actions Bar */}
             {isOwner && selectedTransactions.length > 0 && (
-              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-blue-900">
-                    {selectedTransactions.length} transaction(s) selected
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleBulkApprove}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white  hover:bg-green-700 transition-colors text-sm font-medium"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve Selected
-                  </button>
-                  <button
-                    onClick={handleBulkCancel}
-                    className="flex items-center px-4 py-2 bg-red-600 text-white  hover:bg-red-700 transition-colors text-sm font-medium"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel Checkout Selected
-                  </button>
-                  <button
-                    onClick={handleBulkDelete}
-                    disabled={isProcessingDelete}
-                    className="flex items-center px-4 py-2 bg-red-700 text-white  hover:bg-red-800 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isProcessingDelete ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash className="h-4 w-4 mr-2" />
-                        Delete Selected
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setSelectedTransactions([])}
-                    className="px-4 py-2 bg-gray-200 text-gray-700  hover:bg-gray-300 transition-colors text-sm font-medium"
-                  >
-                    Clear Selection
-                  </button>
+              <div className="mb-4 bg-gradient-to-r from-pink-50 to-pink-100 border border-pink-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-pink-100 text-pink-900 border border-pink-200 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4 text-pink-700" />
+                      {selectedTransactions.length} transaction(s) selected
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleBulkApprove}
+                      className="flex items-center px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Approve 
+                    </button>
+                    <button
+                      onClick={handleBulkCancel}
+                      className="flex items-center px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel Checkout 
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={isProcessingDelete}
+                      className="flex items-center px-4 py-2.5 bg-red-500 text-white hover:bg-red-800 transition-colors text-sm font-medium rounded-xl shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isProcessingDelete ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash className="h-4 w-4 mr-2" />
+                          Delete 
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setSelectedTransactions([])}
+                      className="px-4 py-2.5 bg-gray-500 border border-gray-200 text-white   hover:bg-gray-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Transactions Table */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -1355,11 +1450,11 @@ export default function TransactionsPage() {
               ) : (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
                   <div className="inline-block min-w-full align-middle">
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                    <div className="overflow-hidden md:rounded-2xl">
                       <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
                           <tr>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="w-12 px-3 md:px-4 lg:px-6 py-3 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               <input
                                 type="checkbox"
                                 checked={
@@ -1374,53 +1469,56 @@ export default function TransactionsPage() {
                                     ? "Only owner can select transactions"
                                     : undefined
                                 }
-                                className="h-4 w-4 md:h-5 md:w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="h-4 w-4 md:h-5 md:w-5 text-pink-600 focus:ring-pink-400 border-gray-300 rounded cursor-pointer touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
                                 aria-label="Select all transactions"
                               />
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.transactionId}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.customer}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.items}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.total}
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               Original Total Price
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               Discount Price
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               Wholesale Amount
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.profit}
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.tax}
                             </th>
-                            <th className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.branch}
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.sellingCurrency}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.paymentMethod}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.status}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                              Delivery Status
+                            </th>
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.dateTime}
                             </th>
-                            <th className="px-3 md:px-4 lg:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.actions}
                             </th>
                           </tr>
@@ -1435,11 +1533,12 @@ export default function TransactionsPage() {
                             const isPartiallyRefunded =
                               transaction.status === "partially_refunded";
 
-                            const rowClass = "hover:bg-gray-50";
+                            const rowClass =
+                              "hover:bg-pink-50/50 transition-colors";
 
                             return (
                               <tr key={transaction.id} className={rowClass}>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedTransactions.includes(
@@ -1454,27 +1553,39 @@ export default function TransactionsPage() {
                                         ? "Only owner can select transactions"
                                         : undefined
                                     }
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="h-4 w-4 text-pink-600 focus:ring-pink-400 border-gray-300 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     aria-label={`Select transaction ${transaction.transactionId}`}
                                   />
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {transaction.transactionId}
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  <div className="flex items-center gap-2">
+                                    <span>{transaction.transactionId}</span>
+                                    {(transaction as any).cancellationRequest?.status === "pending" && (
+                                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 border border-amber-200">
+                                        Cancel Requested
+                                      </span>
+                                    )}
+                                    {(transaction as any).refundRequest?.status === "pending" && (
+                                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 border border-blue-200">
+                                        Refund Requested
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap">
                                   <div className="text-sm text-gray-900">
                                     {transaction.customer?.displayName ||
                                       t.walkInCustomer}
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {transaction.items.reduce(
                                     (total, item) => total + item.quantity,
                                     0,
                                   )}{" "}
                                   {t.items}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                                   {(() => {
                                     const refundedAmount =
                                       transaction.refunds?.reduce(
@@ -1584,7 +1695,7 @@ export default function TransactionsPage() {
                                     );
                                   })()}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm font-medium">
                                   {(() => {
                                     // Calculate profit: (selling price - original price) * quantity for each item
                                     const totalProfit =
@@ -1648,13 +1759,13 @@ export default function TransactionsPage() {
                                     );
                                   })()}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {formatPrice(transaction.tax || 0)}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {transaction.branchName || t.mainBranch}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {transaction.sellingCurrency &&
                                   transaction.exchangeRate &&
                                   transaction.sellingTotal ? (
@@ -1677,7 +1788,7 @@ export default function TransactionsPage() {
                                     <span className="text-gray-400">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap">
                                   <div className="flex items-center">
                                     {getPaymentMethodIcon(
                                       transaction.paymentMethod,
@@ -1689,19 +1800,36 @@ export default function TransactionsPage() {
                                     </span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap">
                                   <span
                                     className={getStatusBadge(
-                                      transaction.status,
+                                      transaction.paymentStatus || transaction.status,
                                     )}
                                   >
-                                    {getStatusText(transaction.status)}
+                                    {getStatusText(transaction.paymentStatus || transaction.status)}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap">
+                                  {(transaction.paymentMethod === "cod" ||
+                                    transaction.paymentMethod === "scan") &&
+                                  transaction.deliveryStatus ? (
+                                    <span
+                                      className={getDeliveryStatusBadge(
+                                        transaction.deliveryStatus,
+                                      ) || ""}
+                                    >
+                                      {getDeliveryStatusText(
+                                        transaction.deliveryStatus,
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">-</span>
+                                  )}
+                                </td>
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {formatDate(transaction.timestamp)}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm font-medium">
                                   <div className="relative">
                                     <button
                                       ref={(el) => {
@@ -1833,7 +1961,7 @@ export default function TransactionsPage() {
                     <p className="text-sm text-gray-600 mt-1">
                       Transaction ID: {selectedTransaction.transactionId}
                     </p>
-                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="mt-3 p-3 bg-cyan-50 rounded-lg border border-blue-200">
                       <p className="text-sm text-blue-800">
                         💡 <strong>Tip:</strong> You can only refund up to the
                         available quantity for each item. The system will
@@ -1971,7 +2099,7 @@ export default function TransactionsPage() {
                       })}
                     </div>
 
-                    <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <div className="mt-6 p-4 bg-cyan-50 rounded-lg">
                       {(() => {
                         // Calculate refund breakdown
                         const totalItemRefundAmount = Object.entries(
@@ -2061,7 +2189,7 @@ export default function TransactionsPage() {
                                   <span className="font-medium text-gray-900">
                                     Total Refund Amount:
                                   </span>
-                                  <span className="text-xl font-bold text-blue-600">
+                                  <span className="text-xl font-bold text-cyan-600">
                                     {formatPrice(finalRefundAmount)}
                                   </span>
                                 </div>
@@ -2329,14 +2457,14 @@ export default function TransactionsPage() {
                                   key: "groupPercent",
                                   label: "Group Discount",
                                   badge: "GROUP",
-                                  badgeClasses: "bg-blue-100 text-blue-800",
+                                  badgeClasses: "bg-cyan-100 text-blue-800",
                                   amount: breakdown.groupPercentSavings,
                                 },
                                 {
                                   key: "groupFixed",
                                   label: "Group Fixed Discount",
                                   badge: "GROUP",
-                                  badgeClasses: "bg-blue-100 text-blue-800",
+                                  badgeClasses: "bg-cyan-100 text-blue-800",
                                   amount: breakdown.groupFixedTotal,
                                 },
                                 {
@@ -2368,7 +2496,7 @@ export default function TransactionsPage() {
                               if (summaryItems.length === 0) return null;
 
                               return (
-                                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+                                <div className="bg-cyan-50 border border-blue-100 rounded-lg p-3 space-y-2">
                                   <div className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
                                     Discount Details
                                   </div>
@@ -2645,6 +2773,164 @@ export default function TransactionsPage() {
                       View Details
                     </button>
 
+                    {/* Customer Cancellation Request Actions */}
+                    {(() => {
+                      const transaction = transactions.find(
+                        (t) => t.id === openDropdown,
+                      );
+                      const cancelRequest = (transaction as any)?.cancellationRequest;
+                      
+                      if (cancelRequest?.status === "pending") {
+                        return (
+                          <>
+                            <div className="border-t border-gray-100 my-1"></div>
+                            <div className="px-4 py-2 text-xs font-semibold text-amber-600 uppercase">
+                              Cancellation Request
+                            </div>
+                            <button
+                              onClick={async () => {
+                                if (!transaction) return;
+                                try {
+                                  // Approve cancellation
+                                  await transactionService.cancelTransaction(
+                                    transaction.id!,
+                                    transaction,
+                                    user?.email || "Owner",
+                                  );
+                                  
+                                  // Update cancellation request status
+                                  const { db } = await import("@/lib/firebase");
+                                  const { doc, updateDoc } = await import("firebase/firestore");
+                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
+                                    "cancellationRequest.status": "approved",
+                                    "cancellationRequest.approvedAt": new Date().toISOString(),
+                                    "cancellationRequest.approvedBy": user?.email || "Owner",
+                                  });
+                                  
+                                  toast.success("Cancellation request approved!");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  console.error("Approval error:", error);
+                                  toast.error("Failed to approve cancellation");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-3" />
+                              Approve Cancellation
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!transaction) return;
+                                const reason = prompt("Reason for rejection:");
+                                if (!reason) return;
+                                
+                                try {
+                                  const { db } = await import("@/lib/firebase");
+                                  const { doc, updateDoc } = await import("firebase/firestore");
+                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
+                                    cancellationRequest: {
+                                      ...cancelRequest,
+                                      status: "rejected",
+                                      rejectedAt: new Date().toISOString(),
+                                      rejectionReason: reason,
+                                      rejectedBy: user?.email || "Owner",
+                                    },
+                                  });
+                                  toast.success("Cancellation request rejected");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  toast.error("Failed to reject cancellation");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <X className="h-4 w-4 mr-3" />
+                              Reject Cancellation
+                            </button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Customer Refund Request Actions */}
+                    {(() => {
+                      const transaction = transactions.find(
+                        (t) => t.id === openDropdown,
+                      );
+                      const refundRequest = (transaction as any)?.refundRequest;
+                      
+                      if (refundRequest?.status === "pending") {
+                        return (
+                          <>
+                            <div className="border-t border-gray-100 my-1"></div>
+                            <div className="px-4 py-2 text-xs font-semibold text-blue-600 uppercase">
+                              Refund Request
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (transaction) {
+                                  // Open refund modal with pre-selected items from request
+                                  setSelectedTransaction(transaction);
+                                  const requestedItems: { [key: string]: number } = {};
+                                  refundRequest.items?.forEach((item: any) => {
+                                    const txnItem = transaction.items.find(
+                                      (ti) => ti.groupName === item.groupName || ti.id === item.id
+                                    );
+                                    if (txnItem) {
+                                      const index = transaction.items.indexOf(txnItem);
+                                      requestedItems[`${txnItem.id}___${index}`] = item.quantity;
+                                    }
+                                  });
+                                  setRefundItems(requestedItems);
+                                  setShowRefundModal(true);
+                                  setOpenDropdown(null);
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-3" />
+                              Process Refund
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!transaction) return;
+                                const reason = prompt("Reason for rejection:");
+                                if (!reason) return;
+                                
+                                try {
+                                  const { db } = await import("@/lib/firebase");
+                                  const { doc, updateDoc } = await import("firebase/firestore");
+                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
+                                    refundRequest: {
+                                      ...refundRequest,
+                                      status: "rejected",
+                                      rejectedAt: new Date().toISOString(),
+                                      rejectionReason: reason,
+                                      rejectedBy: user?.email || "Owner",
+                                    },
+                                  });
+                                  toast.success("Refund request rejected");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  toast.error("Failed to reject refund");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <X className="h-4 w-4 mr-3" />
+                              Reject Refund
+                            </button>
+                          </>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {(() => {
                       const transaction = transactions.find(
                         (t) => t.id === openDropdown,
@@ -2703,6 +2989,99 @@ export default function TransactionsPage() {
                             Cancel Checkout
                           </button>
                         )
+                      );
+                    })()}
+
+                    {/* Delivery Status Updates for COD/Scan orders */}
+                    {(() => {
+                      const transaction = transactions.find(
+                        (t) => t.id === openDropdown,
+                      );
+                      if (
+                        !transaction ||
+                        (transaction.paymentMethod !== "cod" &&
+                          transaction.paymentMethod !== "scan") ||
+                        transaction.status === "cancelled"
+                      ) {
+                        return null;
+                      }
+
+                      return (
+                        <>
+                          <div className="border-t border-gray-100 my-1"></div>
+                          <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase">
+                            Delivery Status
+                          </div>
+                          
+                          {transaction.deliveryStatus !== "confirmed" && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await transactionService.updateDeliveryStatus(
+                                    transaction.id!,
+                                    "confirmed",
+                                    user?.email || "Admin",
+                                  );
+                                  toast.success("Order confirmed successfully!");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  toast.error("Failed to confirm order");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-3" />
+                              Confirm Order
+                            </button>
+                          )}
+
+                          {transaction.deliveryStatus === "confirmed" && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await transactionService.updateDeliveryStatus(
+                                    transaction.id!,
+                                    "shipped",
+                                    user?.email || "Admin",
+                                  );
+                                  toast.success("Order marked as shipped!");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  toast.error("Failed to update status");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            >
+                              <Truck className="h-4 w-4 mr-3" />
+                              Mark as Shipped
+                            </button>
+                          )}
+
+                          {transaction.deliveryStatus === "shipped" && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await transactionService.updateDeliveryStatus(
+                                    transaction.id!,
+                                    "delivered",
+                                    user?.email || "Admin",
+                                  );
+                                  toast.success("Order marked as delivered!");
+                                  loadTransactions();
+                                  setOpenDropdown(null);
+                                } catch (error) {
+                                  toast.error("Failed to update status");
+                                }
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-3" />
+                              Mark as Delivered
+                            </button>
+                          )}
+                        </>
                       );
                     })()}
                   </div>

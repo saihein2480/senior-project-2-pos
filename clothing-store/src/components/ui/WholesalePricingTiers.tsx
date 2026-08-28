@@ -38,7 +38,7 @@ export function WholesalePricingTiers({
             <DollarSign className="h-5 w-5 text-gray-400 mr-2" />
             <h3 className="text-lg font-medium text-gray-900">{title}</h3>
             {wholesaleTiers.length > 0 && (
-              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-blue-800">
                 {wholesaleTiers.length} tier{wholesaleTiers.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -111,7 +111,7 @@ export function WholesalePricingTiers({
               
               {/* Summary information */}
               {sortedTiers.length > 1 && (
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <div className="mt-6 p-4 bg-cyan-50 rounded-lg">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
                       <DollarSign className="h-5 w-5 text-blue-400 mt-0.5" />

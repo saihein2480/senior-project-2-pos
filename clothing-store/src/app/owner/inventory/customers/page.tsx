@@ -70,10 +70,15 @@ function CustomerPageContent() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Pagination state - separate for each customer type table
+  const [retailerPage, setRetailerPage] = useState(1);
+  const [wholesalerPage, setWholesalerPage] = useState(1);
+  const [distributorPage, setDistributorPage] = useState(1);
+  const [individualPage, setIndividualPage] = useState(1);
+  const [unassignedPage, setUnassignedPage] = useState(1);
+  const [rowsPerPage] = useState(10);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [selectedCustomerType, setSelectedCustomerType] = useState<string | null>(null);
 
   // Fetch customers from API
   const fetchCustomers = async () => {
@@ -311,19 +316,59 @@ function CustomerPageContent() {
     }
   };
 
-  // Filter customers based on search term
-  const filteredCustomers = customers.filter(
+  // Filter customers based on search term only
+  const searchFilteredCustomers = customers.filter(
     (customer) =>
       customer.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()),
+      customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredCustomers.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const currentCustomers = filteredCustomers.slice(startIndex, endIndex);
+  // Group customers by type from the search-filtered list
+  const retailerCustomers = searchFilteredCustomers.filter(
+    (customer) => customer.customerType === "retailer",
+  );
+  const wholesalerCustomers = searchFilteredCustomers.filter(
+    (customer) => customer.customerType === "wholesaler",
+  );
+  const distributorCustomers = searchFilteredCustomers.filter(
+    (customer) => customer.customerType === "distributor",
+  );
+  const individualCustomers = searchFilteredCustomers.filter(
+    (customer) => customer.customerType === "individual",
+  );
+  const unassignedCustomers = searchFilteredCustomers.filter(
+    (customer) => !customer.customerType || (customer.customerType !== "retailer" && customer.customerType !== "wholesaler" && customer.customerType !== "distributor" && customer.customerType !== "individual"),
+  );
+
+  // Calculate total filtered customers for the "no customers found" message
+  const filteredCustomers = searchFilteredCustomers;
+
+  // Pagination calculations for each type
+  const retailerTotalPages = Math.ceil(retailerCustomers.length / rowsPerPage);
+  const retailerStartIndex = (retailerPage - 1) * rowsPerPage;
+  const retailerEndIndex = retailerStartIndex + rowsPerPage;
+  const retailerPageCustomers = retailerCustomers.slice(retailerStartIndex, retailerEndIndex);
+
+  const wholesalerTotalPages = Math.ceil(wholesalerCustomers.length / rowsPerPage);
+  const wholesalerStartIndex = (wholesalerPage - 1) * rowsPerPage;
+  const wholesalerEndIndex = wholesalerStartIndex + rowsPerPage;
+  const wholesalerPageCustomers = wholesalerCustomers.slice(wholesalerStartIndex, wholesalerEndIndex);
+
+  const distributorTotalPages = Math.ceil(distributorCustomers.length / rowsPerPage);
+  const distributorStartIndex = (distributorPage - 1) * rowsPerPage;
+  const distributorEndIndex = distributorStartIndex + rowsPerPage;
+  const distributorPageCustomers = distributorCustomers.slice(distributorStartIndex, distributorEndIndex);
+
+  const individualTotalPages = Math.ceil(individualCustomers.length / rowsPerPage);
+  const individualStartIndex = (individualPage - 1) * rowsPerPage;
+  const individualEndIndex = individualStartIndex + rowsPerPage;
+  const individualPageCustomers = individualCustomers.slice(individualStartIndex, individualEndIndex);
+
+  const unassignedTotalPages = Math.ceil(unassignedCustomers.length / rowsPerPage);
+  const unassignedStartIndex = (unassignedPage - 1) * rowsPerPage;
+  const unassignedEndIndex = unassignedStartIndex + rowsPerPage;
+  const unassignedPageCustomers = unassignedCustomers.slice(unassignedStartIndex, unassignedEndIndex);
 
   // Format date
   const formatDate = (date: Date | string) => {
@@ -358,33 +403,20 @@ function CustomerPageContent() {
           />
 
           <main className="flex-1 overflow-x-hidden overflow-y-auto">
-            <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
               {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">
-                    Customers
-                  </h1>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage your customer database and relationships
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  {/* <Button
-                    variant="outline"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="flex items-center "
-                  >
-                    <RefreshCw
-                      className={`h-4 w-4 mr-2 ${
-                        isRefreshing ? "animate-spin" : ""
-                      }`}
-                    />
-                    Refresh
-                  </Button> */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">
+                      Customers
+                    </h1>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage your customer database and relationships
+                    </p>
+                  </div>
                   <Button
-                    className="flex items-center"
+                    className="flex items-center bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white font-medium shadow-md border-0"
                     onClick={() => setIsModalOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -393,343 +425,1096 @@ function CustomerPageContent() {
                 </div>
               </div>
 
+              {/* Customer Type Filter Tabs */}
+              <div className="mb-6 flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType(null);
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
+                    selectedCustomerType === null
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  All Types
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("retailer");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "retailer"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  <Store className="h-4 w-4" />
+                  Retailer
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("wholesaler");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "wholesaler"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  <Building2 className="h-4 w-4" />
+                  Wholesaler
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("distributor");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "distributor"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  <Building2 className="h-4 w-4" />
+                  Distributor
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("individual");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "individual"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  <User className="h-4 w-4" />
+                  Individual
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("others");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "others"
+                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  Others
+                </button>
+              </div>
+
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {/* Total Customers */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
-                        <Users className="h-5 w-5 text-blue-600" />
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                         Total Customers
                       </p>
-                      <p className="text-2xl font-semibold text-gray-900">
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
                         {stats.totalCustomers}
                       </p>
+                    </div>
+                    <div className="p-3 bg-cyan-100 rounded-xl">
+                      <Users className="h-6 w-6 text-cyan-600" />
                     </div>
                   </div>
                 </div>
 
                 {/* Retailer */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
-                        <Store className="h-5 w-5 text-purple-600" />
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                         Retailer
                       </p>
-                      <p className="text-2xl font-semibold text-gray-900">
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
                         {stats.retailerCustomers}
                       </p>
+                    </div>
+                    <div className="p-3 bg-purple-100 rounded-xl">
+                      <Store className="h-6 w-6 text-purple-600" />
                     </div>
                   </div>
                 </div>
 
                 {/* Wholesaler */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-orange-600" />
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                         Wholesaler
                       </p>
-                      <p className="text-2xl font-semibold text-gray-900">
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
                         {stats.wholesalerCustomers}
                       </p>
+                    </div>
+                    <div className="p-3 bg-orange-100 rounded-xl">
+                      <Building2 className="h-6 w-6 text-orange-600" />
                     </div>
                   </div>
                 </div>
 
                 {/* Receivables */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8  rounded-lg flex items-center justify-center">
-                        <CreditCard className="h-5 w-5 text-red-600" />
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                         Receivables
                       </p>
-                      <p className="text-2xl font-semibold text-gray-900">
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
                         {formatPrice(stats.totalReceivables)}
                       </p>
+                    </div>
+                    <div className="p-3 bg-red-100 rounded-xl">
+                      <CreditCard className="h-6 w-6 text-red-600" />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Search Bar */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <Input
                     type="text"
-                    placeholder="Search for customers..."
+                    placeholder="Search by name, email, or phone..."
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
-                      setCurrentPage(1);
+                      setRetailerPage(1);
+                      setWholesalerPage(1);
+                      setDistributorPage(1);
+                      setIndividualPage(1);
+                      setUnassignedPage(1);
                     }}
-                    className="pl-10"
+                    className="pl-12 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-base"
                   />
                 </div>
               </div>
 
               {/* Customer List */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    <span className="ml-2 text-gray-600">
+              {isLoading ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <span className="ml-3 text-gray-600 font-medium">
                       Loading customers...
                     </span>
                   </div>
-                ) : error ? (
-                  <div className="flex items-center justify-center py-12">
-                    <AlertCircle className="h-8 w-8 text-red-400" />
-                    <span className="ml-2 text-red-600">{error}</span>
-                  </div>
-                ) : filteredCustomers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                      <Users className="h-12 w-12 text-gray-400" />
+                </div>
+              ) : error ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
+                  <div className="flex items-center justify-center">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+                      <p className="text-red-600 font-medium">{error}</p>
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  </div>
+                </div>
+              ) : filteredCustomers.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                      <Users className="h-10 w-10 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
                       No customers found
                     </h3>
-                    <p className="text-gray-500 text-center max-w-md">
+                    <p className="text-gray-500 text-center max-w-sm mb-6">
                       {searchTerm
                         ? "No customers match your search criteria."
                         : "Get started by adding your first customer."}
                     </p>
                     <Button
-                      className="mt-4 flex items-center"
+                      className="flex items-center bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white font-medium shadow-md border-0"
                       onClick={() => setIsModalOpen(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Customer
                     </Button>
                   </div>
-                ) : (
-                  <div className="overflow-x-auto overflow-y-visible">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Customer
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Type
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Contact
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total Spent
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Receivables
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Joined
-                          </th>
-                          <th className="relative px-6 py-3">
-                            <span className="sr-only">Actions</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {currentCustomers.map((customer) => (
-                          <tr key={customer.uid} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-15 w-15">
-                                  {customer.customerImage ? (
-                                    <img
-                                      className="h-15 w-15 rounded-full object-cover"
-                                      src={customer.customerImage}
-                                      alt={
-                                        customer.displayName || customer.email
-                                      }
-                                      onError={(e) => {
-                                        // Fallback to default avatar if image fails to load
-                                        const target =
-                                          e.target as HTMLImageElement;
-                                        target.style.display = "none";
-                                        target.nextElementSibling?.classList.remove(
-                                          "hidden",
-                                        );
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div
-                                    className={`h-15 w-15 rounded-full bg-gray-200 flex items-center justify-center ${
-                                      customer.customerImage ? "hidden" : ""
-                                    }`}
-                                  >
-                                    <User className="h-6 w-6 text-gray-500" />
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {customer.displayName || "No Name"}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {customer.email}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span
-                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  customer.customerType === "wholesaler"
-                                    ? "bg-orange-100 text-orange-800"
-                                    : "bg-purple-100 text-purple-800"
-                                }`}
-                              >
-                                {customer.customerType || "Retailer"}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              <div className="space-y-1">
-                                {customer.phone && (
-                                  <div className="flex items-center">
-                                    <Phone className="h-3 w-3 text-gray-400 mr-1" />
-                                    {customer.phone}
-                                  </div>
-                                )}
-                                {customer.address && (
-                                  <div className="flex items-center">
-                                    <MapPin className="h-3 w-3 text-gray-400 mr-1" />
-                                    {customer.address}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatPrice(customer.totalSpent || 0)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatPrice(customer.receivables || 0)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {formatDate(customer.createdAt)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="relative">
-                                <button
-                                  ref={(el) => {
-                                    buttonRefs.current[customer.uid] = el;
-                                  }}
-                                  onClick={() =>
-                                    handleDropdownToggle(customer.uid)
-                                  }
-                                  className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-                                  aria-label="Customer actions"
-                                >
-                                  <MoreVertical className="h-4 w-4 text-gray-500" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Pagination */}
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm text-gray-700">Rows per page:</p>
-                      <select
-                        title="Select number of rows per page"
-                        value={rowsPerPage}
-                        onChange={(e) => {
-                          setRowsPerPage(Number(e.target.value));
-                          setCurrentPage(1);
-                        }}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
-                      >
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
-                      <p className="text-sm text-gray-700">
-                        Showing {startIndex + 1}–
-                        {Math.min(endIndex, filteredCustomers.length)} of{" "}
-                        {filteredCustomers.length} customers
-                      </p>
-                    </div>
-                    <div>
-                      <nav
-                        className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-                        aria-label="Pagination"
-                      >
-                        <button
-                          title="Go to previous page"
-                          onClick={() =>
-                            setCurrentPage(Math.max(1, currentPage - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <ChevronLeft className="h-5 w-5" />
-                        </button>
-                        <button
-                          title="Go to next page"
-                          onClick={() =>
-                            setCurrentPage(
-                              Math.min(totalPages, currentPage + 1),
-                            )
-                          }
-                          disabled={currentPage === totalPages}
-                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <ChevronRight className="h-5 w-5" />
-                        </button>
-                      </nav>
-                    </div>
-                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Show message if no customers after filtering */}
+                  {retailerCustomers.length === 0 && wholesalerCustomers.length === 0 && distributorCustomers.length === 0 && individualCustomers.length === 0 && unassignedCustomers.length === 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                          <Users className="h-10 w-10 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                          No customers to display
+                        </h3>
+                        <p className="text-gray-500 text-center max-w-sm mb-2">
+                          Total customers: {filteredCustomers.length}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          This might be a data structure issue. Check console for details.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Retailer Customers Section */}
+                  {(selectedCustomerType === null || selectedCustomerType === "retailer") && retailerCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-blue-100 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <Store className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Retailer Customers</h2>
+                            <p className="text-sm text-gray-600">{retailerCustomers.length} {retailerCustomers.length === 1 ? 'retailer' : 'retailers'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {retailerPageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-blue-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-blue-100"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <User className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {customer.displayName || "No Name"}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Retailer Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setRetailerPage(Math.max(1, retailerPage - 1))}
+                            disabled={retailerPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setRetailerPage(Math.min(retailerTotalPages, retailerPage + 1))}
+                            disabled={retailerPage === retailerTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {retailerStartIndex + 1} to {Math.min(retailerEndIndex, retailerCustomers.length)} of {retailerCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setRetailerPage(Math.max(1, retailerPage - 1))}
+                                disabled={retailerPage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {retailerPage} of {retailerTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setRetailerPage(Math.min(retailerTotalPages, retailerPage + 1))}
+                                disabled={retailerPage === retailerTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {(selectedCustomerType === null || selectedCustomerType === "wholesaler") && wholesalerCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-100 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <Building2 className="h-5 w-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Wholesaler Customers</h2>
+                            <p className="text-sm text-gray-600">{wholesalerCustomers.length} {wholesalerCustomers.length === 1 ? 'wholesaler' : 'wholesalers'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {wholesalerPageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-orange-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-orange-100"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <Building2 className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {customer.displayName || "No Name"}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Wholesaler Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setWholesalerPage(Math.max(1, wholesalerPage - 1))}
+                            disabled={wholesalerPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setWholesalerPage(Math.min(wholesalerTotalPages, wholesalerPage + 1))}
+                            disabled={wholesalerPage === wholesalerTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {wholesalerStartIndex + 1} to {Math.min(wholesalerEndIndex, wholesalerCustomers.length)} of {wholesalerCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setWholesalerPage(Math.max(1, wholesalerPage - 1))}
+                                disabled={wholesalerPage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {wholesalerPage} of {wholesalerTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setWholesalerPage(Math.min(wholesalerTotalPages, wholesalerPage + 1))}
+                                disabled={wholesalerPage === wholesalerTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {(selectedCustomerType === null || selectedCustomerType === "distributor") && distributorCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <Building2 className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Distributor Customers</h2>
+                            <p className="text-sm text-gray-600">{distributorCustomers.length} {distributorCustomers.length === 1 ? 'distributor' : 'distributors'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {distributorPageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-purple-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-purple-100"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <Building2 className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {customer.displayName || "No Name"}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Distributor Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setDistributorPage(Math.max(1, distributorPage - 1))}
+                            disabled={distributorPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setDistributorPage(Math.min(distributorTotalPages, distributorPage + 1))}
+                            disabled={distributorPage === distributorTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {distributorStartIndex + 1} to {Math.min(distributorEndIndex, distributorCustomers.length)} of {distributorCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setDistributorPage(Math.max(1, distributorPage - 1))}
+                                disabled={distributorPage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {distributorPage} of {distributorTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setDistributorPage(Math.min(distributorTotalPages, distributorPage + 1))}
+                                disabled={distributorPage === distributorTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {(selectedCustomerType === null || selectedCustomerType === "individual") && individualCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-100 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <User className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Individual Customers</h2>
+                            <p className="text-sm text-gray-600">{individualCustomers.length} {individualCustomers.length === 1 ? 'individual' : 'individuals'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {individualPageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-green-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-green-100"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <User className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {customer.displayName || "No Name"}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Individual Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setIndividualPage(Math.max(1, individualPage - 1))}
+                            disabled={individualPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setIndividualPage(Math.min(individualTotalPages, individualPage + 1))}
+                            disabled={individualPage === individualTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {individualStartIndex + 1} to {Math.min(individualEndIndex, individualCustomers.length)} of {individualCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setIndividualPage(Math.max(1, individualPage - 1))}
+                                disabled={individualPage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {individualPage} of {individualTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setIndividualPage(Math.min(individualTotalPages, individualPage + 1))}
+                                disabled={individualPage === individualTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {(selectedCustomerType === null || selectedCustomerType === "others") && unassignedCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-gray-50 to-slate-50 border-b border-gray-200 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <Users className="h-5 w-5 text-gray-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Other Customers</h2>
+                            <p className="text-sm text-gray-600">{unassignedCustomers.length} {unassignedCustomers.length === 1 ? 'customer' : 'customers'} (no type assigned)</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {unassignedPageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-gray-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-gray-200"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-gray-500 to-slate-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <User className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-900">
+                                        {customer.displayName || "No Name"}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Unassigned Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setUnassignedPage(Math.max(1, unassignedPage - 1))}
+                            disabled={unassignedPage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setUnassignedPage(Math.min(unassignedTotalPages, unassignedPage + 1))}
+                            disabled={unassignedPage === unassignedTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {unassignedStartIndex + 1} to {Math.min(unassignedEndIndex, unassignedCustomers.length)} of {unassignedCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setUnassignedPage(Math.max(1, unassignedPage - 1))}
+                                disabled={unassignedPage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {unassignedPage} of {unassignedTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setUnassignedPage(Math.min(unassignedTotalPages, unassignedPage + 1))}
+                                disabled={unassignedPage === unassignedTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </main>
         </div>

@@ -27,11 +27,16 @@ import {
   Store,
   Building2,
   Wallet,
+  AlertCircle,
+  RotateCcw,
+  XCircle,
+  DollarSign,
 } from "lucide-react";
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useViewMode } from "@/contexts/ViewModeContext";
 import { UserRole } from "@/types/auth";
 import { useOnlineOrdersNotification } from "@/hooks/useOnlineOrdersNotification";
 
@@ -56,6 +61,10 @@ const iconMap = {
   Building2,
   Store,
   Wallet,
+  AlertCircle,
+  RotateCcw,
+  XCircle,
+  DollarSign,
 };
 
 interface SidebarProps extends NavigationProps {
@@ -71,8 +80,6 @@ export function Sidebar({
   activeItem,
   onItemClick,
   className = "",
-  isCollapsed = false,
-  onToggleCollapse,
   isCartModalOpen = false,
   isMobileOpen,
   onCloseMobile,
@@ -80,9 +87,9 @@ export function Sidebar({
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [manuallyCollapsed, setManuallyCollapsed] = useState<string[]>([]);
   const [logoError, setLogoError] = useState<boolean>(false);
-
-  // Collapse feature removed — always render expanded sidebar
-  const collapsed = false;
+  const [pendingCancellationCount, setPendingCancellationCount] = useState<number>(0);
+  const [pendingRefundCount, setPendingRefundCount] = useState<number>(0);
+  const [pendingRefundPaymentsCount, setPendingRefundPaymentsCount] = useState<number>(0);
 
   // Use settings context for business name and logo
   const { businessSettings, isLoading } = useSettings();
@@ -91,9 +98,75 @@ export function Sidebar({
 
   const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
 
+  // Listen to pending cancellation and refund requests
+  useEffect(() => {
+    const fetchPendingRequests = async () => {
+      try {
+        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        
+        const transactionsRef = collection(db!, "transactions");
+        const q = query(
+          transactionsRef,
+          where("status", "!=", "cancelled")
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          let cancellationCount = 0;
+          let refundCount = 0;
+          let paymentCount = 0;
+          
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            
+            // Count pending CANCELLATION requests
+            if (data.cancellationRequest?.status === "pending") {
+              cancellationCount++;
+            }
+            
+            // Count pending REFUND requests
+            if (data.refundRequest?.status === "pending") {
+              refundCount++;
+            }
+            
+            // Count pending refund PAYMENTS (approved but not yet paid)
+            const isPaidOrder = data.paymentMethod === "cash" || data.paymentMethod === "scan" || data.paymentMethod === "wallet";
+            if (isPaidOrder) {
+              // Check for pending cancellation refund
+              if (data.cancellationRefund?.status === "pending") {
+                paymentCount++;
+              }
+              
+              // Check for pending partial refunds
+              const refunds = data.refunds || [];
+              refunds.forEach((refund: any) => {
+                if (refund.status === "pending") {
+                  paymentCount++;
+                }
+              });
+            }
+          });
+          
+          setPendingCancellationCount(cancellationCount);
+          setPendingRefundCount(refundCount);
+          setPendingRefundPaymentsCount(paymentCount);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error fetching pending requests:", error);
+      }
+    };
+    
+    fetchPendingRequests();
+  }, []);
+
   // Get user role from auth context
   const { user } = useAuth();
-  const userRole = user?.role || "staff"; // Default to staff if no role
+  
+  // Get view mode - use viewAsRole for filtering menu items
+  const { viewAsRole } = useViewMode();
+  const userRole = viewAsRole || user?.role || "staff"; // Use viewAsRole if available
 
   // Get translations
   const { t } = useLanguage();
@@ -158,6 +231,42 @@ export function Sidebar({
       ],
     },
     {
+      id: "requests",
+      label: "Customer Requests",
+      icon: "AlertCircle",
+      roles: ["owner", "manager"],
+      children: [
+        {
+          id: "cancellation-requests",
+          label: "Cancellation Requests",
+          icon: "XCircle",
+          href: "/owner/requests/cancellations",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "refund-requests",
+          label: "Return Requests",
+          icon: "RotateCcw",
+          href: "/owner/requests/refunds",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "pending-refunds",
+          label: "Pending Refund Payments",
+          icon: "DollarSign",
+          href: "/owner/requests/pending-refunds",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "refund-report",
+          label: "Refund Report",
+          icon: "FileText",
+          href: "/owner/requests/refund-report",
+          roles: ["owner", "manager"],
+        },
+      ],
+    },
+    {
       id: "inventory",
       label: t.inventory,
       icon: "Package",
@@ -186,13 +295,13 @@ export function Sidebar({
       href: "/owner/expenses",
       roles: ["owner", "manager"], // Only owner and manager
     },
-    {
-      id: "online-promotions",
-      label: "Online Promotions",
-      icon: "Tag",
-      href: "/owner/online-promotions",
-      roles: ["owner", "manager"],
-    },
+    // {
+    //   id: "online-promotions",
+    //   label: "Online Promotions",
+    //   icon: "Tag",
+    //   href: "/owner/online-promotions",
+    //   roles: ["owner", "manager"],
+    // },
     {
       id: "barcode",
       label: t.barcode,
@@ -377,14 +486,19 @@ export function Sidebar({
     const isActiveOrHasActiveChild = isActive || hasActiveChild;
 
     const itemClasses = `
-  flex items-center w-full text-sm transition-colors
-  px-3 py-2 hover:bg-gray-100
-  ${isActiveOrHasActiveChild ? "text-blue-700 border-r-2 border-blue-700" : "text-gray-700"}
-  ${level > 0 ? "pl-8" : ""}
+  group flex items-center w-full gap-2.5 text-sm font-medium rounded-lg transition-colors
+  px-3 py-2
+  ${
+    isActiveOrHasActiveChild
+      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-sm hover:from-rose-600 hover:to-pink-600"
+      : "text-gray-600 hover:bg-pink-50 hover:text-gray-900"
+  }
 `;
 
-    const iconClasses = `w-4 h-4 mr-3 flex-shrink-0 ${
-      isActiveOrHasActiveChild ? "text-blue-700" : ""
+    const iconClasses = `w-4 h-4 flex-shrink-0 ${
+      isActiveOrHasActiveChild
+        ? "text-white"
+        : "text-gray-400 group-hover:text-gray-600"
     }`;
 
     const handleMainClick = () => {
@@ -409,11 +523,26 @@ export function Sidebar({
               className={itemClasses}
             >
               {renderIcon(item.icon, iconClasses)}
-              <span className="flex-1 text-left flex items-center justify-between">
-                <span>{item.label}</span>
+              <span className="flex-1 text-left flex items-center justify-between min-w-0">
+                <span className="truncate">{item.label}</span>
                 {item.id === "online-orders" && unseenOrdersCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-2">
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
                     {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
+                  </span>
+                )}
+                {item.id === "cancellation-requests" && pendingCancellationCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                    {pendingCancellationCount > 99 ? "99+" : pendingCancellationCount}
+                  </span>
+                )}
+                {item.id === "refund-requests" && pendingRefundCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                    {pendingRefundCount > 99 ? "99+" : pendingRefundCount}
+                  </span>
+                )}
+                {item.id === "pending-refunds" && pendingRefundPaymentsCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                    {pendingRefundPaymentsCount > 99 ? "99+" : pendingRefundPaymentsCount}
                   </span>
                 )}
               </span>
@@ -425,7 +554,11 @@ export function Sidebar({
                   e.stopPropagation();
                   toggleExpanded(item.id);
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors ${
+                  isActiveOrHasActiveChild
+                    ? "hover:bg-white/20"
+                    : "hover:bg-gray-200"
+                }`}
               >
                 {isExpanded ? (
                   <ChevronDown className="w-3 h-3" />
@@ -438,21 +571,29 @@ export function Sidebar({
         ) : (
           <button onClick={handleMainClick} className={itemClasses}>
             {renderIcon(item.icon, iconClasses)}
-            <span className="flex-1 text-left flex items-center justify-between">
-              <span>{item.label}</span>
+            <span className="flex-1 text-left flex items-center justify-between min-w-0">
+              <span className="truncate">{item.label}</span>
               {item.id === "sales" && unseenOrdersCount > 0 && !isExpanded && (
                 <span
-                  className="w-2 h-2 bg-red-500 rounded-full mr-2"
+                  className="w-2 h-2 bg-red-500 rounded-full mr-2 flex-shrink-0"
                   title="New online order"
                 ></span>
               )}
+              {item.id === "requests" && (pendingCancellationCount > 0 || pendingRefundCount > 0 || pendingRefundPaymentsCount > 0) && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                  {(() => {
+                    const total = pendingCancellationCount + pendingRefundCount + pendingRefundPaymentsCount;
+                    return total > 99 ? "99+" : total;
+                  })()}
+                </span>
+              )}
             </span>
             {hasChildren && (
-              <div className="ml-2">
+              <div className="ml-1 flex-shrink-0">
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-3.5 h-3.5" />
                 ) : (
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5" />
                 )}
               </div>
             )}
@@ -460,7 +601,7 @@ export function Sidebar({
         )}
 
         {hasChildren && isExpanded && (
-          <div className="bg-gray-50">
+          <div className="mt-0.5 mb-1 ml-5 pl-2.5 border-l border-gray-200 space-y-0.5">
             {item.children?.map((child) => renderMenuItem(child, level + 1))}
           </div>
         )}
@@ -475,50 +616,35 @@ export function Sidebar({
 
   const container = (
     <div
-      className={`w-64 bg-white border-r border-gray-200 h-screen sticky top-0 transition-all duration-300 ${className} flex flex-col`}
+      className={`w-60 bg-white border-r border-gray-200 h-screen sticky top-0 transition-all duration-300 ${className} flex flex-col`}
     >
       {/* Shop Header */}
-      <div className="px-4 py-7 border-b border-gray-200 flex-shrink-0">
-        {isCollapsed ? (
-          <div className="flex flex-col items-center space-y-2">
-            {businessLogo && !logoError ? (
-              <img
-                src={businessLogo}
-                alt="Business Logo"
-                className="w-10 h-10 object-contain rounded"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <Store className="w-10 h-10 text-purple-600" />
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center">
-            {businessLogo && !logoError ? (
-              <img
-                src={businessLogo}
-                alt="Business Logo"
-                className="w-12 h-12 object-contain rounded mr-3"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <Store className="w-12 h-12 text-purple-600 mr-3" />
-            )}
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-900">
-                {isLoading ? "Loading..." : businessName || "Business Name"}
-              </h1>
-              <p className="text-xs text-gray-500">Owner Dashboard</p>
+      <div className="px-4 py-4 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          {businessLogo && !logoError ? (
+            <img
+              src={businessLogo}
+              alt="Business Logo"
+              className="w-9 h-9 object-contain rounded-lg flex-shrink-0"
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Store className="w-5 h-5 text-white" />
             </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-bold text-gray-900 truncate">
+              {isLoading ? "Loading..." : businessName || "Business Name"}
+            </h1>
+            <p className="text-[11px] text-gray-500">Owner Dashboard</p>
           </div>
-        )}
+        </div>
       </div>
-
-      {/* Collapse button removed — sidebar always expanded */}
 
       {/* Scrollable Navigation Area */}
       <div
-        className="flex-1 overflow-y-auto py-4"
+        className="flex-1 overflow-y-auto py-3"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <style jsx>{`
@@ -526,7 +652,7 @@ export function Sidebar({
             display: none;
           }
         `}</style>
-        <nav className="space-y-1">
+        <nav className="px-2 space-y-0.5">
           {filteredMenuItems.map((item) => renderMenuItem(item))}
         </nav>
       </div>
@@ -553,7 +679,7 @@ export function Sidebar({
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="fixed inset-y-0 left-0 z-50 w-64 drop-shadow-2xl"
+              className="fixed inset-y-0 left-0 z-50 w-60 drop-shadow-2xl"
             >
               {container}
             </motion.div>

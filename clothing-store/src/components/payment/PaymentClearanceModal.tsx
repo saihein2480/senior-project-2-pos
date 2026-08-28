@@ -320,8 +320,10 @@ export function PaymentClearanceModal({
 
     try {
       // Determine transaction status based on payment method
+      // Cash = completed immediately
+      // COD and Scan = pending (requires confirmation)
       const transactionStatus =
-        selectedPaymentMethod === "cod" ? "pending" : "completed";
+        selectedPaymentMethod === "cash" ? "completed" : "pending";
 
       // Record transaction in database
       const recordedTransactionId = await transactionService.recordTransaction({
@@ -348,6 +350,13 @@ export function PaymentClearanceModal({
         "Transaction recorded successfully with ID:",
         recordedTransactionId,
       );
+
+      // Show appropriate success message
+      if (transactionStatus === "pending") {
+        toast.success(
+          `${selectedPaymentMethod.toUpperCase()} order created successfully! Transaction is pending confirmation.`,
+        );
+      }
 
       // Complete payment (clear cart, etc.)
       onPaymentComplete({
@@ -969,7 +978,7 @@ export function PaymentClearanceModal({
               <button
                 title="View detailed currency information"
                 onClick={() => setShowDetailModal(true)}
-                className="text-blue-600 hover:text-blue-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-blue-100 touch-manipulation"
+                className="text-cyan-600 hover:text-blue-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-cyan-100 touch-manipulation"
               >
                 <Eye className="h-4 w-4 md:h-5 md:w-5" />
               </button>
@@ -989,7 +998,7 @@ export function PaymentClearanceModal({
           <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r border-gray-200 overflow-y-auto">
             {/* Customer Information */}
             <div className="flex items-center space-x-2 md:space-x-3 mb-3">
-              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-blue-500 flex items-center justify-center">
+              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-cyan-500 flex items-center justify-center">
                 {customer?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1089,13 +1098,13 @@ export function PaymentClearanceModal({
                 Payment Method
               </h3>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {/* Cash Payment */}
                 <button
                   onClick={() => setSelectedPaymentMethod("cash")}
                   className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
                     selectedPaymentMethod === "cash"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-pink-500 bg-pink-50 text-pink-700"
                       : "border-gray-200 hover:border-gray-300 text-gray-700"
                   }`}
                 >
@@ -1103,12 +1112,12 @@ export function PaymentClearanceModal({
                   <span className="text-xs font-medium">Cash</span>
                 </button>
 
-                {/* Scan E-Payment */}
+                {/* Scan Payment */}
                 <button
                   onClick={() => setSelectedPaymentMethod("scan")}
                   className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
                     selectedPaymentMethod === "scan"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-pink-500 bg-pink-50 text-pink-700"
                       : "border-gray-200 hover:border-gray-300 text-gray-700"
                   }`}
                 >
@@ -1116,25 +1125,12 @@ export function PaymentClearanceModal({
                   <span className="text-xs font-medium">Scan</span>
                 </button>
 
-                {/* Customer Wallet */}
-                <button
-                  onClick={() => setSelectedPaymentMethod("wallet")}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
-                    selectedPaymentMethod === "wallet"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-gray-200 hover:border-gray-300 text-gray-700"
-                  }`}
-                >
-                  <Wallet className="h-5 w-5" />
-                  <span className="text-xs font-medium">Wallet</span>
-                </button>
-
                 {/* COD (Cash On Delivery) */}
                 <button
                   onClick={() => setSelectedPaymentMethod("cod")}
                   className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
                     selectedPaymentMethod === "cod"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-pink-500 bg-pink-50 text-pink-700"
                       : "border-gray-200 hover:border-gray-300 text-gray-700"
                   }`}
                 >

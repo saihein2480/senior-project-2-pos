@@ -880,7 +880,7 @@ function LabelPrintContent() {
                         key={variant.id}
                         className={`group relative bg-white border cursor-pointer transition-all duration-200 ${
                           selectedVariants.includes(variant.id)
-                            ? "border-blue-400 bg-blue-50/50 shadow-lg shadow-blue-100/50"
+                            ? "border-blue-400 bg-cyan-50/50 shadow-lg shadow-blue-100/50"
                             : "border-gray-200 hover:border-gray-300 hover:shadow-md"
                         }`}
                         onClick={() => handleSelectVariant(variant.id)}
@@ -910,7 +910,7 @@ function LabelPrintContent() {
                           <div
                             className={`absolute top-3 right-3 w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
                               selectedVariants.includes(variant.id)
-                                ? "bg-blue-500 border-blue-500"
+                                ? "bg-cyan-500 border-blue-500"
                                 : "bg-white/80 border-gray-300 group-hover:border-blue-400"
                             }`}
                           >
@@ -993,7 +993,7 @@ function LabelPrintContent() {
                             <div
                               className={`text-xs px-3 py-1 rounded-full font-medium ${
                                 selectedVariants.includes(variant.id)
-                                  ? "bg-blue-100 text-blue-600"
+                                  ? "bg-cyan-100 text-cyan-600"
                                   : "bg-gray-100 text-gray-500"
                               }`}
                             >

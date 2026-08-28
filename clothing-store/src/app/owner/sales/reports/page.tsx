@@ -133,7 +133,7 @@ function ReportsPageContent() {
     | "partially_refunded"
   >("all");
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<
-    "all" | "cash" | "scan" | "wallet" | "cod"
+    "all" | "cash" | "scan" | "cod"
   >("all");
   const [filterWholesale, setFilterWholesale] = useState<
     "all" | "with_wholesale" | "without_wholesale"
@@ -1254,7 +1254,7 @@ function ReportsPageContent() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="reports"
@@ -1282,40 +1282,54 @@ function ReportsPageContent() {
           onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-screen-2xl mx-auto">
             {/* Header with Metrics Settings Button */}
-            <div className="mb-6 flex justify-between items-center">
-              <div>
-                {/* <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Reports & Analytics
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                  Sales Reports
                 </h1>
-                <p className="text-gray-600">
-                  Comprehensive business insights and performance metrics
-                </p> */}
+                <p className="mt-1 text-sm text-gray-600">
+                  Key metrics, daily status, and recent transactions.
+                </p>
               </div>
-              <button
-                onClick={() => setShowMetricsSettings(!showMetricsSettings)}
-                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
-                title="Show/Hide Metrics"
-              >
-                <Settings className="w-4 h-4" />
-                Metrics
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 text-sm font-medium text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Refresh"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button> */}
+                <button
+                  onClick={() => setShowMetricsSettings(!showMetricsSettings)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 text-sm font-medium text-gray-900"
+                  title="Show/Hide Metrics"
+                >
+                  <Settings className="w-4 h-4" />
+                  Metrics
+                </button>
+              </div>
             </div>
 
             {/* Metrics Settings Panel */}
             {showMetricsSettings && (
-              <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex justify-between items-center mb-4">
+              <div className="mb-6 bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between gap-3 mb-4">
                   <h3 className="font-semibold text-gray-900">
                     Show/Hide Metrics
                   </h3>
                   <button
                     onClick={() => setShowMetricsSettings(false)}
-                    className="text-gray-500 hover:text-gray-700"
+                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+                    aria-label="Close"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1323,10 +1337,10 @@ function ReportsPageContent() {
                     <button
                       key={metric.id}
                       onClick={() => toggleMetricVisibility(metric.id)}
-                      className={`p-3 rounded-lg border-2 transition-all text-sm font-medium text-left ${
+                      className={`p-3 rounded-xl border transition-colors text-sm font-medium text-left ${
                         isMetricHidden(metric.id)
-                          ? "border-gray-200 bg-gray-50 text-gray-500"
-                          : "border-blue-500 bg-blue-50 text-blue-700"
+                          ? "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
+                          : "border-blue-200 bg-cyan-50 text-blue-800 hover:bg-cyan-100"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1343,229 +1357,284 @@ function ReportsPageContent() {
               </div>
             )}
 
-            {/* All Metrics - Single Grid Container */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-              {!isMetricHidden("totalSales") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalSales}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
+            {/* Key Performance Summary */}
+            <div className="mb-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-3">
+                Key Performance Summary
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                {/* Total Sales Card */}
+                {!isMetricHidden("totalSales") && (
+                  <div className="lg:col-span-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                    <div className="relative">
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-xs font-medium text-blue-100">
+                          Total Sales
+                        </p>
+                        <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <DollarSign className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold mb-0.5">
                         {formatPrice(reportData?.totalRevenue || 0)}
                       </p>
+                      <div className="flex items-center gap-1.5 text-[10px] text-blue-100">
+                        <TrendingUp className="h-3 w-3" />
+                        <span>Ks {(reportData?.totalRevenue || 0).toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!isMetricHidden("totalProfit") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalProfit}
-                      </p>
-                      <p className="text-2xl font-bold text-orange-600">
+                {/* Total Profit Card */}
+                {!isMetricHidden("totalProfit") && (
+                  <div className="lg:col-span-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                    <div className="relative">
+                      <div className="flex items-start justify-between mb-2">
+                        <p className="text-xs font-medium text-emerald-100">
+                          Total Profit
+                        </p>
+                        <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                          <TrendingUp className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold mb-0.5">
                         {formatPrice(reportData?.totalProfit || 0)}
                       </p>
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-100">
+                        <BarChart3 className="h-3 w-3" />
+                        <span>Net Profit</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Store Volume Card */}
+                <div className="lg:col-span-3 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                  <div className="relative">
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="text-xs font-medium text-cyan-100">
+                        Store Volume
+                      </p>
+                      <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <ShoppingBag className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {!isMetricHidden("totalTransactions") && (
+                        <div>
+                          <p className="text-[10px] text-cyan-100 mb-0.5">Total Transactions:</p>
+                          <p className="text-xl font-bold">{reportData?.totalTransactions || 0}</p>
+                        </div>
+                      )}
+                      {!isMetricHidden("totalCustomers") && (
+                        <div>
+                          <p className="text-[10px] text-cyan-100 mb-0.5">Total Customers:</p>
+                          <p className="text-xl font-bold">{reportData?.totalCustomers || 0}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              )}
 
-              {!isMetricHidden("totalTransactions") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalTransactions}
+                {/* Inventory Status Card */}
+                <div className="lg:col-span-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
+                  <div className="relative">
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="text-xs font-medium text-orange-100">
+                        Inventory Status
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {reportData?.totalTransactions || 0}
-                      </p>
+                      <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <BarChart3 className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {!isMetricHidden("stockValueUnit") && (
+                        <div>
+                          <p className="text-[10px] text-orange-100 mb-0.5">
+                            Stock Value (Unit):
+                          </p>
+                          <p className="text-lg font-bold leading-tight">
+                            {formatPrice(reportData?.totalStockSellValueTHB || 0)}
+                          </p>
+                          <p className="text-[9px] text-orange-100">
+                            {SettingsService.formatPrice(
+                              reportData?.totalStockSellValueMMK || 0,
+                              "MMK",
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      {!isMetricHidden("stockValueOriginal") && (
+                        <div>
+                          <p className="text-[10px] text-orange-100 mb-0.5">
+                            Stock Value (Orig):
+                          </p>
+                          <p className="text-lg font-bold leading-tight">
+                            {formatPrice(reportData?.totalStockOriginalTHB || 0)}
+                          </p>
+                          <p className="text-[9px] text-orange-100">
+                            {SettingsService.formatPrice(
+                              reportData?.totalStockOriginalMMK || 0,
+                              "MMK",
+                            )}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            </div>
 
-              {!isMetricHidden("totalCustomers") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalCustomers}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {reportData?.totalCustomers || 0}
-                      </p>
-                    </div>
+            {/* Secondary Metrics - 3 Column Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Currency & Wholesale Breakdown */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border border-purple-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-lg bg-purple-500 text-white flex items-center justify-center">
+                    <Wallet className="h-4 w-4" />
                   </div>
+                  <h3 className="text-sm font-semibold text-purple-900 uppercase tracking-wide">
+                    Currency & Wholesale Details
+                  </h3>
                 </div>
-              )}
-
-              {!isMetricHidden("totalSalesTHB") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalSalesThb}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                <div className="space-y-4">
+                  {!isMetricHidden("totalSalesTHB") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Total Sales (฿)</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {formatPrice(reportData?.totalRevenueTHB || 0)}
                       </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("totalSalesMMK") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalSalesMmk}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {formatInMMK(reportData?.totalRevenueMMK || 0)}
+                  )}
+                  {!isMetricHidden("totalSalesMMK") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Total Sales (Ks)</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {SettingsService.formatPrice(reportData?.totalRevenueMMK || 0, "MMK")}
                       </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("totalExpenseTHB") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalExpenseThb}
-                      </p>
-                      <p className="text-2xl font-bold text-red-600">
-                        {formatPrice(reportData?.totalExpenseTHB || 0)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("totalExpenseMMK") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalExpenseMmk}
-                      </p>
-                      <p className="text-2xl font-bold text-red-600">
-                        {SettingsService.formatPrice(
-                          reportData?.totalExpenseMMK || 0,
-                          "MMK",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("wholesaleTHB") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Wholesale Sales (THB)
-                      </p>
-                      <p className="text-2xl font-bold text-indigo-600">
+                  )}
+                  {!isMetricHidden("wholesaleTHB") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Wholesale Sales (THB)</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {SettingsService.formatPrice(
                           reportData?.totalWholesaleRevenueTHB || 0,
                           "THB",
                         )}
                       </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("wholesaleMMK") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        Wholesale Sales (MMK)
-                      </p>
-                      <p className="text-2xl font-bold text-indigo-600">
+                  )}
+                  {!isMetricHidden("wholesaleMMK") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Wholesale Sales (MMK)</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {SettingsService.formatPrice(
                           reportData?.totalWholesaleRevenueMMK || 0,
                           "MMK",
                         )}
                       </p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
 
-              {!isMetricHidden("stockValueUnit") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.remainingStockValueUnit}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
+              {/* Expense Details */}
+              <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6 border border-red-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-lg bg-red-500 text-white flex items-center justify-center">
+                    <Truck className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-red-900 uppercase tracking-wide">
+                    Expense Breakdown
+                  </h3>
+                </div>
+                <div className="space-y-4">
+                  {!isMetricHidden("totalExpenseTHB") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1">Total Expense (฿)</p>
+                          <p className="text-xl font-bold text-red-600">
+                            {formatPrice(reportData?.totalExpenseTHB || 0)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <span>Comparison: ฿ 0</span>
+                        <span className="ml-2 text-red-600">+W(฿)</span>
+                      </div>
+                    </div>
+                  )}
+                  {!isMetricHidden("totalExpenseMMK") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1">Total Expense (Ks)</p>
+                          <p className="text-xl font-bold text-red-600">
+                            {SettingsService.formatPrice(
+                              reportData?.totalExpenseMMK || 0,
+                              "MMK",
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <span>Comparison: Ks 0</span>
+                        <span className="ml-2 text-red-600">-t(฿)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Inventory Details */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border border-green-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-8 rounded-lg bg-green-500 text-white flex items-center justify-center">
+                    <BarChart3 className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-green-900 uppercase tracking-wide">
+                    Stock Value Breakdown
+                  </h3>
+                </div>
+                <div className="space-y-4">
+                  {!isMetricHidden("stockValueUnit") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Stock Value (Unit Price)</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {formatPrice(reportData?.totalStockSellValueTHB || 0)}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-xs text-gray-500 mt-1">
                         {SettingsService.formatPrice(
                           reportData?.totalStockSellValueMMK || 0,
                           "MMK",
                         )}
                       </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {!isMetricHidden("stockValueOriginal") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.remainingStockValueOriginal}
-                      </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                  )}
+                  {!isMetricHidden("stockValueOriginal") && (
+                    <div className="bg-white rounded-xl p-4">
+                      <p className="text-xs text-gray-600 mb-1">Stock Value (Original Price)</p>
+                      <p className="text-xl font-bold text-gray-900">
                         {formatPrice(reportData?.totalStockOriginalTHB || 0)}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-xs text-gray-500 mt-1">
                         {SettingsService.formatPrice(
                           reportData?.totalStockOriginalMMK || 0,
                           "MMK",
                         )}
                       </p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
-
-              {!isMetricHidden("totalNetProfit") && (
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {t.totalNetProfit}
-                      </p>
-                      <p className="text-2xl font-bold text-orange-600">
-                        {formatPrice(reportData?.totalNetTHB || 0)}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {SettingsService.formatPrice(
-                          reportData?.totalNetMMK || 0,
-                          "MMK",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Charts and Tables */}
@@ -1632,13 +1701,13 @@ function ReportsPageContent() {
             </div>
 
             {/* Daily Status Table */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+              <div className="p-5 border-b border-gray-200">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <h3 className="text-lg font-semibold text-gray-900">
                     {t.dailyStatus}
                   </h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select
                       aria-label="Daily status branch"
                       value={filterBranch || "all"}
@@ -1648,7 +1717,7 @@ function ReportsPageContent() {
                         setDailyCurrentPage(1);
                         setCurrentPage(1);
                       }}
-                      className="px-3 py-2 border border-gray-300 bg-white text-sm text-gray-900"
+                      className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                     >
                       <option value="all">{t.allBranches}</option>
                       {shops.map((shop) => (
@@ -1683,7 +1752,7 @@ function ReportsPageContent() {
                           setDailyEndDate(end.toISOString().split("T")[0]);
                         }
                       }}
-                      className="px-3 py-2 border border-gray-300 bg-white text-sm text-gray-900"
+                      className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                     >
                       <option value="today">Today</option>
                       <option value="7d">Last 7 Days</option>
@@ -1693,23 +1762,29 @@ function ReportsPageContent() {
                       <option value="custom">Custom</option>
                     </select>
                     {dailyRange === "custom" && (
-                      <>
-                        <input
-                          title="Start date"
-                          type="date"
-                          value={dailyStartDate}
-                          onChange={(e) => setDailyStartDate(e.target.value)}
-                          className="px-2 py-2 border border-gray-300 text-gray-900 text-sm"
-                        />
-                        <span className="text-gray-500">to</span>
-                        <input
-                          title="End date"
-                          type="date"
-                          value={dailyEndDate}
-                          onChange={(e) => setDailyEndDate(e.target.value)}
-                          className="px-2 py-2 border border-gray-300 text-sm text-gray-900"
-                        />
-                      </>
+                      <div className="flex items-center gap-3">
+                        <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-pink-300">
+                          <input
+                            title="Start date"
+                            type="date"
+                            value={dailyStartDate}
+                            onChange={(e) => setDailyStartDate(e.target.value)}
+                            className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900 pr-8"
+                          />
+                          <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        </div>
+                        <span className="text-gray-300">—</span>
+                        <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-pink-300">
+                          <input
+                            title="End date"
+                            type="date"
+                            value={dailyEndDate}
+                            onChange={(e) => setDailyEndDate(e.target.value)}
+                            className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900 pr-8"
+                          />
+                          <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1766,30 +1841,30 @@ function ReportsPageContent() {
                   return null;
                 })()}
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.date}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.totalSale}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Wholesale Amount
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.originalPrice}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.profit}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.expenses}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.netSales}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.totalNetProfit}
                       </th>
                     </tr>
@@ -1809,14 +1884,17 @@ function ReportsPageContent() {
                         dailyEndIndex,
                       );
                       return dailyPageRows.map((row) => (
-                        <tr key={row.date} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <tr
+                          key={row.date}
+                          className="hover:bg-pink-50/50 transition-colors"
+                        >
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             {(() => {
                               const d = new Date(row.date);
                               return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
                             })()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div>{formatPrice(row.totalSalesTHB || 0)}</div>
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
@@ -1825,7 +1903,7 @@ function ReportsPageContent() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div>{formatPrice(row.wholesaleSalesTHB || 0)}</div>
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
@@ -1834,7 +1912,7 @@ function ReportsPageContent() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div>{formatPrice(row.originalPriceTHB || 0)}</div>
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
@@ -1843,7 +1921,7 @@ function ReportsPageContent() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div>{formatPrice(row.profitTHB || 0)}</div>
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
@@ -1852,7 +1930,7 @@ function ReportsPageContent() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div>{formatPrice(row.expenseTHB || 0)}</div>
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
@@ -1861,7 +1939,7 @@ function ReportsPageContent() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div className="relative">
                               <div
                                 onMouseEnter={() =>
@@ -1900,13 +1978,13 @@ function ReportsPageContent() {
                               </div>
 
                               {cellTooltip?.key === `${row.date}-netsales` && (
-                                <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
+                                <div className="absolute top-full left-0 mt-2 bg-gray-900 text-white text-xs rounded-lg py-1 px-2 whitespace-nowrap z-10 shadow-sm">
                                   {cellTooltip.text}
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             <div className="relative">
                               <div
                                 onMouseEnter={() =>
@@ -1945,7 +2023,7 @@ function ReportsPageContent() {
                               </div>
 
                               {cellTooltip?.key === `${row.date}-netprofit` && (
-                                <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
+                                <div className="absolute top-full left-0 mt-2 bg-gray-900 text-white text-xs rounded-lg py-1 px-2 whitespace-nowrap z-10 shadow-sm">
                                   {cellTooltip.text}
                                 </div>
                               )}
@@ -2165,7 +2243,7 @@ function ReportsPageContent() {
             </div> */}
 
             {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
                 <div className="relative">
@@ -2178,7 +2256,7 @@ function ReportsPageContent() {
                       setSearchTerm(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-pink-300 focus:border-transparent"
                   />
                 </div>
 
@@ -2198,7 +2276,7 @@ function ReportsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
                 >
                   <option value="all">All Status</option>
                   <option value="completed">Completed</option>
@@ -2218,17 +2296,15 @@ function ReportsPageContent() {
                         | "all"
                         | "cash"
                         | "scan"
-                        | "wallet"
                         | "cod",
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
                 >
                   <option value="all">All Payment Methods</option>
                   <option value="cash">Cash</option>
-                  <option value="scan">Scan Payment</option>
-                  <option value="wallet">Wallet</option>
+                  <option value="scan">Scan</option>
                   <option value="cod">COD</option>
                 </select>
 
@@ -2245,7 +2321,7 @@ function ReportsPageContent() {
                     );
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
                 >
                   <option value="all">All</option>
                   <option value="with_wholesale">With Wholesale Amount</option>
@@ -2262,7 +2338,7 @@ function ReportsPageContent() {
                     setFilterBranch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
                 >
                   <option value="all">All Branches</option>
                   {shops.map((shop) => (
@@ -2311,7 +2387,7 @@ function ReportsPageContent() {
                       }
                     }
                   }}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent text-gray-900 bg-white"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
                 >
                   <option value="today">Today</option>
                   <option value="7d">Last 7 Days</option>
@@ -2322,36 +2398,45 @@ function ReportsPageContent() {
                 </select>
 
                 {/* Custom Date Range Inputs - Same Row */}
-                <div className="flex items-center gap-2 lg:col-span-2 flex-wrap">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setDateRange("custom");
-                      setCurrentPage(1);
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    max={endDate}
-                    aria-label="Start Date"
-                  />
-                  <span className="text-gray-500">to</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setDateRange("custom");
-                      setCurrentPage(1);
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    min={startDate}
-                    max={new Date().toISOString().split("T")[0]}
-                    aria-label="End Date"
-                  />
+                <div className="lg:col-span-2 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-gray-300">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setDateRange("custom");
+                          setCurrentPage(1);
+                        }}
+                        className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900 pr-8"
+                        max={endDate}
+                        aria-label="Start Date"
+                      />
+                      <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                    <span className="text-gray-300">—</span>
+                    <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-2.5 focus-within:ring-2 focus-within:ring-gray-300">
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setDateRange("custom");
+                          setCurrentPage(1);
+                        }}
+                        className="w-[145px] sm:w-[160px] appearance-none bg-transparent border-none focus:outline-none focus:ring-0 text-sm text-gray-900 pr-8"
+                        min={startDate}
+                        max={new Date().toISOString().split("T")[0]}
+                        aria-label="End Date"
+                      />
+                      <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+
                   <button
                     onClick={exportToCSV}
-                    className="inline-flex items-center justify-center font-normal transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 text-gray-900 hover:bg-gray-50 px-4 py-2 text-sm"
+                    className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 px-4 py-2.5 text-sm rounded-xl shadow-sm"
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Export
@@ -2361,76 +2446,79 @@ function ReportsPageContent() {
             </div>
 
             {/* Recent Transactions */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-8">
-              <div className="p-6 border-b border-gray-200">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+              <div className="p-5 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">
                   {t.recentTransactions}
                 </h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.transactionId}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.customer}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.items}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.total}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Original Total Price
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Discount Price
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Refund Amount
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Wholesale Amount
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.profit}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Profit Margin %
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Discount %
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.tax}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.branch}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.sellingCurrency}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.paymentMethod}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.soldBy}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.status}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.dateTime}
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {currentTransactions.map((transaction) => (
-                      <tr key={transaction.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">
+                      <tr
+                        key={transaction.id}
+                        className="hover:bg-pink-50/50 transition-colors"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                           #{transaction.transactionId}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
@@ -2646,7 +2734,7 @@ function ReportsPageContent() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex items-center">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-2">
+                            <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center mr-2">
                               <span className="text-xs font-medium text-blue-800">
                                 {user?.email?.charAt(0).toUpperCase() || "S"}
                               </span>
@@ -2667,7 +2755,7 @@ function ReportsPageContent() {
                                     ? "bg-red-100 text-gray-800"
                                     : transaction.status === "refunded"
                                       ? "bg-gray-100 text-gray-800"
-                                      : "bg-blue-100 text-blue-800"
+                                      : "bg-cyan-100 text-blue-800"
                             }`}
                           >
                             {transaction.status === "completed"

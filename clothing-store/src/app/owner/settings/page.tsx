@@ -361,7 +361,7 @@ function OwnerSettingsContent() {
                 {user?.role === "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Store className="h-5 w-5 text-blue-600 mr-2" />
+                      <Store className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Your Branch
                       </h2>
@@ -419,7 +419,7 @@ function OwnerSettingsContent() {
                 {user?.role === "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Receipt className="h-5 w-5 text-blue-600 mr-2" />
+                      <Receipt className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Tax Rate
                       </h2>
@@ -430,7 +430,7 @@ function OwnerSettingsContent() {
                           <span className="text-sm font-medium text-gray-900">
                             Current Tax Rate
                           </span>
-                          <span className="text-lg font-bold text-blue-600">
+                          <span className="text-lg font-bold text-cyan-600">
                             {settings.taxRate}%
                           </span>
                         </div>
@@ -446,7 +446,7 @@ function OwnerSettingsContent() {
                 {user?.role === "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
+                      <DollarSign className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Currency Rate
                       </h2>
@@ -458,7 +458,7 @@ function OwnerSettingsContent() {
                             {getCurrencyRateDisplay().from} →{" "}
                             {getCurrencyRateDisplay().to}
                           </span>
-                          <span className="text-lg font-bold text-blue-600">
+                          <span className="text-lg font-bold text-cyan-600">
                             {settings.currencyRate}
                           </span>
                         </div>
@@ -481,7 +481,7 @@ function OwnerSettingsContent() {
                 {user?.role !== "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Building2 className="h-5 w-5 text-blue-600 mr-2" />
+                      <Building2 className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Business Information
                       </h2>
@@ -657,7 +657,7 @@ function OwnerSettingsContent() {
                 {user?.role !== "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Receipt className="h-5 w-5 text-blue-600 mr-2" />
+                      <Receipt className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Invoice & Receipt Settings
                       </h2>
@@ -780,10 +780,10 @@ function OwnerSettingsContent() {
                 )}
 
                 {/* User Interface Preferences - Owner/Manager only */}
-                {user?.role !== "staff" && (
+                {/* {user?.role !== "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <User className="h-5 w-5 text-blue-600 mr-2" />
+                      <User className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         User Interface Preferences
                       </h2>
@@ -821,13 +821,13 @@ function OwnerSettingsContent() {
                       </div>
                     </div>
                   </div>
-                )}
+                )} */}
 
                 {/* Currency Rate - Owner/Manager only */}
                 {user?.role !== "staff" && (
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <DollarSign className="h-5 w-5 text-blue-600 mr-2" />
+                      <DollarSign className="h-5 w-5 text-cyan-600 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Currency Rate
                       </h2>
@@ -869,7 +869,7 @@ function OwnerSettingsContent() {
                       </div>
 
                       {settings.currencyRate > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="bg-cyan-50 border border-blue-200 rounded-lg p-3">
                           <p className="text-sm text-blue-800">
                             <span className="font-medium">Exchange Rate:</span>{" "}
                             1 {getCurrencyRateDisplay().fromSymbol} ={" "}
@@ -883,7 +883,7 @@ function OwnerSettingsContent() {
                 )}
 
                 {/* Deployment Link Section */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center mb-4">
                     <h2 className="text-lg font-semibold text-gray-900">
                       Customer Website Deployment
@@ -918,7 +918,7 @@ function OwnerSettingsContent() {
                       </a>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Action Buttons - Save button for staff (branch only), full reset/save for owner/manager */}
                 <div className="flex justify-end space-x-4 pt-6">

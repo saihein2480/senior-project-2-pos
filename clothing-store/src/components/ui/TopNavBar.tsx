@@ -6,8 +6,10 @@ import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useViewMode } from "@/contexts/ViewModeContext";
 import { ShopService } from "@/services/shopService";
 import { toast } from "react-hot-toast";
+import { RoleViewSwitcher } from "./RoleViewSwitcher";
 import {
   LogOut,
   ChevronDown,
@@ -53,6 +55,9 @@ export function TopNavBar({
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
+
+  // Get view mode context for role switching
+  const { viewAsRole, setViewAsRole, isViewingAsOtherRole } = useViewMode();
 
   const languages = [
     { name: "English", flag: "🇺🇸", code: "EN", value: "en" as const },
@@ -185,16 +190,16 @@ export function TopNavBar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-10 bg-white shadow border-b border-gray-200">
+    <header className="sticky top-0 z-10 bg-white shadow-md border-b border-gray-200">
       <div className="px-2 sm:px-4">
-        <div className="flex justify-between items-center py-4 sm:py-6 px-2 sm:px-4">
+        <div className="flex justify-between items-center h-16 px-2 sm:px-4">
           <div className="flex items-center">
             <button
               onClick={() => onMenuToggle?.()}
               className="mr-2 sm:mr-3 p-2 rounded-md hover:bg-gray-100 lg:hidden"
               aria-label="Toggle menu"
             >
-              <Menu className="w-6 h-6 text-gray-700" />
+              <Menu className="w-6 h-6 text-gray-900" />
             </button>
 
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 hidden xl:block">
@@ -216,17 +221,17 @@ export function TopNavBar({
                 }}
                 aria-haspopup="menu"
                 aria-expanded={isBranchDropdownOpen}
-                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-full hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"
                 title="Click to change branch"
               >
-                <Store className="w-4 h-4 text-gray-600" />
-                <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] sm:max-w-none truncate">
+                <Store className="w-4 h-4 text-gray-900" />
+                <span className="text-xs sm:text-sm font-medium text-gray-900 max-w-[80px] sm:max-w-none truncate">
                   {businessSettings?.currentBranch === "No Branch"
                     ? t.noBranch
                     : businessSettings?.currentBranch || t.mainBranch}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 text-gray-600 transition-transform ${
+                  className={`w-4 h-4 text-gray-900 transition-transform ${
                     isBranchDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
@@ -266,7 +271,7 @@ export function TopNavBar({
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors cursor-pointer ${
                               isSelected
-                                ? "bg-blue-100 text-gray-900 font-medium"
+                                ? "bg-cyan-100 text-gray-900 font-medium"
                                 : "text-gray-700 hover:bg-gray-100"
                             }`}
                           >
@@ -275,7 +280,7 @@ export function TopNavBar({
                               <span>{shop.name}</span>
                             </div>
                             {isSelected && (
-                              <span className="text-blue-600 text-lg">✓</span>
+                              <span className="text-cyan-600 text-lg">✓</span>
                             )}
                           </button>
                         );
@@ -286,7 +291,7 @@ export function TopNavBar({
               )}
             </div>
             {/* Date Display */}
-            <div className="hidden lg:block text-sm text-gray-600">
+            <div className="hidden lg:block text-sm text-gray-900 font-medium">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "short",
                 year: "numeric",
@@ -311,16 +316,16 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isCurrencyDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400  hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded-lg transition-all"
               >
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-sm font-semibold text-gray-900">
                   {currencies.find((c) => c.code === selectedCurrency)?.symbol}
                 </span>
-                <span className="text-xs text-gray-900">
+                <span className="text-xs text-gray-900 font-medium">
                   {selectedCurrency}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 text-gray-600 transition-transform ${
+                  className={`w-4 h-4 text-gray-900 transition-transform ${
                     isCurrencyDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
@@ -343,7 +348,7 @@ export function TopNavBar({
                         }
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-blue-50 text-gray-700"
+                            ? "bg-cyan-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -356,7 +361,7 @@ export function TopNavBar({
                         <div className="flex items-center gap-2">
                           <span className="text-lg">{currency.symbol}</span>
                           {/* {isSelected && (
-                            <span className="text-blue-600">✓</span>
+                            <span className="text-cyan-600">✓</span>
                           )} */}
                         </div>
                       </button>
@@ -375,13 +380,13 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isLanguageDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded-lg transition-all"
               >
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-gray-900">
                   {languages.find((l) => l.value === language)?.name}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 text-gray-600 transition-transform ${
+                  className={`w-4 h-4 text-gray-900 transition-transform ${
                     isLanguageDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
@@ -402,7 +407,7 @@ export function TopNavBar({
                         onClick={() => handleLanguageChange(lang.value)}
                         className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-blue-50 text-gray-700"
+                            ? "bg-cyan-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -415,13 +420,19 @@ export function TopNavBar({
                             </div>
                           </div>
                         </div>
-                        {/* {isSelected && <span className="text-blue-600">✓</span>} */}
+                        {/* {isSelected && <span className="text-cyan-600">✓</span>} */}
                       </button>
                     );
                   })}
                 </div>
               )}
             </div>
+
+            {/* Role View Switcher (Owner only) */}
+            <RoleViewSwitcher
+              currentView={viewAsRole}
+              onViewChange={setViewAsRole}
+            />
 
             {/* Shopping Cart */}
             <div
@@ -431,8 +442,8 @@ export function TopNavBar({
                 onCartModalStateChange?.(true);
               }}
             >
-              <ShoppingCart className="h-6 w-6 text-gray-700 hover:text-gray-900" />
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              <ShoppingCart className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
                 {getCartItemCount()}
               </span>
             </div>
@@ -443,7 +454,7 @@ export function TopNavBar({
               className="relative cursor-pointer"
               onClick={() => markAsSeen()}
             >
-              <Bell className="h-6 w-6 text-gray-700 hover:text-gray-900" />
+              <Bell className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
               {unseenOrdersCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
                   {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
@@ -458,7 +469,7 @@ export function TopNavBar({
                 className="flex items-center space-x-2 focus:outline-none"
                 aria-label="User menu"
               >
-                <div className="w-11 h-11 rounded-full border border-gray-300 bg-gray-100 flex items-center justify-center text-gray-700">
+                <div className="w-11 h-11 rounded-full border-2 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-900">
                   <User className="w-5 h-5" />
                 </div>
               </button>

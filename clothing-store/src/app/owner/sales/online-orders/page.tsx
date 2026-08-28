@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -18,6 +18,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
 } from "lucide-react";
 
 type OrderWorkflowStatus =
@@ -26,6 +27,8 @@ type OrderWorkflowStatus =
   | "delivering"
   | "delivered"
   | "cancelled"
+  | "fully_returned"
+  | "partially_returned"
   | "unknown";
 
 type PaymentWorkflowStatus =
@@ -33,6 +36,10 @@ type PaymentWorkflowStatus =
   | "pending"
   | "failed"
   | "cancelled"
+  | "pending_refund"
+  | "refunded"
+  | "partially_refunded"
+  | "refund_rejected"
   | "unknown";
 
 const OWNER_STATUS_OPTIONS: Array<{
@@ -44,12 +51,18 @@ const OWNER_STATUS_OPTIONS: Array<{
   { value: "delivering", label: "Delivering" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "fully_returned", label: "Fully Returned" },
+  { value: "partially_returned", label: "Partially Returned" },
 ];
 
 function getNormalizedOrderStatus(row: OnlineOrder): OrderWorkflowStatus {
   const status = (row.status || "").toLowerCase();
   const paymentStatus = (row.paymentStatus || "").toLowerCase();
   const combined = `${status} ${paymentStatus}`;
+
+  // Check for return statuses first
+  if (/(fully_returned)/.test(combined)) return "fully_returned";
+  if (/(partially_returned)/.test(combined)) return "partially_returned";
 
   if (/(packaging|packed|preparing)/.test(combined)) return "packaging";
   if (/(delivering|shipping|shipped|in_transit)/.test(combined)) {
@@ -80,6 +93,8 @@ function getOrderStatusLabel(row: OnlineOrder): string {
   if (normalized === "delivering") return "Delivering";
   if (normalized === "delivered") return "Delivered";
   if (normalized === "cancelled") return "Cancelled";
+  if (normalized === "fully_returned") return "Fully Returned";
+  if (normalized === "partially_returned") return "Partially Returned";
 
   return "Unknown";
 }
@@ -88,9 +103,13 @@ function getPaymentStatusLabel(row: OnlineOrder): string {
   const raw = (row.paymentStatus || row.status || "").toLowerCase();
 
   if (/(success|succeeded|paid|completed)/.test(raw)) return "Paid";
+  if (/(pending_refund)/.test(raw)) return "Pending Refund";
+  if (/(refund_rejected)/.test(raw)) return "Refund Rejected";
+  if (/(partially_refunded)/.test(raw)) return "Partially Refunded";
+  if (/(refunded)/.test(raw)) return "Fully Refunded";
   if (/(pending|processing|created|initiated)/.test(raw)) return "Pending";
   if (/(fail|failed|error|declined)/.test(raw)) return "Failed";
-  if (/(cancelled|canceled|void|refunded)/.test(raw)) return "Cancelled";
+  if (/(cancelled|canceled|void)/.test(raw)) return "Cancelled";
 
   const fallback = row.paymentStatus || row.status || "-";
   return fallback.charAt(0).toUpperCase() + fallback.slice(1).toLowerCase();
@@ -100,9 +119,13 @@ function getNormalizedPaymentStatus(row: OnlineOrder): PaymentWorkflowStatus {
   const raw = (row.paymentStatus || row.status || "").toLowerCase();
 
   if (/(success|succeeded|paid|completed)/.test(raw)) return "paid";
+  if (/(pending_refund)/.test(raw)) return "pending_refund";
+  if (/(refund_rejected)/.test(raw)) return "refund_rejected";
+  if (/(partially_refunded)/.test(raw)) return "partially_refunded";
+  if (/(refunded)/.test(raw)) return "refunded";
   if (/(pending|processing|created|initiated)/.test(raw)) return "pending";
   if (/(fail|failed|error|declined)/.test(raw)) return "failed";
-  if (/(cancelled|canceled|void|refunded)/.test(raw)) return "cancelled";
+  if (/(cancelled|canceled|void)/.test(raw)) return "cancelled";
 
   return "unknown";
 }
@@ -143,6 +166,19 @@ function getCustomerAddress(row: OnlineOrder): string {
     return parts.join(", ") || "-";
   }
 
+  return "-";
+}
+
+function getPaymentMethodLabel(row: OnlineOrder): string {
+  const method = (row.paymentMethod || "").toLowerCase();
+  
+  if (method === "cod") return "💵 COD";
+  if (method === "cash") return "💵 Cash";
+  if (method === "scan" || method === "wallet") return "📱 QR Scan";
+  if (method) {
+    return method.charAt(0).toUpperCase() + method.slice(1);
+  }
+  
   return "-";
 }
 
@@ -299,6 +335,7 @@ function OrderTableRow({
   onMarkSeen,
   onViewDetails,
   onPrintInvoice,
+  onMarkCODPaid,
 }: {
   row: OnlineOrder;
   isNew: boolean;
@@ -307,6 +344,7 @@ function OrderTableRow({
   onMarkSeen: (id: string) => void;
   onViewDetails: (row: OnlineOrder) => void;
   onPrintInvoice: (row: OnlineOrder) => void;
+  onMarkCODPaid: (row: OnlineOrder) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{
@@ -333,6 +371,11 @@ function OrderTableRow({
     );
   const orderStatusLabel = getOrderStatusLabel(row);
   const paymentStatusLabel = getPaymentStatusLabel(row);
+  const paymentMethodLabel = getPaymentMethodLabel(row);
+  const paymentMethod = (row.paymentMethod || "").toLowerCase();
+  const isCOD = paymentMethod === "cod";
+  const isDelivered = getNormalizedOrderStatus(row) === "delivered";
+  const canMarkCODPaid = isCOD && isDelivered && getNormalizedPaymentStatus(row) !== "paid";
 
   const toggleDropdown = () => {
     if (dropdownOpen) {
@@ -371,7 +414,7 @@ function OrderTableRow({
           type="checkbox"
           checked={isSelected}
           onChange={(e) => onSelect(row.id, e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
           aria-label={`Select order ${row.orderId || row.id}`}
         />
       </td>
@@ -392,8 +435,34 @@ function OrderTableRow({
         {totalItemsCount} item{totalItemsCount !== 1 ? "s" : ""}
       </td>
       <td className="px-4 py-4 text-gray-700 font-medium">
-        {Number(row.amountMmk || 0).toLocaleString()}
+        <div className="flex flex-col gap-0.5">
+          <span>
+            ฿ {(() => {
+              // Use total field if available (direct THB amount)
+              if (row.total !== undefined && row.total !== null) {
+                return Number(row.total).toFixed(2);
+              }
+              // Fallback: Calculate THB total from cartItems
+              if (row.cartItems && row.cartItems.length > 0) {
+                const thbTotal = row.cartItems.reduce(
+                  (sum, item) => sum + (Number(item.priceTHB || 0) * Number(item.quantity || 0)),
+                  0
+                );
+                return thbTotal.toFixed(2);
+              }
+              // Last resort: derive from MMK if exchange rate exists
+              const mmkRate = Number(process.env.NEXT_PUBLIC_MMK_RATE || 43);
+              const mmkAmount = Number(row.amountMmk || 0);
+              const thbEstimate = mmkRate > 0 ? mmkAmount / mmkRate : mmkAmount;
+              return thbEstimate.toFixed(2);
+            })()}
+          </span>
+          <span className="text-xs text-gray-500">
+            Ks {Number(row.amountMmk || 0).toLocaleString()}
+          </span>
+        </div>
       </td>
+      <td className="px-4 py-4 text-gray-700">{paymentMethodLabel}</td>
       <td className="px-4 py-4 text-gray-700">{paymentStatusLabel}</td>
       <td className="px-4 py-4 text-gray-700">{orderStatusLabel}</td>
       <td className="px-4 py-4 text-gray-600">
@@ -441,6 +510,17 @@ function OrderTableRow({
               >
                 <Printer size={16} /> Print Invoice
               </button>
+              {canMarkCODPaid && (
+                <button
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-green-50 flex items-center gap-2 text-green-600 transition-colors border-t border-gray-100"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    onMarkCODPaid(row);
+                  }}
+                >
+                  <DollarSign size={16} /> Mark as Paid
+                </button>
+              )}
             </div>
           </>
         )}
@@ -467,12 +547,17 @@ function OnlineOrdersContent() {
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<
     "all" | Exclude<PaymentWorkflowStatus, "unknown">
   >("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<
+    "all" | "cod" | "scan"
+  >("all");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(
     new Set(),
   );
   const [bulkStatus, setBulkStatus] =
     useState<Exclude<OrderWorkflowStatus, "unknown">>("packaging");
+  const [bulkPaymentStatus, setBulkPaymentStatus] = useState<"PENDING" | "SUCCESS">("SUCCESS");
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [isBulkPaymentUpdating, setIsBulkPaymentUpdating] = useState(false);
   const [dateRange, setDateRange] = useState<
     "today" | "7d" | "30d" | "90d" | "all" | "custom"
   >("30d");
@@ -623,9 +708,11 @@ function OnlineOrdersContent() {
   };
 
   const shouldShowNewBadge = (row: OnlineOrder) => {
-    if (!isPaymentPaid(row)) return false;
+    // Show NEW badge if order is in the newOrderIds set (just arrived)
     if (newOrderIds.has(row.id)) return true;
+    // Don't show if already marked as seen
     if (seenOrderIds.has(row.id)) return false;
+    // Show for recent orders (within last 5 minutes) that haven't been seen
     return isRecentOrder(row);
   };
 
@@ -635,6 +722,7 @@ function OnlineOrdersContent() {
     searchTerm,
     filterStatus,
     filterPaymentStatus,
+    filterPaymentMethod,
     dateRange,
     startDate,
     endDate,
@@ -667,6 +755,12 @@ function OnlineOrdersContent() {
     const matchesPaymentStatus =
       filterPaymentStatus === "all" ||
       normalizedPaymentStatus === filterPaymentStatus;
+
+    const paymentMethod = (row.paymentMethod || "").toLowerCase();
+    const matchesPaymentMethod =
+      filterPaymentMethod === "all" ||
+      (filterPaymentMethod === "cod" && paymentMethod === "cod") ||
+      (filterPaymentMethod === "scan" && (paymentMethod === "scan" || paymentMethod === "wallet"));
 
     let matchesDateRange = true;
     if (dateRange !== "all") {
@@ -707,7 +801,7 @@ function OnlineOrdersContent() {
     }
 
     return (
-      matchesSearch && matchesStatus && matchesPaymentStatus && matchesDateRange
+      matchesSearch && matchesStatus && matchesPaymentStatus && matchesPaymentMethod && matchesDateRange
     );
   });
 
@@ -794,6 +888,74 @@ function OnlineOrdersContent() {
     } finally {
       setIsBulkUpdating(false);
     }
+  };
+
+  const applyBulkPaymentStatusUpdate = async () => {
+    const ids = Array.from(selectedOrderIds);
+    if (ids.length === 0) return;
+
+    // Filter to only COD orders that are delivered
+    const codDeliveredOrders = rows.filter((row) => {
+      if (!selectedOrderIds.has(row.id)) return false;
+      const isCOD = (row.paymentMethod || "").toLowerCase() === "cod";
+      const isDelivered = getNormalizedOrderStatus(row) === "delivered";
+      return isCOD && isDelivered;
+    });
+
+    if (codDeliveredOrders.length === 0) {
+      window.alert("No delivered COD orders selected");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Mark ${codDeliveredOrders.length} delivered COD order(s) as ${bulkPaymentStatus === "SUCCESS" ? "PAID" : "PENDING"}?`
+    );
+
+    if (!confirmed) return;
+
+    setIsBulkPaymentUpdating(true);
+    try {
+      // Update each COD order's payment status
+      for (const order of codDeliveredOrders) {
+        await onlineOrderService.updateOnlineOrderPaymentStatus(
+          order.id,
+          bulkPaymentStatus
+        );
+      }
+
+      // Update local state
+      setRows((prev) =>
+        prev.map((row) => {
+          const shouldUpdate = codDeliveredOrders.some(o => o.id === row.id);
+          return shouldUpdate
+            ? {
+                ...row,
+                paymentStatus: bulkPaymentStatus,
+                updatedAt: new Date().toISOString(),
+              }
+            : row;
+        })
+      );
+      setSelectedOrderIds(new Set());
+      window.alert(`Successfully updated ${codDeliveredOrders.length} order(s)`);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update payment statuses";
+      window.alert(message);
+    } finally {
+      setIsBulkPaymentUpdating(false);
+    }
+  };
+
+  const hasSelectedDeliveredCODOrders = () => {
+    return rows.some((row) => {
+      if (!selectedOrderIds.has(row.id)) return false;
+      const isCOD = (row.paymentMethod || "").toLowerCase() === "cod";
+      const isDelivered = getNormalizedOrderStatus(row) === "delivered";
+      return isCOD && isDelivered;
+    });
   };
 
   const escapeHtml = (value: string) =>
@@ -1226,6 +1388,36 @@ function OnlineOrdersContent() {
     setTimeout(printNow, 1500);
   };
 
+  const handleMarkCODPaid = async (row: OnlineOrder) => {
+    const confirmed = window.confirm(
+      `Mark COD order ${row.orderId || row.id} as PAID?\n\nThis confirms that the customer has paid cash on delivery.\n\nOrder Amount: ${Number(row.amountMmk || 0).toLocaleString()} MMK`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      // Update payment status to "SUCCESS" or "PAID"
+      await onlineOrderService.updateOnlineOrderPaymentStatus(row.id, "SUCCESS");
+      
+      // Update local state
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id
+            ? { ...r, paymentStatus: "SUCCESS", updatedAt: new Date().toISOString() }
+            : r
+        )
+      );
+      
+      window.alert("COD order marked as paid successfully!");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update COD payment status";
+      window.alert(message);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       <div className="hidden lg:block">
@@ -1258,7 +1450,7 @@ function OnlineOrdersContent() {
             </p>
 
             <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div className="relative">
                   <Search
                     size={16}
@@ -1269,7 +1461,7 @@ function OnlineOrdersContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search order ID or customer..."
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                 </div>
 
@@ -1288,10 +1480,12 @@ function OnlineOrdersContent() {
                           | "packaging"
                           | "delivering"
                           | "delivered"
-                          | "cancelled",
+                          | "cancelled"
+                          | "fully_returned"
+                          | "partially_returned",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="all">All Order Status</option>
                     <option value="pending">Pending</option>
@@ -1299,6 +1493,8 @@ function OnlineOrdersContent() {
                     <option value="delivering">Delivering</option>
                     <option value="delivered">Delivered</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="fully_returned">Fully Returned</option>
+                    <option value="partially_returned">Partially Returned</option>
                   </select>
                 </div>
 
@@ -1316,16 +1512,40 @@ function OnlineOrdersContent() {
                           | "paid"
                           | "pending"
                           | "failed"
-                          | "cancelled",
+                          | "cancelled"
+                          | "pending_refund",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="all">All Payment Status</option>
                     <option value="paid">Paid</option>
                     <option value="pending">Pending</option>
                     <option value="failed">Failed</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="pending_refund">Pending Refund</option>
+                    <option value="refunded">Fully Refunded</option>
+                    <option value="partially_refunded">Partially Refunded</option>
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <Filter
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <select
+                    value={filterPaymentMethod}
+                    onChange={(e) =>
+                      setFilterPaymentMethod(
+                        e.target.value as "all" | "cod" | "scan"
+                      )
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                  >
+                    <option value="all">All Payment Methods</option>
+                    <option value="cod">💵 Cash on Delivery</option>
+                    <option value="scan">📱 QR Scan</option>
                   </select>
                 </div>
 
@@ -1347,7 +1567,7 @@ function OnlineOrdersContent() {
                           | "custom",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
                     <option value="today">Today</option>
                     <option value="7d">Last 7 days</option>
@@ -1365,13 +1585,13 @@ function OnlineOrdersContent() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
                   />
                 </div>
               )}
@@ -1407,10 +1627,39 @@ function OnlineOrdersContent() {
                     disabled={selectedCount === 0 || isBulkUpdating}
                     className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isBulkUpdating ? "Updating..." : "Update Selected"}
+                    {isBulkUpdating ? "Updating..." : "Update Order Status"}
                   </button>
                 </div>
               </div>
+
+              {/* Payment Status Update - Only for delivered COD orders */}
+              {hasSelectedDeliveredCODOrders() && (
+                <div className="mt-3 flex flex-col gap-2 rounded-md border border-green-200 bg-green-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-gray-700">
+                    💵 Update payment status for delivered COD orders
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select
+                      value={bulkPaymentStatus}
+                      onChange={(e) =>
+                        setBulkPaymentStatus(e.target.value as "PENDING" | "SUCCESS")
+                      }
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                    >
+                      <option value="SUCCESS">Paid</option>
+                      <option value="PENDING">Pending</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={applyBulkPaymentStatusUpdate}
+                      disabled={isBulkPaymentUpdating}
+                      className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isBulkPaymentUpdating ? "Updating..." : "Update Payment Status"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 overflow-x-auto overflow-y-visible rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1431,14 +1680,15 @@ function OnlineOrdersContent() {
                         onChange={(e) =>
                           toggleCurrentRowsSelection(e.target.checked)
                         }
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
                         aria-label="Select all rows on current page"
                       />
                     </th>
-                    <th className="px-4 py-3 font-medium">Order ID</th>
+                    <th className="px-4 py-3 font-medium">Order Ref</th>
                     <th className="px-4 py-3 font-medium">Customer</th>
                     <th className="px-4 py-3 font-medium">Items</th>
-                    <th className="px-4 py-3 font-medium">Amount (MMK)</th>
+                    <th className="px-4 py-3 font-medium">Amount (THB / MMK)</th>
+                    <th className="px-4 py-3 font-medium">Payment Method</th>
                     <th className="px-4 py-3 font-medium">Payment Status</th>
                     <th className="px-4 py-3 font-medium">Order Status</th>
                     <th className="px-4 py-3 font-medium">Updated</th>
@@ -1451,7 +1701,7 @@ function OnlineOrdersContent() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         Loading online orders...
@@ -1460,7 +1710,7 @@ function OnlineOrdersContent() {
                   ) : currentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         No matching online orders found.
@@ -1477,6 +1727,7 @@ function OnlineOrdersContent() {
                         onMarkSeen={markOrderSeen}
                         onViewDetails={setSelectedOrder}
                         onPrintInvoice={handlePrintInvoice}
+                        onMarkCODPaid={handleMarkCODPaid}
                       />
                     ))
                   )}

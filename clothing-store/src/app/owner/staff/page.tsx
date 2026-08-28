@@ -53,6 +53,8 @@ function StaffContent() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPageManager, setCurrentPageManager] = useState(1);
+  const [rowsPerPageManager, setRowsPerPageManager] = useState(10);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -216,13 +218,13 @@ function StaffContent() {
       case "manager":
         return {
           label: "Manager",
-          color: "bg-blue-100 text-blue-800",
+          color: "bg-fuchsia-100 text-fuchsia-800",
           description: "Manage products & inventory",
         };
       case "staff":
         return {
           label: "Staff",
-          color: "bg-green-100 text-green-800",
+          color: "bg-pink-100 text-pink-800",
           description: "Process sales & orders",
         };
       default:
@@ -276,229 +278,274 @@ function StaffContent() {
             )}
 
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Staff Management
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  Manage staff accounts and permissions
-                </p>
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    Staff Management
+                  </h1>
+                  <p className="text-gray-500 mt-2">
+                    Manage staff accounts and permissions
+                  </p>
+                </div>
+                <Button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium shadow-md"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add Staff
+                </Button>
               </div>
-              <Button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2"
-              >
-                <UserPlus className="h-4 w-4" />
-                Add Staff
-              </Button>
             </div>
 
-            {/* Staff List */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Role
-                      </th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Created
-                      </th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {staff.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-6 py-8 text-center text-gray-500"
-                        >
-                          No staff accounts yet
-                        </td>
-                      </tr>
-                    ) : (
-                      currentStaff.map((member, idx) => {
-                        const roleInfo = getRoleInfo(member.role);
-                        const rowKey =
-                          member.id ||
-                          member.email ||
-                          `staff-${startIndex + idx}`;
-                        return (
-                          <tr
-                            key={rowKey}
-                            className="border-b hover:bg-gray-50"
-                          >
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                              {member.displayName || "-"}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {member.email}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              <span
-                                className={`px-2 py-1 rounded text-xs font-medium ${roleInfo.color}`}
-                              >
-                                {roleInfo.label}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              {member.isActive !== false ? (
-                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                                  Active
-                                </span>
-                              ) : (
-                                <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">
-                                  Inactive
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {new Date(member.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 text-sm">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingStaff(member);
-                                    setShowEditModal(true);
-                                  }}
-                                  className="text-blue-600 hover:text-blue-800"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleToggleActive(member)}
-                                  className={
-                                    member.isActive !== false
-                                      ? "text-orange-600 hover:text-orange-800"
-                                      : "text-green-600 hover:text-green-800"
-                                  }
-                                  title={
-                                    member.isActive !== false
-                                      ? "Deactivate"
-                                      : "Activate"
-                                  }
-                                >
-                                  {member.isActive !== false ? (
-                                    <UserX className="h-4 w-4" />
-                                  ) : (
-                                    <UserCheck className="h-4 w-4" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteStaff(member.id)}
-                                  className="text-red-600 hover:text-red-800"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {staff.length > 0 && (
-                <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                  <div className="flex-1 flex justify-between sm:hidden">
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div className="flex items-center space-x-2">
-                      <p className="text-sm text-gray-700">Rows per page:</p>
-                      <select
-                        title="Select number of rows per page"
-                        value={rowsPerPage}
-                        onChange={(e) => {
-                          setRowsPerPage(Number(e.target.value));
-                          setCurrentPage(1);
-                        }}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900"
-                      >
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
-                      <p className="text-sm text-gray-700">
-                        Showing {startIndex + 1}–
-                        {Math.min(endIndex, staff.length)} of {staff.length}{" "}
-                        staff members
-                      </p>
+            {/* Staff Grid - Compact Card Design */}
+            <div className="space-y-8">
+              {/* Managers Section */}
+              {staff.filter(s => s.role === "manager").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">M</span>
                     </div>
                     <div>
-                      <nav
-                        className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
-                        aria-label="Pagination"
-                      >
-                        <button
-                          title="Go to previous page"
-                          onClick={() =>
-                            setCurrentPage(Math.max(1, currentPage - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <ChevronLeft className="h-5 w-5" />
-                        </button>
-                        <button
-                          title="Go to next page"
-                          onClick={() =>
-                            setCurrentPage(
-                              Math.min(totalPages, currentPage + 1),
-                            )
-                          }
-                          disabled={currentPage === totalPages}
-                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          <ChevronRight className="h-5 w-5" />
-                        </button>
-                      </nav>
+                      <h2 className="text-lg font-bold text-gray-900">Managers</h2>
+                      <p className="text-sm text-gray-600">{staff.filter(s => s.role === "manager").length} manager{staff.filter(s => s.role === "manager").length !== 1 ? 's' : ''}</p>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {staff.filter(s => s.role === "manager").map((member, idx) => {
+                      const roleInfo = getRoleInfo(member.role);
+                      const rowKey = member.id || member.email || `manager-${idx}`;
+                      const isActive = member.isActive !== false;
+                      const roleColor = "from-fuchsia-600 to-fuchsia-700";
+                      const roleBadgeColor = "bg-fuchsia-100 text-fuchsia-700";
+
+                      return (
+                        <div
+                          key={rowKey}
+                          className={`bg-white rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md hover:border-gray-300 overflow-hidden ${
+                            isActive ? "border-gray-200" : "border-red-200"
+                          }`}
+                        >
+                          {/* Compact Header with Avatar */}
+                          <div className={`bg-gradient-to-r ${roleColor} p-3 flex items-center gap-3`}>
+                            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                              {member.displayName?.charAt(0).toUpperCase() || member.email.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-sm font-bold text-white truncate">
+                                {member.displayName || "N/A"}
+                              </h3>
+                              <p className="text-xs text-white/80 truncate">
+                                {member.email}
+                              </p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap flex-shrink-0 ${
+                              isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {isActive ? "Active" : "Off"}
+                            </span>
+                          </div>
+
+                          {/* Content Section */}
+                          <div className="p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Role</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${roleBadgeColor}`}>
+                                {roleInfo.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Joined</span>
+                              <span className="text-xs font-medium text-gray-900">
+                                {new Date(member.createdAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="grid grid-cols-3 gap-1 p-2 border-t border-gray-100 bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setEditingStaff(member);
+                                setShowEditModal(true);
+                              }}
+                              className="px-2 py-1.5 rounded font-medium text-xs transition-all flex items-center justify-center gap-1 border bg-fuchsia-50 text-fuchsia-600 border-fuchsia-200 hover:bg-fuchsia-100"
+                              title="Edit Manager"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleActive(member)}
+                              className={`px-2 py-1.5 rounded font-medium text-xs transition-all flex items-center justify-center gap-1 border ${
+                                isActive
+                                  ? "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
+                                  : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                              }`}
+                              title={isActive ? "Deactivate" : "Activate"}
+                            >
+                              {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                              <span className="hidden sm:inline text-xs">{isActive ? "Off" : "On"}</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStaff(member.id)}
+                              className="px-2 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded font-medium text-xs transition-all flex items-center justify-center gap-1"
+                              title="Delete Manager"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Del</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Staff Section */}
+              {staff.filter(s => s.role === "staff").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-pink-500 flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">S</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900">Staff</h2>
+                      <p className="text-sm text-gray-600">{staff.filter(s => s.role === "staff").length} staff member{staff.filter(s => s.role === "staff").length !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {staff.filter(s => s.role === "staff").map((member, idx) => {
+                      const roleInfo = getRoleInfo(member.role);
+                      const rowKey = member.id || member.email || `staff-${idx}`;
+                      const isActive = member.isActive !== false;
+                      const roleColor = "from-pink-400 to-pink-500";
+                      const roleBadgeColor = "bg-pink-100 text-pink-700";
+
+                      return (
+                        <div
+                          key={rowKey}
+                          className={`bg-white rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md hover:border-gray-300 overflow-hidden ${
+                            isActive ? "border-gray-200" : "border-red-200"
+                          }`}
+                        >
+                          {/* Compact Header with Avatar */}
+                          <div className={`bg-gradient-to-r ${roleColor} p-3 flex items-center gap-3`}>
+                            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                              {member.displayName?.charAt(0).toUpperCase() || member.email.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-sm font-bold text-white truncate">
+                                {member.displayName || "N/A"}
+                              </h3>
+                              <p className="text-xs text-white/80 truncate">
+                                {member.email}
+                              </p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap flex-shrink-0 ${
+                              isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                            }`}>
+                              {isActive ? "Active" : "Off"}
+                            </span>
+                          </div>
+
+                          {/* Content Section */}
+                          <div className="p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Role</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${roleBadgeColor}`}>
+                                {roleInfo.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">Joined</span>
+                              <span className="text-xs font-medium text-gray-900">
+                                {new Date(member.createdAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="grid grid-cols-3 gap-1 p-2 border-t border-gray-100 bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setEditingStaff(member);
+                                setShowEditModal(true);
+                              }}
+                              className="px-2 py-1.5 rounded font-medium text-xs transition-all flex items-center justify-center gap-1 border bg-pink-50 text-pink-600 border-pink-200 hover:bg-pink-100"
+                              title="Edit Staff"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleActive(member)}
+                              className={`px-2 py-1.5 rounded font-medium text-xs transition-all flex items-center justify-center gap-1 border ${
+                                isActive
+                                  ? "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
+                                  : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+                              }`}
+                              title={isActive ? "Deactivate" : "Activate"}
+                            >
+                              {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                              <span className="hidden sm:inline text-xs">{isActive ? "Off" : "On"}</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStaff(member.id)}
+                              className="px-2 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded font-medium text-xs transition-all flex items-center justify-center gap-1"
+                              title="Delete Staff"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Del</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {staff.length === 0 && (
+                <div className="col-span-full">
+                  <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                      <UserPlus className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-900 mb-1">
+                      No staff yet
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Add your first staff member
+                    </p>
+                    <Button
+                      onClick={() => setShowAddModal(true)}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Add Staff
+                    </Button>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Pagination - Hidden for now since we're showing all */}
+            {/* Pagination will be added if pagination is needed per section */}
+
             {/* Role Permissions Info */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                 <h3 className="font-semibold text-purple-900 mb-2">
                   Admin (Owner)
@@ -513,7 +560,7 @@ function StaffContent() {
                 </ul>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-cyan-50 border border-blue-200 rounded-lg p-4">
                 <h3 className="font-semibold text-blue-900 mb-2">Manager</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li key="manager-1">
@@ -546,113 +593,113 @@ function StaffContent() {
                   </li>
                 </ul>
               </div>
-            </div>
+            </div> */}
 
             {/* Add Staff Modal */}
             {showAddModal && (
-              <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-900">
-                    Add New Staff
-                  </h3>
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                  {/* Modal Header - Default to pink since new staff are usually added as staff */}
+                  <div className="bg-gradient-to-r from-pink-400 to-pink-500 px-6 py-4 rounded-t-2xl">
+                    <h3 className="text-lg font-bold text-white">
+                      Add New Staff Member
+                    </h3>
+                    <p className="text-pink-100 text-sm mt-1">
+                      Create a new staff or manager account
+                    </p>
+                  </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Full Name *
-                      </label>
-                      <Input
-                        value={formData.displayName}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            displayName: e.target.value,
-                          })
-                        }
-                        placeholder="Enter full name"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email *
-                      </label>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
-                        }
-                        placeholder="Enter email"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Password *
-                      </label>
-                      <div className="relative">
+                  {/* Modal Body */}
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Full Name <span className="text-red-500">*</span>
+                        </label>
                         <Input
-                          type={showPassword ? "text" : "password"}
-                          value={formData.password}
+                          value={formData.displayName}
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              password: e.target.value,
+                              displayName: e.target.value,
                             })
                           }
-                          placeholder="Enter password (min 6 characters)"
+                          placeholder="e.g., John Doe"
+                          className="rounded-lg"
                         />
-                        <button
-                          type="button"
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? (
-                            <EyeOff className="h-5 w-5 text-gray-400" />
-                          ) : (
-                            <Eye className="h-5 w-5 text-gray-400" />
-                          )}
-                        </button>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Role *
-                      </label>
-                      <select
-                        title="role"
-                        value={formData.role}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            role: e.target.value as UserRole,
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      >
-                        <option key="staff" value="staff">
-                          Staff
-                        </option>
-                        <option key="manager" value="manager">
-                          Manager
-                        </option>
-                      </select>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Email <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) =>
+                            setFormData({ ...formData, email: e.target.value })
+                          }
+                          placeholder="e.g., john@example.com"
+                          className="rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Password <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            value={formData.password}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                password: e.target.value,
+                              })
+                            }
+                            placeholder="Minimum 6 characters"
+                            className="rounded-lg pr-10"
+                          />
+                          <button
+                            type="button"
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-5 w-5" />
+                            ) : (
+                              <Eye className="h-5 w-5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Role <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          title="role"
+                          value={formData.role}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              role: e.target.value as UserRole,
+                            })
+                          }
+                          className="w-full px-3 py-2.5 border border-pink-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent text-gray-900 font-medium"
+                        >
+                          <option value="staff">Staff (Sales & Orders)</option>
+                          <option value="manager">Manager (Inventory & Reports)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-6">
+                  {/* Modal Footer */}
+                  <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
                     <Button
-                      key="create-btn"
-                      onClick={handleAddStaff}
-                      disabled={loading}
-                      className="flex-1"
-                    >
-                      {loading ? "Creating..." : "Create Account"}
-                    </Button>
-                    <Button
-                      key="cancel-btn"
                       onClick={() => {
                         setShowAddModal(false);
                         setFormData({
@@ -667,6 +714,13 @@ function StaffContent() {
                     >
                       Cancel
                     </Button>
+                    <Button
+                      onClick={handleAddStaff}
+                      disabled={loading}
+                      className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white"
+                    >
+                      {loading ? "Creating..." : "Create Account"}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -674,80 +728,129 @@ function StaffContent() {
 
             {/* Edit Staff Modal */}
             {showEditModal && editingStaff && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-900">
-                    Edit Staff
-                  </h3>
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                  {/* Modal Header - Color based on role */}
+                  <div className={`${
+                    editingStaff.role === "manager"
+                      ? "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700"
+                      : "bg-gradient-to-r from-pink-400 to-pink-500"
+                  } px-6 py-4 rounded-t-2xl`}>
+                    <h3 className="text-lg font-bold text-white">
+                      Edit Staff Member
+                    </h3>
+                    <p className={`${
+                      editingStaff.role === "manager"
+                        ? "text-fuchsia-100"
+                        : "text-pink-100"
+                    } text-sm mt-1`}>
+                      Update {editingStaff.displayName} details
+                    </p>
+                  </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Full Name
-                      </label>
-                      <Input
-                        value={editingStaff.displayName || ""}
-                        onChange={(e) =>
-                          setEditingStaff({
-                            ...editingStaff,
-                            displayName: e.target.value,
-                          })
-                        }
-                        placeholder="Enter full name"
-                      />
-                    </div>
+                  {/* Modal Body */}
+                  <div className="p-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Full Name
+                        </label>
+                        <Input
+                          value={editingStaff.displayName || ""}
+                          onChange={(e) =>
+                            setEditingStaff({
+                              ...editingStaff,
+                              displayName: e.target.value,
+                            })
+                          }
+                          placeholder="Enter full name"
+                          className="rounded-lg"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <Input
-                        type="email"
-                        value={editingStaff.email}
-                        disabled
-                        className="bg-gray-100"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Email cannot be changed
-                      </p>
-                    </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Email
+                        </label>
+                        <Input
+                          type="email"
+                          value={editingStaff.email}
+                          disabled
+                          className="bg-gray-100 rounded-lg cursor-not-allowed"
+                        />
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          📌 Email cannot be changed
+                        </p>
+                      </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Role
-                      </label>
-                      <select
-                        title="role"
-                        value={editingStaff.role}
-                        onChange={(e) =>
-                          setEditingStaff({
-                            ...editingStaff,
-                            role: e.target.value as UserRole,
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-                      >
-                        <option key="staff-edit" value="staff">
-                          Staff
-                        </option>
-                        <option key="manager-edit" value="manager">
-                          Manager
-                        </option>
-                      </select>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Role
+                        </label>
+                        <select
+                          title="role"
+                          value={editingStaff.role}
+                          onChange={(e) =>
+                            setEditingStaff({
+                              ...editingStaff,
+                              role: e.target.value as UserRole,
+                            })
+                          }
+                          className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-gray-900 font-medium ${
+                            editingStaff.role === "manager"
+                              ? "focus:ring-fuchsia-500 border-fuchsia-300"
+                              : "focus:ring-pink-400 border-pink-300"
+                          }`}
+                        >
+                          <option value="staff">Staff (Sales & Orders)</option>
+                          <option value="manager">Manager (Inventory & Reports)</option>
+                        </select>
+                      </div>
+
+                      {/* Status Toggle */}
+                      <div className={`mt-4 p-4 rounded-lg border ${
+                        editingStaff.role === "manager"
+                          ? "bg-fuchsia-50 border-fuchsia-200"
+                          : "bg-pink-50 border-pink-200"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900">Account Status</p>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              {editingStaff.isActive !== false ? "Currently Active" : "Currently Inactive"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              setEditingStaff({
+                                ...editingStaff,
+                                isActive: !(editingStaff.isActive !== false),
+                              })
+                            }
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                              editingStaff.isActive !== false
+                                ? editingStaff.role === "manager"
+                                  ? "bg-fuchsia-500"
+                                  : "bg-pink-500"
+                                : "bg-gray-300"
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                editingStaff.isActive !== false
+                                  ? "translate-x-6"
+                                  : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-6">
+                  {/* Modal Footer */}
+                  <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
                     <Button
-                      key="update-btn"
-                      onClick={handleUpdateStaff}
-                      disabled={loading}
-                      className="flex-1"
-                    >
-                      {loading ? "Updating..." : "Update"}
-                    </Button>
-                    <Button
-                      key="cancel-edit-btn"
                       onClick={() => {
                         setShowEditModal(false);
                         setEditingStaff(null);
@@ -756,6 +859,17 @@ function StaffContent() {
                       className="flex-1"
                     >
                       Cancel
+                    </Button>
+                    <Button
+                      onClick={handleUpdateStaff}
+                      disabled={loading}
+                      className={`flex-1 text-white ${
+                        editingStaff.role === "manager"
+                          ? "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 hover:from-fuchsia-700 hover:to-fuchsia-800"
+                          : "bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700"
+                      }`}
+                    >
+                      {loading ? "Updating..." : "Update"}
                     </Button>
                   </div>
                 </div>

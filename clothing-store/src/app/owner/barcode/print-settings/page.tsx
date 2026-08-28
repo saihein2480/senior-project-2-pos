@@ -464,7 +464,7 @@ function PrintSettingsContent() {
                         showDates: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 accent-blue-600 focus:ring-cyan-400 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">
@@ -485,7 +485,7 @@ function PrintSettingsContent() {
                         showPrice: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 accent-blue-600 focus:ring-cyan-400 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">

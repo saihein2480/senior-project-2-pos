@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -14,9 +15,11 @@ import { StockService } from "@/services/stockService";
 export interface OnlineOrder {
   id: string;
   orderId: string;
+  total?: number;
   amountMmk: number;
   status: string;
   paymentStatus: string;
+  paymentMethod?: string;
   provider?: string;
   customer?: {
     uid?: string;
@@ -217,15 +220,16 @@ class OnlineOrderService {
     const nextStatusIsCancelled = this.isCancelledStatus(status);
     let shouldMarkRestoredAt = false;
 
+    const snap = await getDoc(orderRef);
+    if (!snap.exists()) return;
+
+    const current = {
+      id: snap.id,
+      ...(snap.data() as Omit<OnlineOrder, "id">),
+    } as OnlineOrder;
+
     if (nextStatusIsCancelled) {
-      const snap = await getDoc(orderRef);
-      if (snap.exists()) {
-        const current = {
-          id: snap.id,
-          ...(snap.data() as Omit<OnlineOrder, "id">),
-        } as OnlineOrder;
-        shouldMarkRestoredAt = await this.restoreStockIfNeeded(current);
-      }
+      shouldMarkRestoredAt = await this.restoreStockIfNeeded(current);
     }
 
     await updateDoc(orderRef, {
@@ -235,6 +239,31 @@ class OnlineOrderService {
         ? { stockRestoredAt: new Date().toISOString() }
         : {}),
     });
+
+    // If this is a COD order with a linked transaction, update the transaction too
+    const isCOD = (current.paymentMethod || "").toLowerCase() === "cod";
+    if (isCOD && orderId) {
+      try {
+        // COD orders use the same ID for both onlineOrder and transaction
+        const transactionRef = doc(db, "transactions", orderId);
+        const txSnap = await getDoc(transactionRef);
+        
+        if (txSnap.exists()) {
+          // Map online order status to transaction delivery status AND orderStatus
+          let deliveryStatus = status;
+          if (status === "packaging") deliveryStatus = "confirmed";
+          if (status === "delivering") deliveryStatus = "shipped";
+          
+          await updateDoc(transactionRef, {
+            deliveryStatus,
+            orderStatus: status, // Add orderStatus field for purchases page
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error("Failed to update linked COD transaction:", error);
+      }
+    }
   }
 
   async updateOnlineOrderStatuses(
@@ -262,6 +291,54 @@ class OnlineOrderService {
     });
 
     await batch.commit();
+  }
+
+  async updateOnlineOrderPaymentStatus(
+    orderId: string,
+    paymentStatus: string,
+  ): Promise<void> {
+    if (!db) throw new Error("Database not initialized");
+
+    const ref = doc(db, "onlineOrders", orderId);
+    const snap = await getDoc(ref);
+    
+    if (!snap.exists()) throw new Error("Order not found");
+    
+    const order = snap.data() as Omit<OnlineOrder, "id">;
+    
+    await updateDoc(ref, {
+      paymentStatus,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // If this is a COD order, update the transaction status too
+    const isCOD = (order.paymentMethod || "").toLowerCase() === "cod";
+    if (isCOD && orderId) {
+      try {
+        // Query transactions collection to find the transaction with matching onlineOrderId
+        const transactionsRef = collection(db, "transactions");
+        const q = query(transactionsRef, where("onlineOrderId", "==", orderId));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          // Update the first matching transaction (should only be one)
+          const transactionDoc = querySnapshot.docs[0];
+          const txStatus = paymentStatus === "SUCCESS" ? "completed" : "pending";
+          
+          await updateDoc(doc(db, "transactions", transactionDoc.id), {
+            status: txStatus,
+            paymentStatus, // Also add paymentStatus field
+            updatedAt: new Date().toISOString(),
+          });
+          
+          console.log(`Updated COD transaction ${transactionDoc.id} payment status to ${paymentStatus}`);
+        } else {
+          console.warn(`No transaction found with onlineOrderId: ${orderId}`);
+        }
+      } catch (error) {
+        console.error("Failed to update linked COD transaction payment status:", error);
+      }
+    }
   }
 }
 

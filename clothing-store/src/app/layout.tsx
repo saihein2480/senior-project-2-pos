@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ViewModeProvider } from "@/contexts/ViewModeContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -47,16 +48,18 @@ export default function RootLayout({
       >
         <LanguageProvider>
           <AuthProvider>
-            <SettingsProvider>
-              <CurrencyProvider>
-                <CartProvider>{children}</CartProvider>
-              </CurrencyProvider>
-            </SettingsProvider>
+            <ViewModeProvider>
+              <SettingsProvider>
+                <CurrencyProvider>
+                  <CartProvider>{children}</CartProvider>
+                </CurrencyProvider>
+              </SettingsProvider>
+            </ViewModeProvider>
           </AuthProvider>
         </LanguageProvider>
         <InstallPrompt />
         <NumberInputGuard />
-        <Toaster position="top-center" />
+        <Toaster position="top-center" containerStyle={{ zIndex: 100000 }} />
         <SpeedInsights />
       </body>
     </html>

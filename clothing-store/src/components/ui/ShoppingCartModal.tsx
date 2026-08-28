@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { SettingsService } from "@/services/settingsService";
@@ -38,6 +39,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const [discountAmount, setDiscountAmount] = React.useState<string>("");
   const [cartDiscountPercent, setCartDiscountPercent] =
     React.useState<number>(0);
+  const [isMounted, setIsMounted] = React.useState(false);
 
   // Shop name mapping
   const [shopNames, setShopNames] = React.useState<Record<string, string>>({});
@@ -117,6 +119,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, []);
+
+  React.useEffect(() => {
+    setIsMounted(true);
   }, []);
 
   // Prevent background scrolling when modal is open and auto-open big view
@@ -200,7 +206,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVariantForDiscount, cart.items]);
 
-  if (!isOpen) return null;
+  if (!isMounted || !isOpen) return null;
 
   const handleApplyDiscount = () => {
     const value = parseFloat(discountAmount) || 0;
@@ -458,9 +464,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   // Calculate group discount savings
   const groupDiscountSavings = cart.items.reduce((total, item) => {
     if (item.groupDiscount && item.groupDiscount > 0) {
-      const basePrice = item.isWholesalePricing ? (item.wholesalePrice ?? item.unitPrice) : item.unitPrice;
+      const basePrice = item.isWholesalePricing
+        ? (item.wholesalePrice ?? item.unitPrice)
+        : item.unitPrice;
       const groupDiscountAmount =
-        (basePrice * item.quantity) * (item.groupDiscount / 100);
+        basePrice * item.quantity * (item.groupDiscount / 100);
       return total + groupDiscountAmount;
     }
     return total;
@@ -469,9 +477,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   // Calculate variant discount savings
   const variantDiscountSavings = cart.items.reduce((total, item) => {
     if (item.variantDiscount && item.variantDiscount > 0) {
-      const basePrice = item.isWholesalePricing ? (item.wholesalePrice ?? item.unitPrice) : item.unitPrice;
+      const basePrice = item.isWholesalePricing
+        ? (item.wholesalePrice ?? item.unitPrice)
+        : item.unitPrice;
       const variantDiscountAmount =
-        (basePrice * item.quantity) * (item.variantDiscount / 100);
+        basePrice * item.quantity * (item.variantDiscount / 100);
       return total + variantDiscountAmount;
     }
     return total;
@@ -624,26 +634,29 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     cartDiscountPercent,
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[99999] overflow-hidden"
       style={{ zIndex: 99999 }}
     >
       {/* Backdrop with blur */}
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
       {/* Full Screen Cart - Combined View */}
       <div className="absolute inset-0 bg-white shadow-xl flex flex-col md:flex-row">
         {/* Left Side - Cart Big View */}
         <div className="flex-1 flex flex-col md:border-r border-gray-200">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 bg-gradient-to-r from-rose-50 to-pink-100">
             <div className="flex items-center space-x-2 md:space-x-3">
-              <Eye className="h-5 w-5 md:h-6 md:w-6 text-blue-600" />
+              <Eye className="h-5 w-5 md:h-6 md:w-6 text-rose-600" />
               <h2 className="text-lg md:text-xl font-bold text-gray-900">
                 Cart Items
               </h2>
-              <span className="bg-blue-100 text-blue-800 text-xs md:text-sm font-medium px-2 md:px-2.5 py-0.5 rounded-full">
+              <span className="bg-pink-100 text-pink-800 text-xs md:text-sm font-medium px-2 md:px-2.5 py-0.5 rounded-full">
                 {cart.totalItems} items
               </span>
             </div>
@@ -827,7 +840,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Group Discount Badge (percentage or fixed amount) */}
                               {item.groupDiscount && item.groupDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-pink-100 text-pink-800 px-2 py-0.5 rounded font-medium">
                                     Group: {item.groupDiscount}% OFF
                                   </span>
                                   <button
@@ -841,7 +854,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                               ) : groupFixedDiscounts[item.groupName] ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-pink-100 text-pink-800 px-2 py-0.5 rounded font-medium">
                                     Group:{" "}
                                     {SettingsService.formatPrice(
                                       groupFixedDiscounts[item.groupName],
@@ -1023,7 +1036,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                                           <span>
                                                             Wholesale Total:
                                                           </span>
-                                                          <span className="font-semibold text-blue-600">
+                                                          <span className="font-semibold text-pink-600">
                                                             {formatPrice(
                                                               wholesaleTotal,
                                                             )}
@@ -1130,7 +1143,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               </div>
 
                               {/* Item Subtotal */}
-                              <div className="mt-2  p-2 bg-blue-50 rounded-lg">
+                              <div className="mt-2  p-2 bg-pink-50 rounded-lg">
                                 <div className="text-xs font-medium  text-gray-700 mb-1">
                                   Item Total:
                                 </div>
@@ -1177,7 +1190,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                         )}
                                       </span>
                                       <span className="text-gray-500">=</span>
-                                      <span className="font-bold text-blue-600">
+                                      <span className="font-bold text-pink-600">
                                         {SettingsService.formatPrice(
                                           effectiveTotal,
                                           selectedCurrency as "THB" | "MMK",
@@ -1220,7 +1233,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           {/* Customer Info */}
           <div className="border-b border-gray-200 px-3 md:px-6 py-3 md:py-4">
             <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full bg-cyan-500 flex items-center justify-center">
                 {getSelectedCustomer()?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1248,7 +1261,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 <p className="text-sm font-medium text-gray-900">
                   {getSelectedCustomer()?.displayName || "Unknown Customer"}
                 </p>
-                <p className="text-xs text-blue-600">
+                <p className="text-xs text-cyan-600">
                   {getSelectedCustomer()?.email || "Walk-in customer"}
                 </p>
                 {getSelectedCustomer()?.customerType && (
@@ -1278,12 +1291,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             <div className="flex-1 border-t border-gray-200 overflow-y-auto">
               <div className="px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
                 {/* Discount section */}
-                <div className="p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
-                  <div className="flex items-center space-x-2 text-blue-700 mb-3">
-                    <div className="w-7 h-7 bg-blue-200 rounded-full flex items-center justify-center border border-blue-300">
-                      <span className="text-sm font-bold text-blue-800">%</span>
+                <div className="p-3 bg-pink-50 rounded-lg border-2 border-pink-200">
+                  <div className="flex items-center space-x-2 text-pink-700 mb-3">
+                    <div className="w-7 h-7 bg-pink-200 rounded-full flex items-center justify-center border border-pink-300">
+                      <span className="text-sm font-bold text-pink-800">%</span>
                     </div>
-                    <span className="text-sm font-bold text-blue-800">
+                    <span className="text-sm font-bold text-pink-800">
                       Discount Management
                     </span>
                   </div>
@@ -1294,8 +1307,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("cart")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "cart"
-                          ? "bg-blue-600 text-white"
-                          : "bg-white text-blue-600 border border-blue-300"
+                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
                       Cart
@@ -1304,8 +1317,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("group")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "group"
-                          ? "bg-blue-600 text-white"
-                          : "bg-white text-blue-600 border border-blue-300"
+                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
                       Group
@@ -1314,8 +1327,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("variant")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "variant"
-                          ? "bg-blue-600 text-white"
-                          : "bg-white text-blue-600 border border-blue-300"
+                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
                       Variant
@@ -1335,7 +1348,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           }
                           value={discountAmount}
                           onChange={(e) => setDiscountAmount(e.target.value)}
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                           min="0"
                           max={
                             discountType === "percentage" ? "100" : undefined
@@ -1364,7 +1377,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyDiscount}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 border-2 border-blue-700 shadow-sm"
+                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           Apply
                         </button>
@@ -1385,7 +1398,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             setShowGroupDropdown(true);
                           }}
                           onFocus={() => setShowGroupDropdown(true)}
-                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                         />
                         {showGroupDropdown && filteredGroups.length > 0 && (
                           <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -1397,7 +1410,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                   setGroupSearchTerm(group);
                                   setShowGroupDropdown(false);
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-blue-50 focus:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                                className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-pink-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
                               >
                                 {group}
                               </button>
@@ -1417,7 +1430,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setGroupDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                           min="0"
                           max={
                             groupDiscountType === "percentage"
@@ -1448,7 +1461,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyGroupDiscount}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 border-2 border-blue-700 shadow-sm"
+                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           Apply
                         </button>
@@ -1469,7 +1482,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             setShowVariantDropdown(true);
                           }}
                           onFocus={() => setShowVariantDropdown(true)}
-                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                         />
                         {showVariantDropdown && filteredVariants.length > 0 && (
                           <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -1485,7 +1498,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     );
                                     setShowVariantDropdown(false);
                                   }}
-                                  className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-blue-50 focus:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                                  className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-pink-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
                                 >
                                   {item.groupName} - {colorLabel} /{" "}
                                   {item.selectedSize}
@@ -1507,7 +1520,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setVariantDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
                           min="0"
                           max={
                             variantDiscountType === "percentage"
@@ -1538,7 +1551,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyVariantDiscount}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 border-2 border-blue-700 shadow-sm"
+                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           Apply
                         </button>
@@ -1579,7 +1592,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Group Discount:</span>
-                        <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-cyan-100 text-blue-800 px-1.5 py-0.5 rounded">
                           GROUP
                         </span>
                       </span>
@@ -1597,7 +1610,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Group Fixed Discount:</span>
-                        <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-cyan-100 text-blue-800 px-1.5 py-0.5 rounded">
                           GROUP
                         </span>
                       </span>
@@ -1712,7 +1725,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 {/* Checkout button */}
                 <button
                   onClick={handleCheckout}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors"
+                  className="w-full bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium py-3 rounded-lg transition-colors border-0 shadow-md"
                 >
                   Proceed to Checkout
                 </button>
@@ -1753,6 +1766,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         total={grandTotalForPayment}
         discountBreakdown={discountBreakdownForPayment}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }

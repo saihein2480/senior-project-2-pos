@@ -8,21 +8,12 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Button } from "@/components/ui/Button";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
-import {
-  Store,
-  User,
-  Package,
-  BarChart3,
-  ShoppingCart,
-  Filter,
-  X,
-} from "lucide-react";
+import { Package, Filter, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { StockItem, WholesaleTier } from "@/types/stock";
-import { SettingsService } from "@/services/settingsService";
 import { StockService } from "@/services/stockService";
 import { InventoryRealtimeService } from "@/services/inventoryRealtimeService";
 import { CategoryService } from "@/services/categoryService";
@@ -51,7 +42,7 @@ interface ClothingInventoryItem {
 function OwnerHomeContent() {
   const {} = useAuth();
   const { addToCart, setInventoryCallbacks } = useCart();
-  const { formatPrice, getCurrencySymbol } = useCurrency();
+  const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -969,7 +960,7 @@ function OwnerHomeContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-white flex">
       {/* Desktop Sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1018,7 +1009,7 @@ function OwnerHomeContent() {
                         placeholder="Search by group name..."
                         value={searchTerm}
                         onChange={handleSearchChange}
-                        className="pl-10 pr-4 py-2 w-60 xl:w-64 border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
+                        className="pl-10 pr-4 py-2 w-60 xl:w-64 border rounded-xl border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-gray-50 focus:bg-white transition-colors"
                       />
                       <svg
                         className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"
@@ -1041,7 +1032,7 @@ function OwnerHomeContent() {
                         onClick={() =>
                           setShowFilterDropdown(!showFilterDropdown)
                         }
-                        className="flex items-center px-3 py-1.5 xl:px-4 xl:py-2 border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
+                        className="flex items-center px-3 py-1.5 xl:px-4 xl:py-2 border rounded-xl border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors"
                       >
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
@@ -1067,7 +1058,7 @@ function OwnerHomeContent() {
                             {hasActiveFilters && (
                               <button
                                 onClick={clearFilters}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                className="text-xs text-cyan-600 hover:text-blue-800 font-medium"
                               >
                                 Clear all
                               </button>
@@ -1075,7 +1066,7 @@ function OwnerHomeContent() {
                           </div>
 
                           {/* Category Filter */}
-                          <div className="mb-4">
+                          {/* <div className="mb-4">
                             <label className="block text-xs font-medium text-gray-700 mb-2">
                               Category
                             </label>
@@ -1086,7 +1077,7 @@ function OwnerHomeContent() {
                                 setSelectedCategory(e.target.value);
                                 setCurrentPage(1);
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-cyan-400 focus:border-blue-500 text-gray-900"
                             >
                               <option value="all">All Categories</option>
                               {categories.map((cat) => (
@@ -1095,7 +1086,7 @@ function OwnerHomeContent() {
                                 </option>
                               ))}
                             </select>
-                          </div>
+                          </div> */}
 
                           {/* Stock Status Filter */}
                           <div className="mb-4">
@@ -1109,7 +1100,7 @@ function OwnerHomeContent() {
                                 setSelectedStockStatus(e.target.value);
                                 setCurrentPage(1);
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-cyan-400 focus:border-blue-500 text-gray-900"
                             >
                               <option value="all">All Status</option>
                               <option value="in-stock">In Stock</option>
@@ -1123,7 +1114,7 @@ function OwnerHomeContent() {
                             <label className="block text-xs font-medium text-gray-700 mb-2">
                               Price Range (THB)
                             </label>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center rounded-md border border-gray-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-cyan-400 focus-within:border-blue-500">
                               <input
                                 type="number"
                                 placeholder="Min"
@@ -1135,9 +1126,9 @@ function OwnerHomeContent() {
                                   });
                                   setCurrentPage(1);
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                className="w-1/2 min-w-0 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
                               />
-                              <span className="text-gray-500">-</span>
+                              <span className="h-4 w-px bg-gray-200" />
                               <input
                                 type="number"
                                 placeholder="Max"
@@ -1149,7 +1140,7 @@ function OwnerHomeContent() {
                                   });
                                   setCurrentPage(1);
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                className="w-1/2 min-w-0 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
                               />
                             </div>
                           </div>
@@ -1159,8 +1150,46 @@ function OwnerHomeContent() {
                   </div>
                 </div>
 
+                <div className="mb-5">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-1 inline-flex max-w-full">
+                    <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory("all");
+                          setCurrentPage(1);
+                        }}
+                        className={`px-4 py-2.5 text-sm rounded-lg font-semibold transition-all border-0 ${
+                          selectedCategory === "all"
+                            ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                            : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                        }`}
+                      >
+                        All Products
+                      </button>
+                      {categories.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setCurrentPage(1);
+                          }}
+                          className={`px-4 py-2.5 text-sm rounded-lg font-semibold transition-all border-0 ${
+                            selectedCategory.toLowerCase() === cat.toLowerCase()
+                              ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                              : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Clothing Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 items-start">
                   {isLoading || shopsLoading ? (
                     // Loading state
                     Array.from({ length: 12 }).map((_, index) => (
@@ -1219,152 +1248,162 @@ function OwnerHomeContent() {
                       return (
                         <div
                           key={`${item.id}-${selectedColors[item.id] || "no-color"}`}
-                          className={`bg-white border  overflow-hidden hover:shadow-lg hover:scale-[1.03] transition-transform transition-shadow duration-200 ${
+                          className={`bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-200 ${
                             isOutOfStock
-                              ? "border-red-200 opacity-75"
+                              ? "border-red-200 opacity-80"
                               : "border-gray-200"
                           }`}
                         >
-                          {/* Product Image */}
-                          <div className="relative h-48 bg-gray-100 overflow-hidden">
-                            {item.isNew && !isOutOfStock && (
-                              <span className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded z-[1] pointer-events-none">
-                                New
-                              </span>
-                            )}
-                            {isOutOfStock && (
-                              <>
-                                <div className="absolute inset-0 bg-black z-0"></div>
-                                <div className="absolute inset-0 flex items-center justify-center z-20">
-                                  <span className="text-sm font-bold px-4 py-2 ">
+                          <div className="p-3 flex flex-col h-full">
+                            <div className="relative bg-gray-50 rounded-xl overflow-hidden aspect-[4/5] flex items-center justify-center">
+                              {item.isNew && !isOutOfStock && (
+                                <span className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-md z-10 pointer-events-none">
+                                  New
+                                </span>
+                              )}
+                              {isOutOfStock && (
+                                <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center">
+                                  <span className="text-sm font-semibold text-white px-4 py-2 rounded-md bg-black/40">
                                     OUT OF STOCK
                                   </span>
                                 </div>
-                              </>
-                            )}
-                            <Image
-                              key={`${item.id}-image-${selectedColors[item.id] || "default"}`}
-                              src={getCurrentImage(
-                                item as ClothingInventoryItem,
                               )}
-                              alt={item.name}
-                              width={150}
-                              height={200}
-                              className={`w-full h-full object-cover ${
-                                isOutOfStock ? "opacity-60" : ""
-                              }`}
-                            />
-                            {/* Category and Branch bottom right overlay */}
-                            {(item.category ||
-                              (item.shop && getShopName(item.shop))) && (
-                              <div className="absolute bottom-2 right-2 flex flex-col items-end space-y-1 z-1">
-                                {item.category && (
-                                  <span
-                                    className="bg-white bg-opacity-40 text-xs text-gray-900 px-2 py-0.5 rounded shadow whitespace-nowrap"
-                                    style={{
-                                      backgroundColor: "rgba(255,255,255,0.4)",
-                                    }}
-                                  >
-                                    <span className="text-opacity-100">
+                              <Image
+                                key={`${item.id}-image-${selectedColors[item.id] || "default"}`}
+                                src={getCurrentImage(
+                                  item as ClothingInventoryItem,
+                                )}
+                                alt={item.name}
+                                width={380}
+                                height={270}
+                                className={`w-full h-full object-contain ${
+                                  isOutOfStock ? "opacity-60" : ""
+                                }`}
+                              />
+                              {(item.category ||
+                                (item.shop && getShopName(item.shop))) && (
+                                <div className="absolute bottom-2 right-2 flex flex-col items-end space-y-1 z-10">
+                                  {item.category && (
+                                    <span className="bg-white/70 backdrop-blur text-xs text-gray-900 px-2 py-0.5 rounded-md shadow whitespace-nowrap">
                                       {item.category}
                                     </span>
-                                  </span>
-                                )}
-                                {item.shop && getShopName(item.shop) && (
-                                  <span
-                                    className="bg-white bg-opacity-40 text-xs text-gray-900 px-2 py-0.5 rounded shadow whitespace-nowrap"
-                                    style={{
-                                      backgroundColor: "rgba(255,255,255,0.4)",
-                                    }}
-                                  >
-                                    <span className="text-opacity-100">
+                                  )}
+                                  {item.shop && getShopName(item.shop) && (
+                                    <span className="bg-white/70 backdrop-blur text-xs text-gray-900 px-2 py-0.5 rounded-md shadow whitespace-nowrap">
                                       {getShopName(item.shop)}
                                     </span>
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Product Details */}
-                          <div className="p-3">
-                            <div className="relative">
-                              <h4
-                                className="font-medium text-gray-900 text-sm mb-1 truncate"
-                                title={item.name}
-                                onMouseEnter={() => setTooltipItem(item.id)}
-                                onMouseLeave={() => setTooltipItem(null)}
-                                onTouchStart={() => {
-                                  setTooltipItem(item.id);
-                                  if (tooltipTimeoutRef.current) {
-                                    window.clearTimeout(
-                                      tooltipTimeoutRef.current,
-                                    );
-                                  }
-                                  tooltipTimeoutRef.current = window.setTimeout(
-                                    () => {
-                                      setTooltipItem(null);
-                                      tooltipTimeoutRef.current = null;
-                                    },
-                                    2500,
-                                  );
-                                }}
-                              >
-                                {item.name}
-                              </h4>
-
-                              {tooltipItem === item.id && (
-                                <div className="absolute left-0 bottom-full mb-1 z-50">
-                                  <div className="inline-block max-w-xs bg-gray-900 text-white text-xs px-2 py-1 rounded shadow">
-                                    {item.name}
-                                  </div>
+                                  )}
                                 </div>
                               )}
                             </div>
-                            {/* Removed old category and branch display, now shown on image */}
 
-                            {/* Price and Stock */}
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="text-sm font-medium text-gray-900">
-                                {formatPrice(item.price)}
-                              </span>
-                              <span className="text-xs text-gray-600">
-                                Stock:{" "}
-                                <span
-                                  className={`font-medium ${
-                                    isOutOfStock
-                                      ? "text-red-600"
-                                      : itemStock <= 10
-                                        ? "text-orange-600"
-                                        : "text-green-600"
-                                  }`}
-                                >
-                                  {itemStock}
-                                </span>
-                              </span>
-                            </div>
+                            {/* Content area with dynamic height */}
+                            <div className="flex-1 flex flex-col">
+                              <div className="relative mt-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h4
+                                    className="font-semibold text-gray-900 text-sm leading-snug truncate"
+                                    title={item.name}
+                                    onMouseEnter={() => setTooltipItem(item.id)}
+                                    onMouseLeave={() => setTooltipItem(null)}
+                                    onTouchStart={() => {
+                                      setTooltipItem(item.id);
+                                      if (tooltipTimeoutRef.current) {
+                                        window.clearTimeout(
+                                          tooltipTimeoutRef.current,
+                                        );
+                                      }
+                                      tooltipTimeoutRef.current =
+                                        window.setTimeout(() => {
+                                          setTooltipItem(null);
+                                          tooltipTimeoutRef.current = null;
+                                        }, 2500);
+                                    }}
+                                  >
+                                    {item.name}
+                                  </h4>
 
-                            {/* Color Selection */}
-                            <div className="mb-3">
-                              <label className="text-xs font-medium text-gray-700 mb-1 block">
-                                Color:
-                              </label>
-                              {(() => {
-                                const variants = item.colorVariants || [];
-                                if (variants.length === 0) {
-                                  return (
-                                    <span className="text-xs text-gray-500">
-                                      No color variants available
+                                  <div className="shrink-0 text-xs text-gray-600 whitespace-nowrap">
+                                    Stock:{" "}
+                                    <span
+                                      className={`font-medium ${
+                                        isOutOfStock
+                                          ? "text-red-600"
+                                          : itemStock <= 10
+                                            ? "text-orange-600"
+                                            : "text-green-600"
+                                      }`}
+                                    >
+                                      {itemStock}
                                     </span>
-                                  );
-                                }
+                                  </div>
+                                </div>
 
-                                // Show single row when up to `maxSingleRow` colors,
-                                // otherwise layout into a grid with responsive columns per row.
-                                const maxSingleRow = 7;
-                                if (variants.length <= maxSingleRow) {
+                                {tooltipItem === item.id && (
+                                  <div className="absolute left-0 bottom-full mb-1 z-50">
+                                    <div className="inline-block max-w-xs bg-gray-900 text-white text-xs px-2 py-1 rounded shadow">
+                                      {item.name}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Color Selection */}
+                              <div className="mt-2">
+                                <label className="text-xs font-medium text-gray-700 mb-1 block">
+                                  Colors
+                                </label>
+                                {(() => {
+                                  const variants = item.colorVariants || [];
+                                  if (variants.length === 0) {
+                                    return (
+                                      <span className="text-xs text-gray-500">
+                                        No color variants available
+                                      </span>
+                                    );
+                                  }
+
+                                  const maxSingleRow = 7;
+                                  if (variants.length <= maxSingleRow) {
+                                    return (
+                                      <div className="flex items-center gap-2">
+                                        {variants.map((variant, index) => {
+                                          const variantId =
+                                            variant.id || `variant-${index}`;
+                                          const isSelected =
+                                            selectedColors[item.id] === variantId;
+                                          return (
+                                            <button
+                                              key={`${item.id}-${variantId}`}
+                                              onClick={() =>
+                                                handleColorSelect(
+                                                  item.id,
+                                                  variantId,
+                                                )
+                                              }
+                                              className={`relative w-6 h-6 rounded-full border-2 transition-all ${
+                                                isSelected
+                                                  ? "border-pink-500 ring-2 ring-pink-200 scale-110"
+                                                  : "border-gray-300 hover:border-gray-400 hover:scale-105"
+                                              }`}
+                                              style={{
+                                                backgroundColor:
+                                                  variant.colorCode,
+                                              }}
+                                              title={
+                                                isSelected
+                                                  ? `${variant.color} (click to unselect)`
+                                                  : variant.color
+                                              }
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+
                                   return (
-                                    <div className="flex items-center gap-2 pr-4">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7 gap-2">
                                       {variants.map((variant, index) => {
                                         const variantId =
                                           variant.id || `variant-${index}`;
@@ -1381,12 +1420,11 @@ function OwnerHomeContent() {
                                             }
                                             className={`relative w-6 h-6 rounded-full border-2 transition-all ${
                                               isSelected
-                                                ? "border-blue-500 ring-2 ring-blue-200"
-                                                : "border-gray-300 hover:border-gray-400"
+                                                ? "border-pink-500 ring-2 ring-pink-200 scale-110"
+                                                : "border-gray-300 hover:border-gray-400 hover:scale-105"
                                             }`}
                                             style={{
-                                              backgroundColor:
-                                                variant.colorCode,
+                                              backgroundColor: variant.colorCode,
                                             }}
                                             title={
                                               isSelected
@@ -1398,144 +1436,112 @@ function OwnerHomeContent() {
                                       })}
                                     </div>
                                   );
-                                }
-
-                                // Grid with responsive columns: 3 (sm) -> 4 (md) -> 5 (lg) -> 6 (xl) -> 7 (2xl)
-                                return (
-                                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 2xl:grid-cols-7 gap-2 pr-4">
-                                    {variants.map((variant, index) => {
-                                      const variantId =
-                                        variant.id || `variant-${index}`;
-                                      const isSelected =
-                                        selectedColors[item.id] === variantId;
-                                      return (
-                                        <button
-                                          key={`${item.id}-${variantId}`}
-                                          onClick={() =>
-                                            handleColorSelect(
-                                              item.id,
-                                              variantId,
-                                            )
-                                          }
-                                          className={`relative w-6 h-6 rounded-full border-2 transition-all ${
-                                            isSelected
-                                              ? "border-blue-500 ring-2 ring-blue-200"
-                                              : "border-gray-300 hover:border-gray-400"
-                                          }`}
-                                          style={{
-                                            backgroundColor: variant.colorCode,
-                                          }}
-                                          title={
-                                            isSelected
-                                              ? `${variant.color} (click to unselect)`
-                                              : variant.color
-                                          }
-                                        />
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-
-                            {/* Size Selection */}
-                            <div
-                              className="mb-3"
-                              key={`sizes-${item.id}-${
-                                selectedColors[item.id] || "no-color"
-                              }`}
-                            >
-                              <label className="text-xs font-medium text-gray-700 mb-1 block">
-                                Size:
-                              </label>
-                              <div className="grid grid-cols-3 gap-1">
-                                {(() => {
-                                  const availableSizes = item.colorVariants
-                                    ? getAvailableSizes(
-                                        item as ClothingInventoryItem,
-                                      )
-                                    : [];
-                                  console.log(
-                                    `Size rendering for ${item.id}: availableSizes=`,
-                                    availableSizes,
-                                    `length=${availableSizes.length}`,
-                                  );
-                                  return availableSizes.length > 0 ? (
-                                    availableSizes.map((sizeQty) => {
-                                      const isSelected =
-                                        selectedSizes[item.id] === sizeQty.size;
-                                      const isOutOfStock =
-                                        sizeQty.quantity === 0;
-                                      return (
-                                        <button
-                                          key={`${item.id}-${sizeQty.size}`}
-                                          onClick={() =>
-                                            !isOutOfStock &&
-                                            handleSizeSelect(
-                                              item.id,
-                                              sizeQty.size,
-                                            )
-                                          }
-                                          disabled={isOutOfStock}
-                                          className={`text-xs py-1 px-2 rounded border transition-all ${
-                                            isOutOfStock
-                                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                                              : isSelected
-                                                ? "bg-blue-600 text-white border-blue-600"
-                                                : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
-                                          }`}
-                                          title={`${sizeQty.size} - ${sizeQty.quantity} in stock`}
-                                        >
-                                          <div className="flex flex-col items-center">
-                                            <span>{sizeQty.size}</span>
-                                            <span
-                                              className={`text-xs ${
-                                                isSelected
-                                                  ? "text-blue-200"
-                                                  : "text-gray-500"
-                                              }`}
-                                            >
-                                              ({sizeQty.quantity})
-                                            </span>
-                                          </div>
-                                        </button>
-                                      );
-                                    })
-                                  ) : (
-                                    <span className="text-xs text-gray-500 col-span-3">
-                                      {selectedColors[item.id]
-                                        ? "No sizes available"
-                                        : "Select a color first"}
-                                    </span>
-                                  );
                                 })()}
                               </div>
-                            </div>
 
-                            {/* Add to Cart Button */}
-                            <button
-                              onClick={() =>
-                                handleAddToCart(item as ClothingInventoryItem)
-                              }
-                              disabled={
-                                isOutOfStock ||
-                                !selectedColors[item.id] ||
-                                !selectedSizes[item.id]
-                              }
-                              className={`w-full py-2 px-2 text-sm font-medium rounded transition-colors flex items-center justify-center space-x-2 ${
-                                isOutOfStock
-                                  ? "bg-red-100 text-red-400 cursor-not-allowed border border-red-200"
-                                  : selectedColors[item.id] &&
-                                      selectedSizes[item.id]
-                                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                              }`}
-                            >
-                              <ShoppingCart className="h-4 w-4" />
-                              <span>
-                                {isOutOfStock ? "OUT OF STOCK" : "ADD TO CART"}
-                              </span>
-                            </button>
+                              {/* Size Selection - Only shows when color is selected */}
+                              {selectedColors[item.id] && (
+                                <div
+                                  className="mt-2"
+                                  key={`sizes-${item.id}-${
+                                    selectedColors[item.id] || "no-color"
+                                  }`}
+                                >
+                                  <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                                    Size
+                                  </label>
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {(() => {
+                                      const availableSizes = item.colorVariants
+                                        ? getAvailableSizes(
+                                            item as ClothingInventoryItem,
+                                          )
+                                        : [];
+                                      return availableSizes.length > 0 ? (
+                                        availableSizes.map((sizeQty) => {
+                                          const isSelected =
+                                            selectedSizes[item.id] ===
+                                            sizeQty.size;
+                                          const isOutOfStock =
+                                            sizeQty.quantity === 0;
+                                          return (
+                                            <button
+                                              key={`${item.id}-${sizeQty.size}`}
+                                              onClick={() =>
+                                                !isOutOfStock &&
+                                                handleSizeSelect(
+                                                  item.id,
+                                                  sizeQty.size,
+                                                )
+                                              }
+                                              disabled={isOutOfStock}
+                                              className={`relative text-sm font-bold px-2 py-2.5 rounded-lg border-2 transition-all ${
+                                                isOutOfStock
+                                                  ? "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed line-through"
+                                                  : isSelected
+                                                    ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white border-pink-400 shadow-md"
+                                                    : "bg-white text-gray-700 border-gray-300 hover:border-pink-300 hover:bg-pink-50"
+                                              }`}
+                                              title={`${sizeQty.size} - ${sizeQty.quantity} in stock`}
+                                            >
+                                              {sizeQty.size}
+                                              {!isOutOfStock && (
+                                                <span 
+                                                  className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 min-w-[20px] text-center ${
+                                                    isSelected
+                                                      ? "bg-white text-pink-600 border-pink-300 shadow-sm"
+                                                      : "bg-gradient-to-r from-pink-400 to-pink-300 text-white border-pink-400"
+                                                  }`}
+                                                >
+                                                  {sizeQty.quantity}
+                                                </span>
+                                              )}
+                                            </button>
+                                          );
+                                        })
+                                      ) : (
+                                        <span className="text-xs text-gray-500 col-span-3">
+                                          No sizes available
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Price and Add to Cart */}
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-lg font-semibold text-gray-900 leading-none">
+                                    {formatPrice(item.price)}
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() =>
+                                    handleAddToCart(item as ClothingInventoryItem)
+                                  }
+                                  disabled={
+                                    isOutOfStock ||
+                                    !selectedColors[item.id] ||
+                                    !selectedSizes[item.id]
+                                  }
+                                  aria-label={
+                                    isOutOfStock ? "Out of stock" : "Add to cart"
+                                  }
+                                  className={`h-11 w-11 rounded-xl flex items-center justify-center transition-colors ${
+                                    isOutOfStock
+                                      ? "bg-red-100 text-red-400 cursor-not-allowed border border-red-200"
+                                      : selectedColors[item.id] &&
+                                          selectedSizes[item.id]
+                                        ? "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md"
+                                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                  }`}
+                                >
+                                  <Plus className="h-5 w-5" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1544,41 +1550,41 @@ function OwnerHomeContent() {
                 </div>
 
                 {/* Pagination (moved to bottom) */}
-                <div className="mt-6 flex items-center justify-center">
-                  <div className="flex items-center justify-center space-x-2 w-full px-2">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        title="First page"
-                        onClick={() => setCurrentPage(1)}
-                        disabled={currentPage === 1}
-                        className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        First
-                      </button>
+                <div className="mt-8 flex items-center justify-center">
+                  <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+                    <button
+                      title="First page"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      First
+                    </button>
 
-                      <button
-                        title="Previous page"
-                        onClick={() =>
-                          setCurrentPage((p) => Math.max(p - 1, 1))
-                        }
-                        disabled={currentPage === 1}
-                        className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    <button
+                      title="Previous page"
+                      onClick={() =>
+                        setCurrentPage((p) => Math.max(p - 1, 1))
+                      }
+                      disabled={currentPage === 1}
+                      className="p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 19l-7-7 7-7"
-                          />
-                        </svg>
-                      </button>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    </button>
 
+                    <div className="flex items-center gap-1 px-2">
                       {(() => {
                         const maxButtons = 5;
                         let start = Math.max(
@@ -1601,11 +1607,11 @@ function OwnerHomeContent() {
                               <>
                                 <button
                                   onClick={() => setCurrentPage(1)}
-                                  className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  className="min-w-[36px] px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                                 >
                                   1
                                 </button>
-                                <span className="px-2 text-gray-500">...</span>
+                                <span className="px-2 text-gray-400 text-sm">...</span>
                               </>
                             )}
 
@@ -1613,10 +1619,10 @@ function OwnerHomeContent() {
                               <button
                                 key={pageNumber}
                                 onClick={() => setCurrentPage(pageNumber)}
-                                className={`px-2 py-1.5 text-sm font-medium transition-colors ${
+                                className={`min-w-[36px] px-3 py-2 text-sm font-semibold rounded-lg transition-all ${
                                   currentPage === pageNumber
-                                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md hover:from-rose-600 hover:to-pink-600"
+                                    : "text-gray-700 hover:bg-gray-50"
                                 }`}
                               >
                                 {pageNumber}
@@ -1625,10 +1631,10 @@ function OwnerHomeContent() {
 
                             {end < totalPages && (
                               <>
-                                <span className="px-2 text-gray-500">...</span>
+                                <span className="px-2 text-gray-400 text-sm">...</span>
                                 <button
                                   onClick={() => setCurrentPage(totalPages)}
-                                  className="px-2 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                  className="min-w-[36px] px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                                 >
                                   {totalPages}
                                 </button>
@@ -1637,44 +1643,46 @@ function OwnerHomeContent() {
                           </>
                         );
                       })()}
-
-                      <button
-                        title="Next page"
-                        onClick={() =>
-                          setCurrentPage((prev) =>
-                            Math.min(prev + 1, totalPages),
-                          )
-                        }
-                        disabled={currentPage === totalPages}
-                        className="p-1.5 border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </button>
-
-                      <button
-                        title="Last page"
-                        onClick={() => setCurrentPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="px-2 py-1 border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Last
-                      </button>
                     </div>
 
-                    <div className="hidden md:flex items-center text-sm text-gray-600 pl-4">
-                      Page {currentPage} of {totalPages}
+                    <button
+                      title="Next page"
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(prev + 1, totalPages),
+                        )
+                      }
+                      disabled={currentPage === totalPages}
+                      className="p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </button>
+
+                    <button
+                      title="Last page"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      Last
+                    </button>
+
+                    <div className="hidden md:flex items-center pl-3 ml-3 border-l border-gray-200">
+                      <span className="text-sm text-gray-600 font-medium">
+                        Page {currentPage} of {totalPages}
+                      </span>
                     </div>
                   </div>
                 </div>

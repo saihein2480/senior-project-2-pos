@@ -126,8 +126,8 @@ export function InstallPrompt() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white border-t border-gray-200 shadow-lg md:bottom-4 md:left-4 md:right-auto md:max-w-sm md:rounded-lg md:border">
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 p-2 bg-blue-100 rounded-lg">
-          <Smartphone className="w-6 h-6 text-blue-600" />
+        <div className="flex-shrink-0 p-2 bg-cyan-100 rounded-lg">
+          <Smartphone className="w-6 h-6 text-cyan-600" />
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900">Install App</h3>

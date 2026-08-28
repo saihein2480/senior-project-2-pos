@@ -30,6 +30,7 @@ export interface DiscountBreakdown {
 export interface Transaction {
   id?: string;
   transactionId: string;
+  onlineOrderId?: string; // Reference to onlineOrders collection
   customer: SelectedCustomer | null;
   items: CartItem[];
   subtotal: number;
@@ -47,6 +48,22 @@ export interface Transaction {
     | "cancelled"
     | "refunded"
     | "partially_refunded";
+  paymentStatus?:
+    | "completed"
+    | "pending"
+    | "cancelled"
+    | "refunded"
+    | "partially_refunded"
+    | "pending_refund";
+  orderStatus?:
+    | "pending"
+    | "confirmed"
+    | "processing"
+    | "delivered"
+    | "delivering"
+    | "cancelled"
+    | "fully_returned"
+    | "partially_returned";
   shopId?: string;
   branchName?: string;
   sellingCurrency?: "THB" | "MMK";
@@ -62,6 +79,12 @@ export interface Transaction {
   rejectReason?: string;
   rejectedBy?: string;
   discountBreakdown?: DiscountBreakdown;
+  // Delivery tracking fields
+  deliveryStatus?: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+  deliveryStatusUpdatedAt?: Timestamp;
+  deliveryStatusUpdatedBy?: string;
+  orderSource?: "pos" | "web_storefront";
+  customerUid?: string;
 }
 
 export interface RefundItem {
@@ -85,6 +108,12 @@ export interface Refund {
   processedBy?: string;
   createdAt: Timestamp;
   status: "pending" | "completed" | "failed";
+  // Refund payment tracking
+  refundMethod?: "cash" | "original_payment" | "bank_transfer" | "pending";
+  refundedAt?: Timestamp;
+  refundedBy?: string;
+  refundNotes?: string;
+  refundProofUrl?: string; // Receipt or proof of refund
 }
 
 export interface TransactionSummary {
@@ -459,6 +488,9 @@ class TransactionService {
     transaction: Transaction,
     reason?: string,
     processedBy?: string,
+    refundMethod?: "cash" | "original_payment" | "bank_transfer",
+    inspectionResults?: { [itemIndex: number]: "accepted" | "damaged" },
+    returnStatus?: "refunded" | "partially_refunded",
   ): Promise<string> {
     try {
       // Generate unique refund ID
@@ -588,6 +620,7 @@ class TransactionService {
       }
 
       // Create refund record with comprehensive breakdown
+      const isPaidOrder = transaction.paymentMethod === "cash" || transaction.paymentMethod === "scan" || transaction.paymentMethod === "wallet";
       const refund: Refund = {
         transactionId,
         refundId,
@@ -596,34 +629,65 @@ class TransactionService {
         itemsSubtotal: totalItemRefundAmount,
         cartDiscountRefund: totalProportionalCartDiscount,
         taxRefund: totalProportionalTax,
-        reason,
-        processedBy,
+        reason: reason || undefined,
+        processedBy: processedBy || undefined,
         createdAt: Timestamp.now(),
-        status: "completed",
+        status: isPaidOrder ? "pending" : "completed", // Paid orders need refund confirmation
       };
+      
+      // Only add optional fields if they have valid values (not undefined)
+      if (refundMethod) {
+        refund.refundMethod = refundMethod;
+      }
+      if (!isPaidOrder) {
+        refund.refundedAt = Timestamp.now();
+        refund.refundedBy = processedBy || undefined;
+      }
 
       // Add refund to refunds collection
       const refundDocRef = await addDoc(collection(db!, "refunds"), refund);
 
-      // Restore inventory for refunded items
+      // Restore inventory for refunded items (only accepted items if inspection was done)
       try {
-        const inventoryRestorations = processedRefundItems.map((refundItem) => {
-          const originalItem = transaction.items[refundItem.itemIndex];
-          return {
-            stockId: originalItem.stockId,
-            colorName: originalItem.selectedColor || "",
-            size: originalItem.selectedSize || "",
-            quantity: refundItem.quantity,
-            variantHint: originalItem.id || "",
-          };
-        });
+        const inventoryRestorations = processedRefundItems
+          .filter((refundItem) => {
+            // If inspection results exist, only restock accepted items
+            if (inspectionResults) {
+              return inspectionResults[refundItem.itemIndex] === "accepted";
+            }
+            // If no inspection (cancellation refunds), restock all
+            return true;
+          })
+          .map((refundItem) => {
+            const originalItem = transaction.items[refundItem.itemIndex];
+            return {
+              stockId: originalItem.stockId,
+              colorName: originalItem.selectedColor || "",
+              size: originalItem.selectedSize || "",
+              quantity: refundItem.quantity,
+              variantHint: originalItem.id || "",
+            };
+          });
 
-        console.log(
-          "Processing refund inventory restoration:",
-          inventoryRestorations,
-        );
-        await StockService.restoreMultipleItems(inventoryRestorations);
-        console.log("Inventory restored for refunded items");
+        if (inventoryRestorations.length > 0) {
+          console.log(
+            "Processing refund inventory restoration:",
+            inventoryRestorations,
+          );
+          await StockService.restoreMultipleItems(inventoryRestorations);
+          console.log("Inventory restored for refunded items");
+          
+          if (inspectionResults) {
+            const damagedCount = processedRefundItems.filter(
+              (item) => inspectionResults[item.itemIndex] === "damaged"
+            ).length;
+            if (damagedCount > 0) {
+              console.log(`${damagedCount} damaged item(s) not restocked`);
+            }
+          }
+        } else {
+          console.log("No items to restock (all items marked as damaged)");
+        }
       } catch (inventoryError) {
         console.error("Error restoring inventory for refund:", inventoryError);
         // Continue with refund processing even if inventory restoration fails
@@ -644,25 +708,64 @@ class TransactionService {
       );
 
       // Determine new transaction status
-      // Compare against subtotalAfterCartDiscount (the maximum refundable amount, excluding tax)
-      // Tax is not refundable to customers, so we shouldn't include it in the comparison
+      // If returnStatus is provided (from inspection), use it directly
+      // Otherwise calculate based on total refunded amount
       let newStatus: Transaction["status"];
-      if (totalRefunded >= subtotalAfterCartDiscount) {
-        // All refundable amount has been refunded (tax is not refundable)
-        newStatus = "refunded";
-      } else if (totalRefunded > 0) {
-        newStatus = "partially_refunded";
+      if (returnStatus) {
+        newStatus = returnStatus;
       } else {
+        // Compare against subtotalAfterCartDiscount (the maximum refundable amount, excluding tax)
+        // Tax is not refundable to customers, so we shouldn't include it in the comparison
+        if (totalRefunded >= subtotalAfterCartDiscount) {
+          // All refundable amount has been refunded (tax is not refundable)
+          newStatus = "refunded";
+        } else if (totalRefunded > 0) {
+          newStatus = "partially_refunded";
+        } else {
         // Keep original status if no refunds
         newStatus = transaction.status;
       }
+      }
 
-      await updateDoc(transactionRef, {
+      // Determine orderStatus based on return status
+      const currentOrderStatus = transaction.orderStatus || "pending";
+      const refundRequest = (transaction as any).refundRequest;
+      const isReturnType = refundRequest?.type === "return";
+      const wasDelivered = currentOrderStatus === "delivered" || currentOrderStatus === "delivering";
+      let newOrderStatus = currentOrderStatus;
+      
+      // Update order status for returns - ALWAYS update if returnStatus is provided
+      if (returnStatus) {
+        // Use provided return status for delivered orders or return-type refunds
+        if (returnStatus === "refunded") {
+          newOrderStatus = "fully_returned";
+        } else if (returnStatus === "partially_refunded") {
+          newOrderStatus = "partially_returned";
+        }
+      } else if (wasDelivered || isReturnType) {
+        // If no returnStatus but it's a return, infer from payment status
+        if (newStatus === "refunded") {
+          newOrderStatus = "fully_returned";
+        } else if (newStatus === "partially_refunded") {
+          newOrderStatus = "partially_returned";
+        }
+      }
+
+      // Prepare update object
+      const updateData: any = {
         refunds: updatedRefunds,
         status: newStatus,
-      });
+      };
+
+      // Always update orderStatus if it changed
+      if (newOrderStatus !== currentOrderStatus) {
+        updateData.orderStatus = newOrderStatus;
+      }
+
+      await updateDoc(transactionRef, updateData);
 
       console.log("Refund processed successfully:", refundId);
+      console.log("Updated status:", newStatus, "orderStatus:", newOrderStatus);
       return refundId;
     } catch (error) {
       console.error("Error processing refund:", error);
@@ -736,6 +839,360 @@ class TransactionService {
 
   /**
    * Cancel a transaction and restore all inventory
+   */
+  /**
+   * Confirm return status ONLY (Step 1: Owner confirms items received)
+   * This updates ONLY orderStatus, NOT payment status
+   */
+  async confirmReturnStatus(
+    transactionId: string,
+    returnStatus: "fully_returned" | "partially_returned",
+    confirmedBy: string,
+  ): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      console.log("confirmReturnStatus called with:", {
+        transactionId,
+        returnStatus,
+        confirmedBy,
+      });
+
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      const transactionDoc = await getDoc(transactionRef);
+      
+      if (!transactionDoc.exists()) {
+        throw new Error("Transaction not found");
+      }
+
+      const transaction = transactionDoc.data() as Transaction;
+      const refundRequest = (transaction as any).refundRequest;
+      
+      if (!refundRequest) {
+        throw new Error("No refund request found for this transaction");
+      }
+
+      // Update ONLY orderStatus, do NOT touch status (payment status)
+      const updateData: any = {
+        orderStatus: returnStatus,
+        "refundRequest.returnStatusConfirmedAt": Timestamp.now(),
+        "refundRequest.returnStatusConfirmedBy": confirmedBy,
+      };
+
+      await updateDoc(transactionRef, updateData);
+
+      console.log(`Return status confirmed for ${transactionId}. Order status: ${returnStatus}. Payment status unchanged.`);
+    } catch (error) {
+      console.error("Error confirming return status:", error);
+      throw new Error(`Failed to confirm return status: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Confirm refund payment for paid orders (cash/scan)
+   * This updates ONLY payment status, NOT orderStatus
+   */
+  async confirmRefundPayment(
+    transactionId: string,
+    refundId: string,
+    refundMethod: "cash" | "original_payment" | "bank_transfer",
+    confirmedBy: string,
+    refundNotes?: string,
+    refundProofUrl?: string,
+    refundStatus?: "refunded" | "partially_refunded",
+  ): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      const transactionDoc = await getDoc(transactionRef);
+      
+      if (!transactionDoc.exists()) {
+        throw new Error("Transaction not found");
+      }
+
+      const transaction = transactionDoc.data() as Transaction;
+      const refunds = transaction.refunds || [];
+      
+      // Find the refund to confirm
+      const refundIndex = refunds.findIndex(r => r.refundId === refundId);
+      if (refundIndex === -1) {
+        throw new Error("Refund not found");
+      }
+
+      // Update refund status - only include fields with values
+      const updatedRefund: any = {
+        ...refunds[refundIndex],
+        status: "completed",
+        refundMethod,
+        refundedAt: Timestamp.now(),
+        refundedBy: confirmedBy,
+      };
+      
+      // Only add optional fields if they have values
+      if (refundNotes) {
+        updatedRefund.refundNotes = refundNotes;
+      }
+      if (refundProofUrl) {
+        updatedRefund.refundProofUrl = refundProofUrl;
+      }
+      
+      refunds[refundIndex] = updatedRefund;
+
+      // Calculate total refunded amount (including this refund)
+      const totalRefunded = refunds
+        .filter(r => r.status === "completed")
+        .reduce((sum, r) => sum + r.totalAmount, 0);
+      
+      // Use provided refund status or calculate automatically
+      let newPaymentStatus = transaction.status;
+      
+      if (refundStatus) {
+        // Use the explicitly provided refund status
+        console.log("Using provided refund status:", refundStatus);
+        newPaymentStatus = refundStatus;
+      } else {
+        // Fallback to automatic calculation
+        console.log("Calculating refund status automatically");
+        const isFullyRefunded = totalRefunded >= transaction.total;
+        const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < transaction.total;
+
+        if (isFullyRefunded) {
+          newPaymentStatus = "refunded";
+        } else if (isPartiallyRefunded) {
+          newPaymentStatus = "partially_refunded";
+        }
+      }
+
+      console.log(`Transaction ${transactionId}: Setting payment status to ${newPaymentStatus}`);
+
+      // STEP 2: Update ONLY payment status, do NOT change orderStatus
+      // orderStatus should have been set in Step 1 (confirmReturnStatus)
+
+      await updateDoc(transactionRef, {
+        refunds,
+        status: newPaymentStatus,
+        paymentStatus: newPaymentStatus, // Also update paymentStatus field
+        // Do NOT update orderStatus - it was already set in confirmReturnStatus
+      });
+
+      console.log(`Transaction ${transactionId}: Updated status and paymentStatus fields to ${newPaymentStatus}`);
+
+      // STEP 3: Update onlineOrders collection if this is an online order
+      if (transaction.onlineOrderId) {
+        const onlineOrderRef = doc(db, "onlineOrders", transaction.onlineOrderId);
+        await updateDoc(onlineOrderRef, {
+          paymentStatus: newPaymentStatus,
+          lastUpdated: new Date().toISOString(),
+        });
+        console.log(`Updated onlineOrders ${transaction.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
+      }
+
+      console.log(`Refund ${refundId} payment confirmed. Payment status: ${newPaymentStatus}. Order status unchanged.`);
+    } catch (error) {
+      console.error("Error confirming refund payment:", error);
+      throw new Error("Failed to confirm refund payment");
+    }
+  }
+
+  /**
+   * Cancel transaction for paid orders (cash/scan) with refund processing
+   */
+  async cancelPaidTransaction(
+    transactionId: string,
+    transaction: Transaction,
+    reason?: string,
+    cancelledBy?: string,
+    refundMethod?: "cash" | "original_payment" | "bank_transfer",
+  ): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      const isPaidOrder = transaction.paymentMethod === "cash" || transaction.paymentMethod === "scan" || transaction.paymentMethod === "wallet";
+      
+      if (!isPaidOrder) {
+        // Use regular cancellation for non-paid orders
+        return this.cancelTransaction(transactionId, transaction, reason, cancelledBy);
+      }
+
+      console.log(`Cancelling paid order ${transactionId} with refund`);
+
+      // Calculate already refunded quantities
+      const alreadyRefunded: { [itemIndex: number]: number } = {};
+      if (transaction.refunds) {
+        transaction.refunds.forEach((refund) => {
+          refund.items.forEach((refundItem) => {
+            alreadyRefunded[refundItem.itemIndex] =
+              (alreadyRefunded[refundItem.itemIndex] || 0) +
+              refundItem.quantity;
+          });
+        });
+      }
+
+      // Restore inventory for remaining items
+      const inventoryRestorations: Array<{
+        stockId: string;
+        colorName: string;
+        size: string;
+        quantity: number;
+        variantHint?: string;
+      }> = [];
+
+      transaction.items.forEach((item, index) => {
+        const alreadyRefundedQty = alreadyRefunded[index] || 0;
+        const remainingQuantity = item.quantity - alreadyRefundedQty;
+
+        if (remainingQuantity > 0) {
+          inventoryRestorations.push({
+            stockId: item.stockId,
+            colorName: item.selectedColor || "",
+            size: item.selectedSize || "",
+            quantity: remainingQuantity,
+            variantHint: item.id || "",
+          });
+        }
+      });
+
+      if (inventoryRestorations.length > 0) {
+        await StockService.restoreMultipleItems(inventoryRestorations);
+      }
+
+      // Calculate refund amount (total minus already refunded)
+      const totalAlreadyRefunded = transaction.refunds?.reduce(
+        (sum, refund) => sum + refund.totalAmount,
+        0,
+      ) || 0;
+      const refundAmount = transaction.total - totalAlreadyRefunded;
+
+      // Update transaction with cancellation and refund info
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      await updateDoc(transactionRef, {
+        status: "cancelled",
+        cancelledAt: Timestamp.now(),
+        cancelReason: reason,
+        cancelledBy: cancelledBy,
+        cancellationRefund: {
+          amount: refundAmount,
+          method: refundMethod || "pending",
+          status: "pending",
+          requestedAt: Timestamp.now(),
+          requestedBy: cancelledBy,
+        },
+      });
+
+      console.log(`Paid order cancelled - Refund of ${refundAmount} pending confirmation`);
+    } catch (error) {
+      console.error("Error cancelling paid transaction:", error);
+      throw new Error("Failed to cancel paid transaction");
+    }
+  }
+
+  /**
+   * Confirm cancellation refund payment
+   * This updates ONLY payment status, NOT orderStatus
+   */
+  async confirmCancellationRefund(
+    transactionId: string,
+    refundMethod: "cash" | "original_payment" | "bank_transfer",
+    confirmedBy: string,
+    refundNotes?: string,
+    refundProofUrl?: string,
+    refundStatus?: "refunded" | "partially_refunded",
+  ): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      console.log("confirmCancellationRefund called with:", {
+        transactionId,
+        refundMethod,
+        confirmedBy,
+        refundNotes,
+      });
+
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      
+      // First, check if the transaction exists and has a cancellationRefund
+      const { getDoc } = await import("firebase/firestore");
+      const transactionDoc = await getDoc(transactionRef);
+      
+      if (!transactionDoc.exists()) {
+        throw new Error(`Transaction ${transactionId} not found`);
+      }
+      
+      const data = transactionDoc.data();
+      if (!data.cancellationRefund) {
+        throw new Error(`Transaction ${transactionId} does not have a cancellationRefund field`);
+      }
+      
+      if (data.cancellationRefund.status !== "pending") {
+        throw new Error(`Cancellation refund status is ${data.cancellationRefund.status}, expected "pending"`);
+      }
+      
+      console.log("Transaction found, updating cancellation refund...");
+      console.log("Current cancellationRefund:", data.cancellationRefund);
+      
+      // Use provided refund status or default to "refunded" for cancellations
+      let newPaymentStatus = refundStatus || "refunded";
+      console.log("Using refund status:", newPaymentStatus);
+      
+      // Build update object with only defined values
+      // STEP 2: Update ONLY payment status, do NOT change orderStatus
+      const updateData: any = {
+        "cancellationRefund.status": "completed",
+        "cancellationRefund.method": refundMethod,
+        "cancellationRefund.confirmedAt": Timestamp.now(),
+        "cancellationRefund.confirmedBy": confirmedBy,
+        // Update both status and paymentStatus fields
+        "status": newPaymentStatus,
+        "paymentStatus": newPaymentStatus,
+        // Do NOT update orderStatus - it was already set in Step 1
+      };
+      
+      if (refundNotes) {
+        updateData["cancellationRefund.notes"] = refundNotes;
+      }
+      if (refundProofUrl) {
+        updateData["cancellationRefund.proofUrl"] = refundProofUrl;
+      }
+      
+      await updateDoc(transactionRef, updateData);
+
+      console.log(`Transaction ${transactionId}: Updated status and paymentStatus fields to ${newPaymentStatus}`);
+
+      // STEP 3: Update onlineOrders collection if this is an online order
+      if (data.onlineOrderId) {
+        const onlineOrderRef = doc(db, "onlineOrders", data.onlineOrderId);
+        await updateDoc(onlineOrderRef, {
+          paymentStatus: newPaymentStatus,
+          lastUpdated: new Date().toISOString(),
+        });
+        console.log(`Updated onlineOrders ${data.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
+      }
+
+      console.log(`Cancellation refund for ${transactionId} confirmed successfully. Payment status: ${newPaymentStatus}. Order status unchanged.`);
+    } catch (error) {
+      console.error("Error confirming cancellation refund:", error);
+      console.error("Error details:", {
+        transactionId,
+        refundMethod,
+        errorMessage: error instanceof Error ? error.message : "Unknown",
+        errorCode: (error as any)?.code,
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+      throw new Error(`Failed to confirm cancellation refund: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Cancel transaction (original method for unpaid orders)
    */
   async cancelTransaction(
     transactionId: string,
@@ -833,6 +1290,7 @@ class TransactionService {
       const transactionRef = doc(db, this.collectionName, transactionId);
       await updateDoc(transactionRef, {
         status: "cancelled",
+        orderStatus: "cancelled",
         cancelledAt: Timestamp.now(),
         cancelReason: reason,
         cancelledBy: cancelledBy,
@@ -970,6 +1428,44 @@ class TransactionService {
     } catch (error) {
       console.error("Error deleting transaction:", error);
       throw new Error("Failed to delete transaction");
+    }
+  }
+
+  /**
+   * Update delivery status for COD/Scan orders
+   */
+  async updateDeliveryStatus(
+    transactionId: string,
+    deliveryStatus: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled",
+    updatedBy?: string,
+  ): Promise<void> {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+
+    try {
+      const transactionRef = doc(db, this.collectionName, transactionId);
+      const updateData: Record<string, unknown> = {
+        deliveryStatus,
+        deliveryStatusUpdatedAt: Timestamp.now(),
+        deliveryStatusUpdatedBy: updatedBy || "System",
+      };
+
+      // If marking as delivered, also update transaction status to completed
+      if (deliveryStatus === "delivered") {
+        updateData.status = "completed";
+        updateData.approvedAt = Timestamp.now();
+        updateData.approvedBy = updatedBy || "System";
+      }
+
+      await updateDoc(transactionRef, updateData);
+
+      console.log(
+        `Delivery status updated for transaction ${transactionId}: ${deliveryStatus}`,
+      );
+    } catch (error) {
+      console.error("Error updating delivery status:", error);
+      throw new Error("Failed to update delivery status");
     }
   }
 

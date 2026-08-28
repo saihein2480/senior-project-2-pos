@@ -112,78 +112,82 @@ export function ImageUpload({
   };
 
   return (
-    <div className={`relative ${className}`}>
-      {value ? (
-        <div className="flex flex-col items-center">
-          <div className="relative w-full">
-            <div className="relative w-full h-48 rounded-lg overflow-hidden border border-gray-300 flex items-center justify-center">
-              <img
-                src={value}
-                alt="Uploaded image"
-                className="h-full w-auto object-contain"
-              />
+    <div className={`flex justify-center w-full ${className}`}>
+      <div className="relative">
+        {value ? (
+          <div className="flex flex-col items-center">
+            <div className="relative">
+              <div className="relative w-72 h-60 rounded-xl overflow-hidden border-2 border-gray-200 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 hover:border-blue-300 transition-colors group">
+                <img
+                  src={value}
+                  alt="Uploaded image"
+                  className="h-full w-auto object-contain"
+                />
 
+                {!disabled && (
+                  <>
+                    <input
+                      aria-label="Change image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      disabled={disabled || isUploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl flex items-center justify-center z-0">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md border-0">
+                        <Upload className="h-3.5 w-3.5" />
+                        Change
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               {!disabled && (
-                <>
-                  <input
-                    aria-label="Change image"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    disabled={disabled || isUploading}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                  />
-                  <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-sm z-0">
-                    <Upload className="h-4 w-4" />
-                    Select File
-                  </div>
-                </>
+                <button
+                  title="Remove image"
+                  type="button"
+                  onClick={handleRemove}
+                  className="absolute -top-2.5 -right-2.5 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-md transition-colors z-20"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               )}
             </div>
-            {!disabled && (
-              <button
-                title="Remove image"
-                type="button"
-                onClick={handleRemove}
-                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg transition-colors z-20"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
           </div>
-        </div>
-      ) : (
-        <div className="relative">
-          <input
-            aria-label="Upload image"
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            disabled={disabled || isUploading}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-          />
-          <div className="w-full h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center hover:border-blue-400 transition-colors">
-            {isUploading ? (
-              <div className="flex flex-col items-center">
-                <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
-                <p className="text-sm text-gray-500">Uploading...</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <div className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors mb-4 flex items-center gap-2 shadow-sm">
-                  <Upload className="h-4 w-4" />
-                  Select File
+        ) : (
+          <div className="relative">
+            <input
+              aria-label="Upload image"
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              disabled={disabled || isUploading}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+            <div className="w-72 h-60 border border-gray-300 rounded-xl flex flex-col items-center justify-center hover:border-blue-400 hover:bg-cyan-50/30 transition-all bg-gray-50">
+              {isUploading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                  <p className="text-xs text-gray-500 font-medium">Uploading...</p>
                 </div>
-                <p className="text-xs text-gray-400">
-                  PNG, JPG, JPEG, GIF up to 5MB
-                </p>
-              </div>
-            )}
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm border-0">
+                    <Upload className="h-3.5 w-3.5" />
+                    Select File
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    PNG, JPG, GIF up to 5MB
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-xs text-red-600 font-medium text-center">{error}</p>}
+      </div>
     </div>
   );
 }

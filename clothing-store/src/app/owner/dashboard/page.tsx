@@ -1003,7 +1003,7 @@ function OwnerDashboardContent() {
         ) : status === "pending" ? (
           <Clock className="h-4 w-4 text-yellow-600" />
         ) : (
-          <ShoppingCart className="h-4 w-4 text-blue-600" />
+          <ShoppingCart className="h-4 w-4 text-cyan-600" />
         );
       case "refund":
         return <XCircle className="h-4 w-4 text-red-600" />;
@@ -1017,7 +1017,7 @@ function OwnerDashboardContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Desktop sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1047,107 +1047,107 @@ function OwnerDashboardContent() {
           onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-screen-2xl mx-auto">
             {/* Header */}
-            <div className="mb-8">
-              {/* <div className="mb-4">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Owner Dashboard
+            <div className="mb-8 flex flex-col gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                  {t.dashboard}
                 </h1>
-                <p className="text-gray-600">
-                  Comprehensive analytics and performance metrics for your
-                  clothing store
+                <p className="text-sm text-gray-600 mt-1">
+                  Overview of performance, sales, and inventory.
                 </p>
-              </div> */}
+              </div>
 
-              {/* Filters */}
-              <div className="flex flex-wrap gap-4">
-                <select
-                  title="Filter by Branch"
-                  value={filterBranch}
-                  onChange={(e) => setFilterBranch(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                >
-                  <option value="all">{t.allBranches}</option>
-                  {shops.map((shop) => (
-                    <option key={shop.id} value={shop.name}>
-                      {shop.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  title="Date Range"
-                  value={dateRange}
-                  onChange={(e) => {
-                    const range = e.target.value as
-                      | "today"
-                      | "7d"
-                      | "30d"
-                      | "90d"
-                      | "custom";
-                    setDateRange(range);
+              <div className="bg-white/80 backdrop-blur border border-gray-200 rounded-2xl shadow-sm p-4">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
+                    <select
+                      title="Filter by Branch"
+                      value={filterBranch}
+                      onChange={(e) => setFilterBranch(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                    >
+                      <option value="all">{t.allBranches}</option>
+                      {shops.map((shop) => (
+                        <option key={shop.id} value={shop.name}>
+                          {shop.name}
+                        </option>
+                      ))}
+                    </select>
 
-                    // Auto-set dates based on quick range selection
-                    if (range !== "custom") {
-                      const end = new Date();
-                      const start = new Date();
+                    <select
+                      title="Date Range"
+                      value={dateRange}
+                      onChange={(e) => {
+                        const range = e.target.value as
+                          | "today"
+                          | "7d"
+                          | "30d"
+                          | "90d"
+                          | "custom";
+                        setDateRange(range);
 
-                      switch (range) {
-                        case "today":
-                          // Start and end are today
-                          break;
-                        case "7d":
-                          start.setDate(start.getDate() - 7);
-                          break;
-                        case "30d":
-                          start.setDate(start.getDate() - 30);
-                          break;
-                        case "90d":
-                          start.setDate(start.getDate() - 90);
-                          break;
-                      }
+                        if (range !== "custom") {
+                          const end = new Date();
+                          const start = new Date();
 
-                      setStartDate(start.toISOString().split("T")[0]);
-                      setEndDate(end.toISOString().split("T")[0]);
-                    }
-                  }}
-                  className="px-4 py-2 border border-gray-300  focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                >
-                  <option value="today">{t.today}</option>
-                  <option value="7d">{t.last7Days}</option>
-                  <option value="30d">{t.last30Days}</option>
-                  <option value="90d">{t.last90Days}</option>
-                  <option value="custom">{t.customRange}</option>
-                </select>
+                          switch (range) {
+                            case "today":
+                              break;
+                            case "7d":
+                              start.setDate(start.getDate() - 7);
+                              break;
+                            case "30d":
+                              start.setDate(start.getDate() - 30);
+                              break;
+                            case "90d":
+                              start.setDate(start.getDate() - 90);
+                              break;
+                          }
 
-                {/* Custom Date Range Inputs */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setDateRange("custom");
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    max={endDate}
-                    aria-label="Start Date"
-                    placeholder="Start Date"
-                  />
-                  <span className="text-gray-500">to</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setDateRange("custom");
-                    }}
-                    className="px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-gray-300 focus:border-transparent bg-white text-gray-900"
-                    min={startDate}
-                    max={new Date().toISOString().split("T")[0]}
-                    aria-label="End Date"
-                  />
+                          setStartDate(start.toISOString().split("T")[0]);
+                          setEndDate(end.toISOString().split("T")[0]);
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                    >
+                      <option value="today">{t.today}</option>
+                      <option value="7d">{t.last7Days}</option>
+                      <option value="30d">{t.last30Days}</option>
+                      <option value="90d">{t.last90Days}</option>
+                      <option value="custom">{t.customRange}</option>
+                    </select>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setDateRange("custom");
+                        }}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                        max={endDate}
+                        aria-label="Start Date"
+                        placeholder="Start Date"
+                      />
+                      <span className="text-gray-400">—</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setDateRange("custom");
+                        }}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
+                        min={startDate}
+                        max={new Date().toISOString().split("T")[0]}
+                        aria-label="End Date"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1372,47 +1372,53 @@ function OwnerDashboardContent() {
                   </div> */}
 
                   {/* Items Sold */}
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-500">
                           {t.itemsSold}
                         </p>
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="mt-2 text-2xl font-semibold text-gray-900">
                           {stats.totalItemsSold}
                         </p>
                       </div>
-                      <Package className="h-6 w-6 text-gray-400" />
+                      <div className="h-11 w-11 rounded-2xl bg-cyan-50 text-blue-700 flex items-center justify-center shrink-0">
+                        <Package className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Total Products */}
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-500">
                           {t.totalProducts}
                         </p>
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="mt-2 text-2xl font-semibold text-gray-900">
                           {stats.totalProducts}
                         </p>
                       </div>
-                      <Store className="h-6 w-6 text-gray-400" />
+                      <div className="h-11 w-11 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                        <Store className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Low Stock Alert */}
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-500">
                           {t.lowStockItems}
                         </p>
-                        <p className="text-2xl font-bold text-orange-600">
+                        <p className="mt-2 text-2xl font-semibold text-orange-600">
                           {stats.lowStockProducts}
                         </p>
                       </div>
-                      <AlertCircle className="h-6 w-6 text-orange-600" />
+                      <div className="h-11 w-11 rounded-2xl bg-orange-50 text-orange-700 flex items-center justify-center shrink-0">
+                        <AlertCircle className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1628,10 +1634,17 @@ function OwnerDashboardContent() {
                 {/* Data Visualization Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                   {/* Revenue & Profit Trend Chart */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.totalSaleProfitTrend}
-                    </h2>
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {t.totalSaleProfitTrend}
+                      </h2>
+                      <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
+                        {dateRange === "custom"
+                          ? `${startDate} — ${endDate}`
+                          : dateRange.toUpperCase()}
+                      </span>
+                    </div>
                     {dailyRevenueData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
                         <AreaChart data={dailyRevenueData}>
@@ -1725,7 +1738,7 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Payment Method Distribution Pie Chart */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.paymentMethodDistribution}
                     </h2>
@@ -1781,7 +1794,7 @@ function OwnerDashboardContent() {
                 {/* Additional Charts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                   {/* Order Status Distribution Bar Chart */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.orderStatusDistribution}
                     </h2>
@@ -1843,7 +1856,7 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Daily Orders Trend Line Chart */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.dailyOrdersTrend}
                     </h2>
@@ -1896,7 +1909,7 @@ function OwnerDashboardContent() {
                 {/* Charts and Tables */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                   {/* Top Selling Products */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.topSellingProducts}
                     </h2>
@@ -1905,10 +1918,10 @@ function OwnerDashboardContent() {
                         {topProducts.map((product, index) => (
                           <div
                             key={product.id}
-                            className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                            className="flex items-center justify-between p-4 bg-gray-50/70 hover:bg-gray-50 rounded-xl transition-colors"
                           >
                             <div className="flex items-center space-x-3">
-                              <span className="flex items-center justify-center w-8 h-8  text-gray-800 rounded-full text-md font-bold">
+                              <span className="flex items-center justify-center w-8 h-8 text-gray-900 bg-white border border-gray-200 rounded-full text-sm font-semibold shadow-sm">
                                 #{index + 1}
                               </span>
                               <div>
@@ -1943,19 +1956,19 @@ function OwnerDashboardContent() {
                   </div>
 
                   {/* Recent Activity */}
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.recentActivity}
                     </h2>
                     {recentActivity.length > 0 ? (
-                      <div className="space-y-4">
+                      <div className="divide-y divide-gray-100">
                         {recentActivity.map((activity) => (
                           <div
                             key={activity.id}
-                            className="flex items-start space-x-3"
+                            className="flex items-start gap-3 py-4"
                           >
                             <div className="flex-shrink-0 mt-1">
-                              <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                              <div className="h-9 w-9 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
                                 {getActivityIcon(
                                   activity.type,
                                   activity.status,

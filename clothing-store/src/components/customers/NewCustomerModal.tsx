@@ -177,10 +177,10 @@ export default function NewCustomerModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-        <div className="p-6">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-gray-600" />
               <h2 className="text-xl font-semibold text-gray-900">
@@ -195,234 +195,216 @@ export default function NewCustomerModal({
               <X size={20} />
             </button>
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Customer Image */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Customer Image
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
-                {imagePreview ? (
-                  <div className="relative inline-block">
-                    <img
-                      src={imagePreview}
-                      alt="Customer preview"
-                      className="w-24 h-24 object-cover rounded-full mx-auto mb-2 border-2 border-gray-200"
-                    />
-                    <button
-                      aria-label="Remove image"
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-sm"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <p className="text-sm text-gray-600 mt-2">
-                      {selectedFile?.name}
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 mb-2">
-                      Drag & drop image here.
-                    </p>
-                    <input
-                      type="file"
-                      id="customerImage"
-                      accept="image/png,image/jpg,image/jpeg,image/gif,image/webp"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <label
-                      htmlFor="customerImage"
-                      className="inline-flex items-center px-3 py-1 border border-blue-300 rounded-md text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer"
-                    >
-                      <Upload className="h-3 w-3 mr-1" />
-                      Select File
-                    </label>
-                    <p className="text-xs text-gray-400 mt-1">
-                      PNG, JPG, JPEG, GIF, WebP up to 5MB
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {/* Row 1: Name and Customer Type */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="displayName"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Name *
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      id="displayName"
-                      name="displayName"
-                      value={formData.displayName}
-                      onChange={handleChange}
-                      required
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      placeholder="Enter customer name"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="customerType"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Customer Type *
-                  </label>
-                  <div className="relative">
-                    <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <select
-                      id="customerType"
-                      name="customerType"
-                      value={formData.customerType}
-                      onChange={handleChange}
-                      required
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white text-gray-900"
-                    >
-                      <option value="">Select Type</option>
-                      <option value="retailer">Retailer</option>
-                      <option value="wholesaler">Wholesaler</option>
-                      <option value="distributor">Distributor</option>
-                      <option value="individual">Individual</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Phone Numbers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="phone"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Primary Phone Number *
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="tel"
-                      id="phone"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      required
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      placeholder="Enter primary phone number"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="secondaryPhone"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Phone Number (Optional)
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="tel"
-                      id="secondaryPhone"
-                      name="secondaryPhone"
-                      value={formData.secondaryPhone}
-                      onChange={handleChange}
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      placeholder="Enter secondary phone number"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Full Address */}
-              <div>
-                <label
-                  htmlFor="address"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Full Address
+        <div className="flex-1 overflow-hidden px-6 py-4">
+          <form onSubmit={handleSubmit} className="h-full flex flex-col">
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-12 gap-4">
+              {/* Left Side - Customer Image */}
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Image
                 </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <textarea
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    rows={2}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900"
-                    placeholder="Enter full address"
-                  />
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-gray-400 transition-colors h-[200px] flex flex-col items-center justify-center">
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Customer preview"
+                        className="w-20 h-20 object-cover rounded-full border-2 border-gray-200"
+                      />
+                      <button
+                        aria-label="Remove image"
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <p className="text-xs text-gray-600 mt-2 truncate max-w-[100px]">
+                        {selectedFile?.name}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                      <input
+                        type="file"
+                        id="customerImage"
+                        accept="image/png,image/jpg,image/jpeg,image/gif,image/webp"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="customerImage"
+                        className="inline-flex items-center px-2 py-1 border-0 rounded-md text-xs text-white bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <Upload className="h-3 w-3 mr-1" />
+                        Select
+                      </label>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Up to 5MB
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Row 4: Township and City */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Right Side - Form Fields */}
+              <div className="col-span-9 space-y-3">
+                {/* Row 1: Name and Customer Type */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Name *
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        id="displayName"
+                        name="displayName"
+                        value={formData.displayName}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="customerType" className="block text-sm font-medium text-gray-700 mb-1">
+                      Customer Type *
+                    </label>
+                    <div className="relative">
+                      <Tag className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
+                      <select
+                        id="customerType"
+                        name="customerType"
+                        value={formData.customerType}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent appearance-none bg-white text-gray-900 text-sm"
+                      >
+                        <option value="">Select Type</option>
+                        <option value="retailer">Retailer</option>
+                        <option value="wholesaler">Wholesaler</option>
+                        <option value="distributor">Distributor</option>
+                        <option value="individual">Individual</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Phone Numbers */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Primary Phone Number *
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="tel"
+                        id="phone"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        placeholder="Enter primary phone number"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="secondaryPhone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone Number (Optional)
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="tel"
+                        id="secondaryPhone"
+                        name="secondaryPhone"
+                        value={formData.secondaryPhone}
+                        onChange={handleChange}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        placeholder="Enter secondary phone number"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 3: Full Address */}
                 <div>
-                  <label
-                    htmlFor="township"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Township
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Address
                   </label>
                   <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      id="township"
-                      name="township"
-                      value={formData.township}
+                    <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                    <textarea
+                      id="address"
+                      name="address"
+                      value={formData.address}
                       onChange={handleChange}
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      placeholder="Enter township"
+                      rows={2}
+                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent resize-none text-gray-900 text-sm"
+                      placeholder="Enter full address"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="city"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    City
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      id="city"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleChange}
-                      className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-                      placeholder="Enter city"
-                    />
+                {/* Row 4: Township and City */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="township" className="block text-sm font-medium text-gray-700 mb-1">
+                      Township
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        id="township"
+                        name="township"
+                        value={formData.township}
+                        onChange={handleChange}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        placeholder="Enter township"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        id="city"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        placeholder="Enter city"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex-shrink-0 flex justify-end space-x-3 pt-4 mt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm"
               >
                 <X className="h-4 w-4 mr-1" />
                 Clear
@@ -430,7 +412,7 @@ export default function NewCustomerModal({
               <button
                 type="submit"
                 disabled={isSubmitting || isUploading}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center px-4 py-2 bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shadow-md border-0"
               >
                 <User className="h-4 w-4 mr-1" />
                 {isUploading
