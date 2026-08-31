@@ -620,7 +620,16 @@ class TransactionService {
       }
 
       // Create refund record with comprehensive breakdown
-      const isPaidOrder = transaction.paymentMethod === "cash" || transaction.paymentMethod === "scan" || transaction.paymentMethod === "wallet";
+      // COD orders are considered "paid" once delivered (customer paid cash on delivery)
+      const isPaidOrder = transaction.paymentMethod === "cash" || 
+                         transaction.paymentMethod === "scan" || 
+                         transaction.paymentMethod === "wallet" ||
+                         (transaction.paymentMethod === "cod" && 
+                          (transaction.deliveryStatus === "delivered" || 
+                           transaction.orderStatus === "delivered" ||
+                           transaction.orderStatus === "fully_returned" ||
+                           transaction.orderStatus === "partially_returned"));
+      
       const refund: Refund = {
         transactionId,
         refundId,
@@ -992,6 +1001,44 @@ class TransactionService {
         console.log(`Updated onlineOrders ${transaction.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
       }
 
+      // STEP 4: Send notification to customer about refund completion
+      const customer = (transaction as any).customer;
+      if (customer?.uid) {
+        try {
+          const notificationsRef = collection(db, "notifications");
+          
+          const refundAmount = refunds[refundIndex].totalAmount;
+          const statusLabel = refundStatus === "partially_refunded" ? "Partial Refund" : "Full Refund";
+          
+          const notificationData: any = {
+            userId: customer.uid,
+            type: "refund_completed",
+            title: `${statusLabel} Completed`,
+            message: `Your refund for order ${transaction.transactionId || transactionId} has been processed.\n\nAmount: ${refundAmount.toFixed(2)} ${transaction.sellingCurrency || 'THB'}\nMethod: ${refundMethod === "cash" ? "Cash" : refundMethod === "bank_transfer" ? "Bank Transfer" : "Original Payment Method"}${refundNotes ? `\n\nNote: ${refundNotes}` : ''}`,
+            orderId: transaction.transactionId || transactionId,
+            transactionId: transactionId,
+            amount: refundAmount,
+            refundMethod: refundMethod,
+            read: false,
+            createdAt: Timestamp.now(),
+          };
+          
+          // Only add optional fields if they have values
+          if (transaction.onlineOrderId) {
+            notificationData.onlineOrderId = transaction.onlineOrderId;
+          }
+          if ((transaction as any).branchId) {
+            notificationData.branchId = (transaction as any).branchId;
+          }
+          
+          await addDoc(notificationsRef, notificationData);
+          console.log(`Notification sent to customer ${customer.uid} for refund completion`);
+        } catch (notifError) {
+          console.error("Error sending refund completion notification:", notifError);
+          // Don't throw - notification failure shouldn't stop refund confirmation
+        }
+      }
+
       console.log(`Refund ${refundId} payment confirmed. Payment status: ${newPaymentStatus}. Order status unchanged.`);
     } catch (error) {
       console.error("Error confirming refund payment:", error);
@@ -1175,6 +1222,44 @@ class TransactionService {
           lastUpdated: new Date().toISOString(),
         });
         console.log(`Updated onlineOrders ${data.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
+      }
+
+      // STEP 4: Send notification to customer about refund completion
+      const customer = (data as any).customer;
+      if (customer?.uid) {
+        try {
+          const notificationsRef = collection(db, "notifications");
+          
+          const refundAmount = data.cancellationRefund.amount;
+          const statusLabel = refundStatus === "partially_refunded" ? "Partial Refund" : "Full Refund";
+          
+          const notificationData: any = {
+            userId: customer.uid,
+            type: "refund_completed",
+            title: `Cancellation ${statusLabel} Completed`,
+            message: `Your cancellation refund for order ${data.transactionId || transactionId} has been processed.\n\nAmount: ${refundAmount.toFixed(2)} ${data.sellingCurrency || 'THB'}\nMethod: ${refundMethod === "cash" ? "Cash" : refundMethod === "bank_transfer" ? "Bank Transfer" : "Original Payment Method"}${refundNotes ? `\n\nNote: ${refundNotes}` : ''}`,
+            orderId: data.transactionId || transactionId,
+            transactionId: transactionId,
+            amount: refundAmount,
+            refundMethod: refundMethod,
+            read: false,
+            createdAt: Timestamp.now(),
+          };
+          
+          // Only add optional fields if they have values
+          if (data.onlineOrderId) {
+            notificationData.onlineOrderId = data.onlineOrderId;
+          }
+          if ((data as any).branchId) {
+            notificationData.branchId = (data as any).branchId;
+          }
+          
+          await addDoc(notificationsRef, notificationData);
+          console.log(`Notification sent to customer ${customer.uid} for cancellation refund completion`);
+        } catch (notifError) {
+          console.error("Error sending cancellation refund notification:", notifError);
+          // Don't throw - notification failure shouldn't stop refund confirmation
+        }
       }
 
       console.log(`Cancellation refund for ${transactionId} confirmed successfully. Payment status: ${newPaymentStatus}. Order status unchanged.`);

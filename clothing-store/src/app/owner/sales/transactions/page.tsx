@@ -386,7 +386,7 @@ export default function TransactionsPage() {
     (t) => (t.sellingCurrency || "THB").toUpperCase() === "THB",
   );
 
-  // Calculate net revenue (original total minus refunded amounts)
+  // Calculate net revenue (original total minus refunded amounts, and also deduct tax for fully refunded)
   const calculateNetRevenue = (transactions: Transaction[]) => {
     return transactions.reduce((total, transaction) => {
       const originalAmount = transaction.total;
@@ -395,8 +395,14 @@ export default function TransactionsPage() {
           (sum, refund) => sum + refund.totalAmount,
           0,
         ) || 0;
+      
+      // For fully refunded transactions, also deduct tax
+      const tax = transaction.tax || 0;
+      const isFullyRefunded = transaction.status === "refunded";
+      const taxToDeduct = isFullyRefunded ? tax : 0;
+      
       // Ensure net revenue is never negative (safeguard against data inconsistencies)
-      return total + Math.max(0, originalAmount - refundedAmount);
+      return total + Math.max(0, originalAmount - refundedAmount - taxToDeduct);
     }, 0);
   };
 
@@ -988,7 +994,12 @@ export default function TransactionsPage() {
           (sum, refund) => sum + refund.totalAmount,
           0,
         ) || 0;
-      const netTotal = Math.max(0, transaction.total - refundedAmount);
+      
+      // For fully refunded transactions, also deduct tax
+      const tax = transaction.tax || 0;
+      const isFullyRefunded = transaction.status === "refunded";
+      const taxToDeduct = isFullyRefunded ? tax : 0;
+      const netTotal = Math.max(0, transaction.total - refundedAmount - taxToDeduct);
 
       const transactionProfit = transaction.items.reduce((itemTotal, item) => {
         const profitPerItem =
@@ -1014,6 +1025,10 @@ export default function TransactionsPage() {
 
       const netProfit = Math.max(0, transactionProfit - refundedProfit);
       const wholesale = getTransactionWholesaleAmount(transaction);
+      
+      // Calculate net tax - if fully refunded, tax should be 0
+      const originalTax = transaction.tax || 0;
+      const netTax = transaction.status === "refunded" ? 0 : originalTax;
 
       return [
         transaction.transactionId || "",
@@ -1025,7 +1040,7 @@ export default function TransactionsPage() {
           ? SettingsService.formatPrice(wholesale.amount, wholesale.currency)
           : "-",
         formatPrice(netProfit),
-        formatPrice(transaction.tax || 0),
+        formatPrice(netTax),
         transaction.branchName || "N/A",
         transaction.sellingCurrency || "THB",
         transaction.paymentMethod?.toUpperCase() || "N/A",
@@ -1593,13 +1608,15 @@ export default function TransactionsPage() {
                                           sum + refund.totalAmount,
                                         0,
                                       ) || 0;
-                                    const netTotal =
-                                      transaction.total - refundedAmount;
+                                    const tax = transaction.tax || 0;
                                     const subtotal =
                                       transaction.subtotal ||
-                                      transaction.total -
-                                        (transaction.tax || 0);
-                                    const tax = transaction.tax || 0;
+                                      transaction.total - tax;
+                                    
+                                    // For fully refunded transactions, also deduct tax
+                                    const isFullyRefunded = transaction.status === "refunded";
+                                    const taxToDeduct = isFullyRefunded ? tax : 0;
+                                    const netTotal = transaction.total - refundedAmount - taxToDeduct;
 
                                     if (refundedAmount > 0) {
                                       return (
@@ -1618,7 +1635,12 @@ export default function TransactionsPage() {
                                               {formatPrice(subtotal)}
                                             </div>
                                             <div>
-                                              {t.tax}: {formatPrice(tax)}
+                                              {t.tax}: {formatPrice(isFullyRefunded ? 0 : tax)}
+                                              {isFullyRefunded && (
+                                                <span className="text-gray-400 ml-1">
+                                                  (refunded)
+                                                </span>
+                                              )}
                                             </div>
                                             <div className="border-t border-gray-600 pt-1 mt-1">
                                               <div>
@@ -1629,8 +1651,14 @@ export default function TransactionsPage() {
                                                 {t.refunded}: -
                                                 {formatPrice(refundedAmount)}
                                               </div>
+                                              {isFullyRefunded && (
+                                                <div>
+                                                  Tax Refunded: -
+                                                  {formatPrice(tax)}
+                                                </div>
+                                              )}
                                               <div className="font-semibold">
-                                                {t.netProfit}:{" "}
+                                                Net Total:{" "}
                                                 {formatPrice(netTotal)}
                                               </div>
                                             </div>
@@ -1760,7 +1788,24 @@ export default function TransactionsPage() {
                                   })()}
                                 </td>
                                 <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
-                                  {formatPrice(transaction.tax || 0)}
+                                  {(() => {
+                                    const originalTax = transaction.tax || 0;
+                                    // If fully refunded, tax should be 0
+                                    if (transaction.status === "refunded") {
+                                      return (
+                                        <div className="flex flex-col group relative">
+                                          <span className="text-gray-900">
+                                            {formatPrice(0)}
+                                          </span>
+                                          <span className="text-xs text-gray-500">
+                                            ({t.original}: {formatPrice(originalTax)})
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                    // For partial refunds or completed, show original tax
+                                    return formatPrice(originalTax);
+                                  })()}
                                 </td>
                                 <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {transaction.branchName || t.mainBranch}
@@ -2430,7 +2475,14 @@ export default function TransactionsPage() {
                                 Tax:
                               </span>
                               <span className="text-sm font-medium text-gray-900">
-                                {formatPrice(selectedTransaction.tax)}
+                                {selectedTransaction.status === "refunded"
+                                  ? formatPrice(0)
+                                  : formatPrice(selectedTransaction.tax)}
+                                {selectedTransaction.status === "refunded" && (
+                                  <span className="text-xs text-gray-500 ml-1">
+                                    (Original: {formatPrice(selectedTransaction.tax)})
+                                  </span>
+                                )}
                               </span>
                             </div>
                             <div className="flex justify-between">

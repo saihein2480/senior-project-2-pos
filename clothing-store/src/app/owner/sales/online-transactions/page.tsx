@@ -343,7 +343,7 @@ function OnlineTransactionsContent() {
                     }
                     className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
                   >
-                    <option value="all">All Status</option>
+                    <option value="all">All Payment Status</option>
                     <option value="completed">Completed</option>
                     <option value="pending">Pending</option>
                     <option value="failed">Failed</option>
@@ -532,22 +532,22 @@ function OnlineTransactionsContent() {
                                   : (row.paymentStatus || row.status || "").toLowerCase().includes("success") ||
                                     (row.paymentStatus || row.status || "").toLowerCase().includes("completed")
                                   ? "bg-green-100 text-green-800"
-                                  : (row.paymentStatus || row.status || "").toLowerCase().includes("fail")
+                                  : (row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase().includes("fail")
                                   ? "bg-red-100 text-red-800"
-                                  : (row.paymentStatus || row.status || "").toLowerCase().includes("cancel")
+                                  : (row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase().includes("cancel")
                                   ? "bg-gray-100 text-gray-800"
                                   : "bg-blue-100 text-blue-800"
                               }`}
                             >
-                              {(row.paymentStatus || row.status || "").toLowerCase() === "pending_refund"
+                              {(row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase() === "pending_refund"
                                 ? "Pending Refund"
-                                : (row.paymentStatus || row.status || "").toLowerCase() === "refund_rejected"
+                                : (row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase() === "refund_rejected"
                                 ? "Refund Rejected"
-                                : (row.paymentStatus || row.status || "").toLowerCase() === "refunded"
+                                : (row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase() === "refunded"
                                 ? "Fully Refunded"
-                                : (row.paymentStatus || row.status || "").toLowerCase() === "partially_refunded"
+                                : (row.paymentStatus || row.paymentStatus || row.status || "").toLowerCase() === "partially_refunded"
                                 ? "Partially Refunded"
-                                : row.paymentStatus || row.status || "-"}
+                                : row.paymentStatus || row.paymentStatus || row.status || "-"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-gray-600">

@@ -73,6 +73,7 @@ export interface OnlineTransaction {
   paymentProvider?: string;
   paymentMethod?: string;
   status?: string;
+  paymentStatus?: string; // Added to match actual data structure
   timestamp?: string;
   exchangeRate?: number;
   customer?: {

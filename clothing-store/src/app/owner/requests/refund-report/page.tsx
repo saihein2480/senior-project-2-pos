@@ -35,8 +35,8 @@ export default function RefundReportPage() {
   }>>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending">("all");
-  const [filterType, setFilterType] = useState<"all" | "cancellation" | "partial">("all");
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<"all" | "refunded" | "partially_refunded" | "pending_refund" | "refund_rejected">("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<"all" | "cash" | "scan" | "cod">("all");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: "",
     end: "",
@@ -47,7 +47,7 @@ export default function RefundReportPage() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Load all refunds (completed and pending)
+  // Load all refunds (transactions with refund-related payment statuses)
   useEffect(() => {
     setLoading(true);
     
@@ -55,6 +55,9 @@ export default function RefundReportPage() {
     const q = query(transactionsRef, orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("=== LOADING REFUNDS ===");
+      console.log("Total transactions:", snapshot.size);
+      
       const refunds: Array<{
         transaction: Transaction;
         refund?: any;
@@ -65,25 +68,52 @@ export default function RefundReportPage() {
         const data = doc.data() as Transaction;
         const transaction = { ...data, id: doc.id };
         
-        // Check for cancellation refund (any status)
-        if ((data as any).cancellationRefund) {
-          refunds.push({
-            transaction,
-            type: "cancellation",
-          });
-        }
+        // Check both paymentStatus and status fields (case-insensitive)
+        const paymentStatus = (data.paymentStatus || "").toLowerCase();
+        const status = (data.status || "").toLowerCase();
         
-        // Check for partial refunds (any status)
-        const transactionRefunds = data.refunds || [];
-        transactionRefunds.forEach((refund) => {
-          refunds.push({
-            transaction,
-            refund,
-            type: "partial",
-          });
-        });
+        // Check for refund-related statuses in both fields
+        const isRefundRelated = 
+          /(pending_refund)/.test(paymentStatus) ||
+          /(pending_refund)/.test(status) ||
+          /(refund_rejected)/.test(paymentStatus) ||
+          /(refund_rejected)/.test(status) ||
+          /(partially_refunded|partial)/.test(paymentStatus) ||
+          /(partially_refunded|partial)/.test(status) ||
+          /(refunded)/.test(paymentStatus) ||
+          /(refunded)/.test(status) ||
+          /(fully_refunded)/.test(paymentStatus) ||
+          /(fully_refunded)/.test(status);
+        
+        if (isRefundRelated) {
+          console.log("Found refund order:", transaction.transactionId, "PaymentStatus:", data.paymentStatus, "Status:", data.status);
+          
+          // Determine type based on refund data
+          if ((data as any).cancellationRefund) {
+            refunds.push({
+              transaction,
+              type: "cancellation",
+            });
+          } else if (data.refunds && data.refunds.length > 0) {
+            // Add entry for each partial refund
+            data.refunds.forEach((refund) => {
+              refunds.push({
+                transaction,
+                refund,
+                type: "partial",
+              });
+            });
+          } else {
+            // No specific refund data but has refund status
+            refunds.push({
+              transaction,
+              type: "partial", // default to partial
+            });
+          }
+        }
       });
       
+      console.log("Total refunds found:", refunds.length);
       setAllRefunds(refunds);
       setFilteredRefunds(refunds);
       setLoading(false);
@@ -94,6 +124,20 @@ export default function RefundReportPage() {
 
   // Apply filters
   useEffect(() => {
+    console.log("=== APPLYING FILTERS ===");
+    console.log("Filter Payment Status:", filterPaymentStatus);
+    console.log("Filter Payment Method:", filterPaymentMethod);
+    console.log("Total refunds before filter:", allRefunds.length);
+    
+    // Log first few items to see data structure
+    if (allRefunds.length > 0) {
+      console.log("Sample refund data:", {
+        paymentStatus: allRefunds[0].transaction.paymentStatus,
+        paymentMethod: allRefunds[0].transaction.paymentMethod,
+        transactionId: allRefunds[0].transaction.transactionId,
+      });
+    }
+    
     let filtered = [...allRefunds];
 
     // Filter by search query
@@ -106,19 +150,50 @@ export default function RefundReportPage() {
       });
     }
 
-    // Filter by status
-    if (filterStatus !== "all") {
+    // Filter by payment status (refund payment status from transaction)
+    if (filterPaymentStatus !== "all") {
+      console.log("Filtering by payment status:", filterPaymentStatus);
+      const beforeCount = filtered.length;
       filtered = filtered.filter((item) => {
-        const status = item.type === "cancellation"
-          ? (item.transaction as any).cancellationRefund?.status
-          : item.refund?.status;
-        return status === filterStatus;
+        const paymentStatus = (item.transaction.paymentStatus || "").toLowerCase();
+        const status = (item.transaction.status || "").toLowerCase();
+        
+        let matches = false;
+        if (filterPaymentStatus === "pending_refund") {
+          matches = /(pending_refund)/.test(paymentStatus) || /(pending_refund)/.test(status);
+        } else if (filterPaymentStatus === "refund_rejected") {
+          matches = /(refund_rejected)/.test(paymentStatus) || /(refund_rejected)/.test(status);
+        } else if (filterPaymentStatus === "partially_refunded") {
+          matches = /(partially_refunded|partial)/.test(paymentStatus) || /(partially_refunded|partial)/.test(status);
+        } else if (filterPaymentStatus === "refunded") {
+          // Match "refunded" or "fully_refunded"
+          matches = (/(refunded)/.test(paymentStatus) && !/(partially_refunded|partial|pending_refund|refund_rejected)/.test(paymentStatus)) ||
+                    (/(refunded)/.test(status) && !/(partially_refunded|partial|pending_refund|refund_rejected)/.test(status)) ||
+                    /(fully_refunded)/.test(paymentStatus) ||
+                    /(fully_refunded)/.test(status);
+        }
+        
+        if (!matches) {
+          console.log("No match - PaymentStatus:", item.transaction.paymentStatus, "Status:", item.transaction.status, "Filter:", filterPaymentStatus);
+        }
+        return matches;
       });
+      console.log("After payment status filter:", filtered.length, "from", beforeCount);
     }
 
-    // Filter by type
-    if (filterType !== "all") {
-      filtered = filtered.filter((item) => item.type === filterType);
+    // Filter by payment method
+    if (filterPaymentMethod !== "all") {
+      console.log("Filtering by payment method:", filterPaymentMethod);
+      const beforeCount = filtered.length;
+      filtered = filtered.filter((item) => {
+        const paymentMethod = item.transaction.paymentMethod || "";
+        const matches = paymentMethod === filterPaymentMethod;
+        if (!matches) {
+          console.log("No match - Transaction payment method:", paymentMethod, "Filter:", filterPaymentMethod);
+        }
+        return matches;
+      });
+      console.log("After payment method filter:", filtered.length, "from", beforeCount);
     }
 
     // Filter by date range
@@ -135,8 +210,9 @@ export default function RefundReportPage() {
       });
     }
 
+    console.log("Final filtered count:", filtered.length);
     setFilteredRefunds(filtered);
-  }, [searchQuery, filterStatus, filterType, dateRange, allRefunds]);
+  }, [searchQuery, filterPaymentStatus, filterPaymentMethod, dateRange, allRefunds]);
 
   const getRefundDate = (item: typeof allRefunds[0]) => {
     if (item.type === "cancellation") {
@@ -179,11 +255,9 @@ export default function RefundReportPage() {
   };
 
   const totalRefundAmount = filteredRefunds.reduce((sum, item) => sum + getRefundAmount(item), 0);
-  const completedRefunds = filteredRefunds.filter((item) => getRefundStatus(item) === "completed");
-  const pendingRefunds = filteredRefunds.filter((item) => getRefundStatus(item) === "pending");
 
   const exportToCSV = () => {
-    const headers = ["Date", "Transaction ID", "Customer", "Type", "Amount", "Status", "Payment Method", "Confirmed By"];
+    const headers = ["Date", "Transaction ID", "Customer", "Amount", "Status", "Payment Method", "Confirmed By"];
     const rows = filteredRefunds.map((item) => {
       const refundDate = item.type === "cancellation"
         ? formatDate((item.transaction as any).cancellationRefund?.requestedAt)
@@ -191,9 +265,7 @@ export default function RefundReportPage() {
       
       const status = getRefundStatus(item);
       const amount = getRefundAmount(item);
-      const paymentMethod = item.type === "cancellation"
-        ? (item.transaction as any).cancellationRefund?.method || "-"
-        : item.refund?.refundMethod || "-";
+      const paymentMethod = item.transaction.paymentMethod || "-";
       const confirmedBy = item.type === "cancellation"
         ? (item.transaction as any).cancellationRefund?.confirmedBy || "-"
         : item.refund?.refundedBy || "-";
@@ -202,7 +274,6 @@ export default function RefundReportPage() {
         refundDate,
         item.transaction.transactionId,
         item.transaction.customer?.displayName || "Walk-in",
-        item.type === "cancellation" ? "Cancellation" : "Partial Refund",
         amount,
         status,
         paymentMethod,
@@ -284,7 +355,7 @@ export default function RefundReportPage() {
             </div>
 
             {/* Stats */}
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -295,34 +366,6 @@ export default function RefundReportPage() {
                   </div>
                   <div className="p-3 bg-blue-50 rounded-lg">
                     <FileText className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Completed</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {completedRefunds.length}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Pending</p>
-                    <p className="text-2xl font-bold text-orange-600 mt-1">
-                      {pendingRefunds.length}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-orange-50 rounded-lg">
-                    <Calendar className="w-6 h-6 text-orange-600" />
                   </div>
                 </div>
               </div>
@@ -344,9 +387,9 @@ export default function RefundReportPage() {
 
             {/* Filters */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Search */}
-                <div className="lg:col-span-2">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Search
                   </label>
@@ -362,35 +405,38 @@ export default function RefundReportPage() {
                   </div>
                 </div>
 
-                {/* Status Filter */}
+                {/* Payment Status Filter */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
+                    Payment Status
                   </label>
                   <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={filterPaymentStatus}
+                    onChange={(e) => setFilterPaymentStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                   >
-                    <option value="all">All Status</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
+                    <option value="all">All Payment Status</option>
+                    <option value="fully_refunded">Fully Refunded</option>
+                    <option value="partially_refunded">Partially Refunded</option>
+                    <option value="pending_refund">Pending Refund</option>
+                    <option value="refund_rejected">Refund Rejected</option>
                   </select>
                 </div>
 
-                {/* Type Filter */}
+                {/* Payment Method Filter */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type
+                    Payment Method
                   </label>
                   <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={filterPaymentMethod}
+                    onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
                   >
-                    <option value="all">All Types</option>
-                    <option value="cancellation">Cancellation</option>
-                    <option value="partial">Partial Refund</option>
+                    <option value="all">All Methods</option>
+                    <option value="cash">Cash</option>
+                    <option value="scan">QR Scan</option>
+                    <option value="cod">COD</option>
                   </select>
                 </div>
 
@@ -408,13 +454,13 @@ export default function RefundReportPage() {
                 </div>
               </div>
 
-              {(searchQuery || filterStatus !== "all" || filterType !== "all" || dateRange.start) && (
+              {(searchQuery || filterPaymentStatus !== "all" || filterPaymentMethod !== "all" || dateRange.start) && (
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => {
                       setSearchQuery("");
-                      setFilterStatus("all");
-                      setFilterType("all");
+                      setFilterPaymentStatus("all");
+                      setFilterPaymentMethod("all");
                       setDateRange({ start: "", end: "" });
                     }}
                     className="text-sm text-blue-600 hover:text-blue-700 font-medium"
@@ -455,9 +501,6 @@ export default function RefundReportPage() {
                           Customer
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Amount
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -473,14 +516,36 @@ export default function RefundReportPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {filteredRefunds.map((item, index) => {
-                        const status = getRefundStatus(item);
-                        const amount = getRefundAmount(item);
-                        const refundDate = item.type === "cancellation"
-                          ? formatDate((item.transaction as any).cancellationRefund?.requestedAt)
-                          : formatDate(item.refund?.createdAt);
-                        const paymentMethod = item.type === "cancellation"
-                          ? (item.transaction as any).cancellationRefund?.method || "-"
-                          : item.refund?.refundMethod || "-";
+                        // Get refund status from transaction paymentStatus or status field
+                        const paymentStatus = (item.transaction.paymentStatus || "").toLowerCase();
+                        const status = (item.transaction.status || "").toLowerCase();
+                        
+                        // Normalize to match purchases page logic
+                        let normalizedStatus = "unknown";
+                        if (/(pending_refund)/.test(paymentStatus) || /(pending_refund)/.test(status)) {
+                          normalizedStatus = "pending_refund";
+                        } else if (/(refund_rejected)/.test(paymentStatus) || /(refund_rejected)/.test(status)) {
+                          normalizedStatus = "refund_rejected";
+                        } else if (/(partially_refunded|partial)/.test(paymentStatus) || /(partially_refunded|partial)/.test(status)) {
+                          normalizedStatus = "partially_refunded";
+                        } else if (/(refunded)/.test(paymentStatus) || /(refunded)/.test(status) || /(fully_refunded)/.test(paymentStatus) || /(fully_refunded)/.test(status)) {
+                          normalizedStatus = "refunded";
+                        }
+                        
+                        // Get amount - use transaction total if no specific refund amount
+                        const amount = getRefundAmount(item) || item.transaction.total || 0;
+                        
+                        // Get date - use transaction createdAt if no refund date
+                        const refundDate = item.type === "cancellation" && (item.transaction as any).cancellationRefund?.requestedAt
+                          ? formatDate((item.transaction as any).cancellationRefund.requestedAt)
+                          : item.refund?.createdAt
+                          ? formatDate(item.refund.createdAt)
+                          : formatDate(item.transaction.createdAt);
+                        
+                        // Get payment method from transaction
+                        const paymentMethod = item.transaction.paymentMethod || "-";
+                        
+                        // Get confirmed by
                         const confirmedBy = item.type === "cancellation"
                           ? (item.transaction as any).cancellationRefund?.confirmedBy || "-"
                           : item.refund?.refundedBy || "-";
@@ -491,36 +556,37 @@ export default function RefundReportPage() {
                               {refundDate}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {item.transaction.transactionId}
+                              {item.transaction.transactionId || "-"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {item.transaction.customer?.displayName || "Walk-in"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                item.type === "cancellation"
-                                  ? "bg-orange-100 text-orange-800"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}>
-                                {item.type === "cancellation" ? "Cancellation" : "Partial Refund"}
-                              </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                               {formatPrice(amount)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                status === "completed"
+                                normalizedStatus === "refunded"
                                   ? "bg-green-100 text-green-800"
-                                  : status === "pending"
+                                  : normalizedStatus === "pending_refund"
                                   ? "bg-yellow-100 text-yellow-800"
+                                  : normalizedStatus === "refund_rejected"
+                                  ? "bg-red-100 text-red-800"
+                                  : normalizedStatus === "partially_refunded"
+                                  ? "bg-blue-100 text-blue-800"
                                   : "bg-gray-100 text-gray-800"
                               }`}>
-                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                                {normalizedStatus === "refunded" ? "Fully Refunded" :
+                                 normalizedStatus === "partially_refunded" ? "Partially Refunded" :
+                                 normalizedStatus === "pending_refund" ? "Pending Refund" :
+                                 normalizedStatus === "refund_rejected" ? "Refund Rejected" :
+                                 item.transaction.paymentStatus || item.transaction.status || "Unknown"}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
-                              {paymentMethod.replace("_", " ")}
+                              {paymentMethod === "scan" ? "QR Scan" : 
+                               paymentMethod === "cod" ? "COD" :
+                               paymentMethod.replace("_", " ")}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {confirmedBy}

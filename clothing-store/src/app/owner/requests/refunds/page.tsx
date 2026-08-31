@@ -407,30 +407,60 @@ export default function RefundRequestsPage() {
       // COD orders are considered "paid" once delivered (customer paid cash on delivery)
       // Also consider orders that are already marked as fully_returned or partially_returned
       // IMPORTANT: We're in the inspection phase, which means items were already marked as returned
-      // So we check the refundRequest.returnReceived flag as proof that items were received
       const refundReq = (selectedRequest as any).refundRequest;
       const isReturnTypeRefund = refundReq?.type === "return" && refundReq?.returnReceived;
       
-      const isPaidOrder = selectedRequest.paymentMethod === "cash" || 
-                          selectedRequest.paymentMethod === "scan" || 
-                          selectedRequest.paymentMethod === "wallet" ||
+      // Normalize payment method and status for comparison (case-insensitive)
+      const paymentMethodLower = (selectedRequest.paymentMethod || "").toLowerCase();
+      const deliveryStatusLower = (selectedRequest.deliveryStatus || "").toLowerCase();
+      const orderStatusLower = (selectedRequest.orderStatus || "").toLowerCase();
+      
+      console.log("Checking if order is paid:", {
+        paymentMethod: selectedRequest.paymentMethod,
+        paymentMethodLower,
+        deliveryStatus: selectedRequest.deliveryStatus,
+        deliveryStatusLower,
+        orderStatus: selectedRequest.orderStatus,
+        orderStatusLower,
+        isReturnTypeRefund,
+        refundReqType: refundReq?.type,
+        returnReceived: refundReq?.returnReceived,
+      });
+      
+      const isPaidOrder = paymentMethodLower === "cash" || 
+                          paymentMethodLower === "scan" || 
+                          paymentMethodLower === "wallet" ||
                           isReturnTypeRefund || // If it's a return type and items were received, it must be paid/delivered
-                          (selectedRequest.paymentMethod === "cod" && 
-                           (selectedRequest.deliveryStatus === "delivered" || 
-                            selectedRequest.orderStatus === "delivered" ||
-                            selectedRequest.orderStatus === "fully_returned" ||
-                            selectedRequest.orderStatus === "partially_returned"));
+                          (paymentMethodLower === "cod" && 
+                           (deliveryStatusLower === "delivered" || 
+                            orderStatusLower === "delivered" ||
+                            orderStatusLower === "fully_returned" ||
+                            orderStatusLower === "partially_returned"));
+      
+      console.log("isPaidOrder result:", isPaidOrder);
       
       if (!isPaidOrder) {
-        const isCODNotDelivered = selectedRequest.paymentMethod === "cod" && 
-                                   selectedRequest.deliveryStatus !== "delivered" &&
-                                   selectedRequest.orderStatus !== "delivered" &&
-                                   selectedRequest.orderStatus !== "fully_returned" &&
-                                   selectedRequest.orderStatus !== "partially_returned" &&
+        const isCODNotDelivered = paymentMethodLower === "cod" && 
+                                   deliveryStatusLower !== "delivered" &&
+                                   orderStatusLower !== "delivered" &&
+                                   orderStatusLower !== "fully_returned" &&
+                                   orderStatusLower !== "partially_returned" &&
                                    !isReturnTypeRefund;
         const errorMessage = isCODNotDelivered 
           ? "COD order has not been delivered yet. Customer has not paid. Cannot process return refund."
           : "This order was not paid yet. Cannot process return refund.";
+        
+        console.error("Payment check failed:", {
+          isCODNotDelivered,
+          errorMessage,
+          paymentMethod: selectedRequest.paymentMethod,
+          paymentMethodLower,
+          deliveryStatus: selectedRequest.deliveryStatus,
+          deliveryStatusLower,
+          orderStatus: selectedRequest.orderStatus,
+          orderStatusLower,
+        });
+        
         toast.error(errorMessage);
         setProcessing(null);
         return;
@@ -502,8 +532,8 @@ export default function RefundRequestsPage() {
           if (selectedRequest.onlineOrderId) {
             notificationData.onlineOrderId = selectedRequest.onlineOrderId;
           }
-          if (selectedRequest.branchId || businessSettings?.branchId) {
-            notificationData.branchId = selectedRequest.branchId || businessSettings?.branchId;
+          if (selectedRequest.shopId) {
+            notificationData.branchId = selectedRequest.shopId;
           }
           
           await addDoc(firestoreCollection(db!, "notifications"), notificationData);
@@ -599,8 +629,8 @@ export default function RefundRequestsPage() {
           if (selectedRequest.onlineOrderId) {
             notificationData.onlineOrderId = selectedRequest.onlineOrderId;
           }
-          if (selectedRequest.branchId || businessSettings?.branchId) {
-            notificationData.branchId = selectedRequest.branchId || businessSettings?.branchId;
+          if (selectedRequest.shopId) {
+            notificationData.branchId = selectedRequest.shopId;
           }
           
           await addDoc(firestoreCollection(db!, "notifications"), notificationData);

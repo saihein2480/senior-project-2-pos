@@ -27,6 +27,7 @@ export default function PendingRefundsPage() {
     transaction: Transaction;
     refund?: any;
     type: "cancellation" | "partial";
+    qrCodeImage?: string;
   }>>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -34,6 +35,7 @@ export default function PendingRefundsPage() {
     transaction: Transaction;
     refund?: any;
     type: "cancellation" | "partial";
+    qrCodeImage?: string;
   } | null>(null);
   const [refundMethod, setRefundMethod] = useState<"cash" | "original_payment" | "bank_transfer">("original_payment");
   const [refundNotes, setRefundNotes] = useState("");
@@ -303,8 +305,21 @@ export default function PendingRefundsPage() {
 
   const getRefundAmount = (item: typeof pendingRefunds[0]) => {
     if (item.type === "cancellation") {
-      return (item.transaction as any).cancellationRefund?.amount || 0;
+      // For full cancellation, always use the transaction total (includes tax)
+      // This is the full amount the customer paid and should receive back
+      return item.transaction.total || 0;
     }
+    
+    // For partial refunds, check the order status
+    const orderStatus = item.transaction.orderStatus || "";
+    const paymentStatus = item.transaction.paymentStatus || item.transaction.status || "";
+    
+    // If order is marked as "fully_returned", customer should get full amount back including tax
+    if (orderStatus === "fully_returned" || paymentStatus === "refunded") {
+      return item.transaction.total || 0;
+    }
+    
+    // For partially returned orders, use the refund amount (without tax)
     return item.refund?.totalAmount || 0;
   };
 
