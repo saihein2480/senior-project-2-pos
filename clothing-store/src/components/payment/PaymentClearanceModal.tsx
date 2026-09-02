@@ -42,6 +42,10 @@ interface PaymentClearanceModalProps {
   tax: number;
   total: number;
   discountBreakdown?: DiscountBreakdown;
+  /** Loyalty coupon applied at the till, recorded and consumed with the sale. */
+  couponId?: string;
+  couponCode?: string;
+  couponDiscount?: number;
 }
 
 type PaymentMethod = "cash" | "scan" | "wallet" | "cod";
@@ -57,6 +61,9 @@ export function PaymentClearanceModal({
   tax,
   total,
   discountBreakdown,
+  couponId,
+  couponCode,
+  couponDiscount,
 }: PaymentClearanceModalProps) {
   const router = useRouter();
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
@@ -344,6 +351,13 @@ export function PaymentClearanceModal({
         exchangeRate: receiptData.exchangeRate,
         sellingTotal: receiptData.sellingTotal,
         discountBreakdown,
+        ...(couponId
+          ? {
+              couponId,
+              couponCode,
+              couponDiscount,
+            }
+          : {}),
       });
 
       console.log(

@@ -13,7 +13,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { ShopService } from "@/services/shopService";
-import { Building2, Receipt, User, DollarSign, Store } from "lucide-react";
+import {
+  Building2,
+  Receipt,
+  User,
+  DollarSign,
+  Store,
+  Gift,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 type ReceiptPaperSize =
   | "44mm"
@@ -27,6 +36,28 @@ type ReceiptPaperSize =
   | "112mm"
   | "114mm"
   | "210mm";
+
+interface CouponPackage {
+  id: string;
+  name: string;
+  pointsRequired: number;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  validityDays: number;
+  enabled: boolean;
+}
+
+interface LoyaltySettings {
+  enabled: boolean;
+  minimumSpendAmount: number;
+  pointsPerPurchase: number;
+  couponPackages?: CouponPackage[];
+  // Legacy single-coupon fields, still saved for backward compatibility.
+  pointsForCoupon: number;
+  couponDiscountType: 'percentage' | 'fixed';
+  couponDiscountValue: number;
+  couponValidityDays: number;
+}
 
 interface BusinessSettings {
   businessName: string;
@@ -45,6 +76,7 @@ interface BusinessSettings {
   enableSoundEffects: boolean;
   currencyRate: number;
   currentBranch?: string;
+  loyaltySettings?: LoyaltySettings;
 }
 
 function OwnerSettingsContent() {
@@ -80,6 +112,16 @@ function OwnerSettingsContent() {
     enableSoundEffects: false,
     currencyRate: 0,
     currentBranch: "No Branch",
+    loyaltySettings: {
+      enabled: false,
+      minimumSpendAmount: 500,
+      pointsPerPurchase: 1,
+      couponPackages: [],
+      pointsForCoupon: 10,
+      couponDiscountType: 'percentage',
+      couponDiscountValue: 10,
+      couponValidityDays: 30,
+    },
   });
 
   // Fetch existing settings on component mount
@@ -188,6 +230,100 @@ function OwnerSettingsContent() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleLoyaltySettingChange = (
+    field: keyof LoyaltySettings,
+    value: string | number | boolean,
+  ) => {
+    setSettings((prev) => ({
+      ...prev,
+      loyaltySettings: {
+        ...prev.loyaltySettings!,
+        [field]: value,
+      },
+    }));
+  };
+
+  /**
+   * The reward tiers the owner is editing. Owners who never configured packages
+   * still have the legacy single-coupon fields, so those are surfaced as one
+   * package to edit rather than being silently discarded.
+   */
+  const couponPackages: CouponPackage[] =
+    settings.loyaltySettings?.couponPackages &&
+    settings.loyaltySettings.couponPackages.length > 0
+      ? settings.loyaltySettings.couponPackages
+      : settings.loyaltySettings?.pointsForCoupon
+        ? [
+            {
+              id: "legacy-default",
+              name: "Reward Coupon",
+              pointsRequired: settings.loyaltySettings.pointsForCoupon,
+              discountType:
+                settings.loyaltySettings.couponDiscountType || "percentage",
+              discountValue:
+                settings.loyaltySettings.couponDiscountValue || 0,
+              validityDays: settings.loyaltySettings.couponValidityDays || 30,
+              enabled: true,
+            },
+          ]
+        : [];
+
+  const setCouponPackages = (next: CouponPackage[]) => {
+    setSettings((prev) => ({
+      ...prev,
+      loyaltySettings: {
+        ...prev.loyaltySettings!,
+        couponPackages: next,
+        // Mirror the cheapest tier into the legacy fields so anything still
+        // reading them stays consistent with what the owner configured.
+        ...(next.length > 0
+          ? (() => {
+              const cheapest = [...next].sort(
+                (a, b) => a.pointsRequired - b.pointsRequired,
+              )[0];
+              return {
+                pointsForCoupon: cheapest.pointsRequired,
+                couponDiscountType: cheapest.discountType,
+                couponDiscountValue: cheapest.discountValue,
+                couponValidityDays: cheapest.validityDays,
+              };
+            })()
+          : {}),
+      },
+    }));
+  };
+
+  const handleAddCouponPackage = () => {
+    setCouponPackages([
+      ...couponPackages,
+      {
+        id: `pkg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: `Package ${couponPackages.length + 1}`,
+        pointsRequired: 10,
+        discountType: "percentage",
+        discountValue: 10,
+        validityDays: 30,
+        enabled: true,
+      },
+    ]);
+  };
+
+  const handleCouponPackageChange = (
+    id: string,
+    field: keyof CouponPackage,
+    value: string | number | boolean,
+  ) => {
+    setCouponPackages(
+      couponPackages.map((pkg) =>
+        pkg.id === id ? { ...pkg, [field]: value } : pkg,
+      ),
+    );
+  };
+
+  const handleRemoveCouponPackage = (id: string) => {
+    setCouponPackages(couponPackages.filter((pkg) => pkg.id !== id));
   };
 
   const handleSaveSettings = async () => {
@@ -875,6 +1011,403 @@ function OwnerSettingsContent() {
                             1 {getCurrencyRateDisplay().fromSymbol} ={" "}
                             {settings.currencyRate}{" "}
                             {getCurrencyRateDisplay().toSymbol}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Loyalty Program Settings - Owner/Manager only */}
+                {user?.role !== "staff" && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Gift className="h-5 w-5 text-purple-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Loyalty Program Settings
+                      </h2>
+                    </div>
+
+                    <div className="space-y-6">
+                      {/* Enable/Disable Loyalty Program */}
+                      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">
+                            Enable Loyalty Program
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Reward customers with points for every purchase
+                          </p>
+                        </div>
+                        <Toggle
+                          checked={settings.loyaltySettings?.enabled || false}
+                          onChange={(checked) =>
+                            handleLoyaltySettingChange("enabled", checked)
+                          }
+                        />
+                      </div>
+
+                      {/* Show settings only if enabled */}
+                      {settings.loyaltySettings?.enabled && (
+                        <>
+                          {/* Points Earning Configuration */}
+                          <div className="bg-purple-50 rounded-lg p-4 space-y-4">
+                            <h3 className="text-sm font-semibold text-purple-900">
+                              Points Earning Rules
+                            </h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-900 mb-2">
+                                  Minimum Spend Amount ({settings.defaultCurrency === "THB" ? "฿" : "Ks"})
+                                </label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="10"
+                                  value={settings.loyaltySettings?.minimumSpendAmount || 0}
+                                  onChange={(e) =>
+                                    handleLoyaltySettingChange(
+                                      "minimumSpendAmount",
+                                      parseFloat(e.target.value) || 0
+                                    )
+                                  }
+                                  placeholder="500"
+                                />
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Minimum purchase amount to earn points
+                                </p>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-900 mb-2">
+                                  Points Per Purchase
+                                </label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={settings.loyaltySettings?.pointsPerPurchase || 1}
+                                  onChange={(e) =>
+                                    handleLoyaltySettingChange(
+                                      "pointsPerPurchase",
+                                      parseInt(e.target.value) || 1
+                                    )
+                                  }
+                                  placeholder="1"
+                                />
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Points earned per qualifying purchase
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="bg-white rounded p-3 border border-purple-200">
+                              <p className="text-sm text-gray-700">
+                                <span className="font-medium">Example:</span> Customer spends{" "}
+                                {settings.defaultCurrency === "THB" ? "฿" : "Ks"}
+                                {settings.loyaltySettings?.minimumSpendAmount || 500} or more →
+                                Earns <span className="font-semibold text-purple-600">
+                                  {settings.loyaltySettings?.pointsPerPurchase || 1} point(s)
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Coupon Packages */}
+                          <div className="bg-green-50 rounded-lg p-4 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="text-sm font-semibold text-green-900">
+                                  Coupon Packages
+                                </h3>
+                                <p className="text-xs text-green-800 mt-1">
+                                  Define one or more reward tiers. When a customer
+                                  reaches a tier they receive that coupon, and using
+                                  it deducts that tier&apos;s points.
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleAddCouponPackage}
+                                className="shrink-0 whitespace-nowrap"
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add Package
+                              </Button>
+                            </div>
+
+                            {couponPackages.length === 0 ? (
+                              <div className="bg-white rounded border border-dashed border-green-300 p-6 text-center">
+                                <Gift className="h-8 w-8 text-green-300 mx-auto mb-2" />
+                                <p className="text-sm text-gray-600">
+                                  No coupon packages yet. Add one so customers can
+                                  earn rewards.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {couponPackages.map((pkg, index) => {
+                                  const currencySymbol =
+                                    settings.defaultCurrency === "THB" ? "฿" : "Ks";
+
+                                  return (
+                                    <div
+                                      key={pkg.id}
+                                      className={`rounded-lg border bg-white p-4 space-y-3 ${
+                                        pkg.enabled
+                                          ? "border-green-200"
+                                          : "border-gray-200 opacity-70"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                                          Tier {index + 1}
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                          <label className="flex items-center gap-2 text-xs text-gray-700">
+                                            <input
+                                              type="checkbox"
+                                              checked={pkg.enabled}
+                                              onChange={(e) =>
+                                                handleCouponPackageChange(
+                                                  pkg.id,
+                                                  "enabled",
+                                                  e.target.checked,
+                                                )
+                                              }
+                                              className="h-4 w-4 rounded border-gray-300 text-green-600"
+                                              aria-label={`Enable ${pkg.name}`}
+                                            />
+                                            Active
+                                          </label>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleRemoveCouponPackage(pkg.id)
+                                            }
+                                            className="rounded-md p-1.5 text-red-500 hover:bg-red-50"
+                                            aria-label={`Remove ${pkg.name}`}
+                                            title="Remove package"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                                            Package Name
+                                          </label>
+                                          <Input
+                                            type="text"
+                                            value={pkg.name}
+                                            onChange={(e) =>
+                                              handleCouponPackageChange(
+                                                pkg.id,
+                                                "name",
+                                                e.target.value,
+                                              )
+                                            }
+                                            placeholder="Bronze Reward"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                                            Points Required
+                                          </label>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={pkg.pointsRequired}
+                                            onChange={(e) =>
+                                              handleCouponPackageChange(
+                                                pkg.id,
+                                                "pointsRequired",
+                                                parseInt(e.target.value) || 0,
+                                              )
+                                            }
+                                            placeholder="10"
+                                          />
+                                          <p className="text-xs text-gray-600 mt-1">
+                                            Deducted when the coupon is used
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                                            Discount Type
+                                          </label>
+                                          <select
+                                            title={`Discount type for ${pkg.name}`}
+                                            value={pkg.discountType}
+                                            onChange={(e) =>
+                                              handleCouponPackageChange(
+                                                pkg.id,
+                                                "discountType",
+                                                e.target.value as
+                                                  | "percentage"
+                                                  | "fixed",
+                                              )
+                                            }
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 text-gray-900"
+                                          >
+                                            <option value="percentage">
+                                              Percentage (%)
+                                            </option>
+                                            <option value="fixed">
+                                              Fixed Amount ({currencySymbol})
+                                            </option>
+                                          </select>
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                                            Discount Value
+                                          </label>
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            step={
+                                              pkg.discountType === "percentage"
+                                                ? "1"
+                                                : "10"
+                                            }
+                                            value={pkg.discountValue}
+                                            onChange={(e) =>
+                                              handleCouponPackageChange(
+                                                pkg.id,
+                                                "discountValue",
+                                                parseFloat(e.target.value) || 0,
+                                              )
+                                            }
+                                            placeholder="10"
+                                          />
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-900 mb-2">
+                                            Validity (Days)
+                                          </label>
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={pkg.validityDays}
+                                            onChange={(e) =>
+                                              handleCouponPackageChange(
+                                                pkg.id,
+                                                "validityDays",
+                                                parseInt(e.target.value) || 30,
+                                              )
+                                            }
+                                            placeholder="30"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="rounded bg-green-50 px-3 py-2 border border-green-200">
+                                        <p className="text-sm text-gray-700">
+                                          At{" "}
+                                          <span className="font-semibold text-green-700">
+                                            {pkg.pointsRequired || 0} points
+                                          </span>{" "}
+                                          → customer earns{" "}
+                                          <span className="font-semibold text-green-700">
+                                            {pkg.discountType === "percentage"
+                                              ? `${pkg.discountValue || 0}% off`
+                                              : `${currencySymbol}${pkg.discountValue || 0} off`}
+                                          </span>
+                                          , valid {pkg.validityDays || 30} days.
+                                          Using it deducts{" "}
+                                          <span className="font-semibold text-green-700">
+                                            {pkg.pointsRequired || 0} points
+                                          </span>
+                                          .
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {couponPackages.filter((pkg) => pkg.enabled).length >
+                              1 && (
+                              <div className="rounded bg-white p-3 border border-green-200">
+                                <p className="text-xs text-gray-700">
+                                  With several active tiers, a customer receives the
+                                  highest tier they reach. Points keep accumulating,
+                                  so cheaper tiers are still awarded along the way.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Program Summary */}
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h3 className="text-sm font-semibold text-blue-900 mb-3">
+                              📊 Program Summary
+                            </h3>
+                            <div className="space-y-2 text-sm text-blue-800">
+                              <p>
+                                ✓ Customers earn{" "}
+                                <span className="font-semibold">
+                                  {settings.loyaltySettings?.pointsPerPurchase || 1} point(s)
+                                </span>{" "}
+                                for purchases of{" "}
+                                {settings.defaultCurrency === "THB" ? "฿" : "Ks"}
+                                {settings.loyaltySettings?.minimumSpendAmount || 500} or more
+                              </p>
+                              {couponPackages.filter((pkg) => pkg.enabled)
+                                .length === 0 ? (
+                                <p>
+                                  ⚠ No active coupon packages, so customers cannot
+                                  earn rewards yet
+                                </p>
+                              ) : (
+                                [...couponPackages]
+                                  .filter((pkg) => pkg.enabled)
+                                  .sort(
+                                    (a, b) =>
+                                      a.pointsRequired - b.pointsRequired,
+                                  )
+                                  .map((pkg) => (
+                                    <p key={pkg.id}>
+                                      ✓{" "}
+                                      <span className="font-semibold">
+                                        {pkg.pointsRequired} points
+                                      </span>{" "}
+                                      = {pkg.name} (
+                                      <span className="font-semibold">
+                                        {pkg.discountType === "percentage"
+                                          ? `${pkg.discountValue}% off`
+                                          : `${settings.defaultCurrency === "THB" ? "฿" : "Ks"}${pkg.discountValue} off`}
+                                      </span>
+                                      , expires in {pkg.validityDays} days)
+                                    </p>
+                                  ))
+                              )}
+                              <p>
+                                ✓ Using a coupon deducts the points of its own
+                                package
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {!settings.loyaltySettings?.enabled && (
+                        <div className="text-center py-6">
+                          <Gift className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                          <p className="text-sm text-gray-500">
+                            Enable the loyalty program to configure rewards
                           </p>
                         </div>
                       )}

@@ -37,6 +37,10 @@ export interface Transaction {
   tax: number;
   discount: number;
   total: number;
+  // Loyalty coupon applied at the till, if any
+  couponId?: string;
+  couponCode?: string;
+  couponDiscount?: number;
   amountPaid: number;
   change: number;
   paymentMethod: "cash" | "scan" | "wallet" | "cod";
@@ -248,6 +252,54 @@ class TransactionService {
         "TransactionService: Transaction recorded successfully with ID:",
         docRef.id,
       );
+
+      // Consume the applied loyalty coupon, which also spends its points.
+      // Done before awarding so the new balance reflects the redemption.
+      if (transactionData.customer?.uid && transactionData.couponId) {
+        try {
+          const { LoyaltyService } = await import("./loyaltyService");
+          const redeemResult = await LoyaltyService.redeemCoupon({
+            customerId: transactionData.customer.uid,
+            couponId: transactionData.couponId,
+            transactionId: transactionData.transactionId,
+          });
+
+          if (!redeemResult.success) {
+            console.error("Coupon not redeemed:", redeemResult.error);
+          }
+        } catch (couponError) {
+          // Don't fail the sale if coupon bookkeeping fails.
+          console.error("Error redeeming coupon:", couponError);
+        }
+      }
+
+      // Award loyalty points if customer is provided and loyalty is enabled
+      if (transactionData.customer?.uid) {
+        try {
+          const { LoyaltyService } = await import("./loyaltyService");
+          const loyaltyResult = await LoyaltyService.awardPoints({
+            customerId: transactionData.customer.uid,
+            transactionId: transactionData.transactionId,
+            transactionAmount: transactionData.total,
+            source: 'pos',
+            description: `Purchase at ${transactionData.branchName || 'POS'}`,
+          });
+
+          if (loyaltyResult.success) {
+            console.log("Loyalty points awarded:", {
+              points: loyaltyResult.pointsAwarded,
+              newTotal: loyaltyResult.newTotalPoints,
+              coupons: loyaltyResult.couponsGenerated.length,
+            });
+          } else if (loyaltyResult.message) {
+            console.log("Loyalty points not awarded:", loyaltyResult.message);
+          }
+        } catch (loyaltyError) {
+          // Don't fail the transaction if loyalty fails
+          console.error("Error awarding loyalty points:", loyaltyError);
+        }
+      }
+
       return docRef.id;
     } catch (error) {
       console.error("TransactionService: Error recording transaction:", error);

@@ -11,11 +11,43 @@ import {
   Timestamp,
   getDoc,
   setDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { Cart, CartItem } from '@/types/cart';
 
 const COLLECTION_NAME = 'carts';
+
+/**
+ * Recursively drop keys whose value is `undefined`.
+ *
+ * Firestore rejects `undefined` outright, and optional fields on the cart
+ * (a customer with no photo, a coupon with no recorded points cost) would
+ * otherwise fail the whole write. Only plain objects and arrays are traversed so
+ * Firestore sentinels like serverTimestamp() and Timestamps pass through intact.
+ */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefined(entry)) as unknown as T;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    (value as object).constructor === Object
+  ) {
+    const result: Record<string, unknown> = {};
+
+    Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
+      if (entry === undefined) return;
+      result[key] = stripUndefined(entry);
+    });
+
+    return result as T;
+  }
+
+  return value;
+}
 
 export interface DatabaseCart extends Cart {
   id?: string;
@@ -24,7 +56,63 @@ export interface DatabaseCart extends Cart {
   updatedAt: string;
 }
 
+/** Shape a stored cart document back into a Cart. */
+function mapCartData(data: Record<string, unknown>): Cart {
+  const selectedCustomer = (data.selectedCustomer as Cart['selectedCustomer']) || null;
+  const appliedCoupon = (data.appliedCoupon as Cart['appliedCoupon']) || null;
+
+  return {
+    items: (data.items as Cart['items']) || [],
+    totalItems: (data.totalItems as number) || 0,
+    totalAmount: (data.totalAmount as number) || 0,
+    currency: (data.currency as Cart['currency']) || 'THB',
+    selectedCustomer,
+    // A coupon only makes sense alongside the customer it belongs to.
+    appliedCoupon:
+      appliedCoupon &&
+      selectedCustomer &&
+      appliedCoupon.customerUid === selectedCustomer.uid
+        ? appliedCoupon
+        : null,
+  };
+}
+
 export class CartService {
+  /**
+   * Watch a user's cart and report every change.
+   *
+   * The cart lives in Firestore rather than localStorage so the same till
+   * session stays in sync across browsers and devices in real time. Returns the
+   * unsubscribe function.
+   */
+  static subscribeToCart(
+    userId: string,
+    onCart: (cart: Cart | null) => void,
+    onError?: (error: Error) => void,
+  ): () => void {
+    if (!db || !isFirebaseConfigured) {
+      console.warn('Firebase not configured, cart will not sync');
+      return () => {};
+    }
+
+    const cartRef = doc(db, COLLECTION_NAME, userId);
+
+    return onSnapshot(
+      cartRef,
+      (snapshot) => {
+        // Skip our own not-yet-acknowledged writes: the local state is already
+        // correct, and echoing it back would bounce between browsers.
+        if (snapshot.metadata.hasPendingWrites) return;
+
+        onCart(snapshot.exists() ? mapCartData(snapshot.data()) : null);
+      },
+      (error) => {
+        console.error('Error watching cart:', error);
+        onError?.(error);
+      },
+    );
+  }
+
   /**
    * Save cart to database
    */
@@ -45,7 +133,7 @@ export class CartService {
       // Use userId as document ID to ensure one cart per user
       const cartRef = doc(db, COLLECTION_NAME, userId);
       await setDoc(cartRef, {
-        ...cartData,
+        ...stripUndefined(cartData),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -71,14 +159,7 @@ export class CartService {
       const cartDoc = await getDoc(cartRef);
 
       if (cartDoc.exists()) {
-        const data = cartDoc.data();
-        const cart: Cart = {
-          items: data.items || [],
-          totalItems: data.totalItems || 0,
-          totalAmount: data.totalAmount || 0,
-          currency: data.currency || 'THB',
-        };
-
+        const cart = mapCartData(cartDoc.data());
         console.log('Cart loaded from database successfully');
         return cart;
       } else {

@@ -6,12 +6,14 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import {
   Cart,
   CartItem,
   CartContextType,
   SelectedCustomer,
+  AppliedCoupon,
 } from "@/types/cart";
 import { useAuth } from "@/contexts/AuthContext";
 import { CartService } from "@/services/cartService";
@@ -39,6 +41,7 @@ export function CartProvider({ children }: CartProviderProps) {
     totalAmount: 0,
     currency: "THB",
     selectedCustomer: null,
+    appliedCoupon: null,
   });
   const [isLoadingCart, setIsLoadingCart] = useState(false);
 
@@ -69,83 +72,87 @@ export function CartProvider({ children }: CartProviderProps) {
     }>
   >([]);
 
-  // Load cart from database when user is authenticated, fallback to localStorage
-  useEffect(() => {
-    const loadCart = async () => {
-      if (user?.uid) {
-        // User is authenticated, load from database
-        setIsLoadingCart(true);
-        try {
-          const dbCart = await CartService.loadCart(user.uid);
-          if (dbCart) {
-            setCart(dbCart);
-          } else {
-            // No cart in database, check localStorage for migration
-            const savedCart = localStorage.getItem("shopping-cart");
-            if (savedCart) {
-              try {
-                const parsedCart = JSON.parse(savedCart);
-                setCart(parsedCart);
-                // Save to database for future use
-                await CartService.saveCart(user.uid, parsedCart);
-                // Clear localStorage after migration
-                localStorage.removeItem("shopping-cart");
-              } catch (error) {
-                console.error("Error migrating cart from localStorage:", error);
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error loading cart from database:", error);
-          // Fallback to localStorage
-          const savedCart = localStorage.getItem("shopping-cart");
-          if (savedCart) {
-            try {
-              const parsedCart = JSON.parse(savedCart);
-              setCart(parsedCart);
-            } catch (error) {
-              console.error("Error loading cart from localStorage:", error);
-            }
-          }
-        } finally {
-          setIsLoadingCart(false);
-        }
-      } else {
-        // User not authenticated, use localStorage
-        const savedCart = localStorage.getItem("shopping-cart");
-        if (savedCart) {
-          try {
-            const parsedCart = JSON.parse(savedCart);
-            setCart(parsedCart);
-          } catch (error) {
-            console.error("Error loading cart from localStorage:", error);
-          }
-        }
-      }
-    };
+  /**
+   * Signature of the cart state that Firestore and this client agree on.
+   *
+   * Every sync decision compares against it, which is what keeps writes and
+   * snapshots from bouncing off each other:
+   *  - a local edit produces a new signature, so it gets written
+   *  - the echo of our own write matches, so it is ignored
+   *  - a remote edit produces a new signature, so it is applied, and the
+   *    resulting save pass sees a matching signature and stays quiet
+   */
+  const syncedSignatureRef = useRef<string | null>(null);
 
-    loadCart();
+  /**
+   * `currency` is intentionally excluded: it is a per-browser display choice,
+   * not shared state. Including it would stop two browsers viewing different
+   * currencies from ever agreeing, leaving them writing over each other.
+   */
+  const cartSignature = (value: Cart) =>
+    JSON.stringify({
+      items: value.items,
+      totalItems: value.totalItems,
+      totalAmount: value.totalAmount,
+      selectedCustomer: value.selectedCustomer ?? null,
+      appliedCoupon: value.appliedCoupon ?? null,
+    });
+
+  // Watch the cart in Firestore so every browser signed in as this user stays
+  // in sync in real time. There is deliberately no localStorage copy: the
+  // database is the single source of truth.
+  useEffect(() => {
+    if (!user?.uid) {
+      syncedSignatureRef.current = null;
+      return;
+    }
+
+    setIsLoadingCart(true);
+
+    const unsubscribe = CartService.subscribeToCart(
+      user.uid,
+      (remoteCart) => {
+        setIsLoadingCart(false);
+
+        if (!remoteCart) {
+          // No cart stored yet. Record an empty signature so the first local
+          // edit is treated as a change worth writing.
+          syncedSignatureRef.current = null;
+          return;
+        }
+
+        const signature = cartSignature(remoteCart);
+        if (signature === syncedSignatureRef.current) return;
+
+        syncedSignatureRef.current = signature;
+        setCart((prev) => ({
+          ...remoteCart,
+          // Currency is a per-browser display choice, not shared state.
+          currency: prev.currency,
+        }));
+      },
+      () => setIsLoadingCart(false),
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, [user?.uid]);
 
-  // Save cart to database and localStorage whenever it changes
+  // Push local cart changes to Firestore, debounced so rapid quantity taps
+  // collapse into a single write.
   useEffect(() => {
-    const saveCart = async () => {
-      if (user?.uid && !isLoadingCart) {
-        // User is authenticated, save to database
-        try {
-          await CartService.saveCart(user.uid, cart);
-        } catch (error) {
-          console.error("Error saving cart to database:", error);
-          // Fallback to localStorage
-          localStorage.setItem("shopping-cart", JSON.stringify(cart));
-        }
-      } else if (!user?.uid) {
-        // User not authenticated, save to localStorage
-        localStorage.setItem("shopping-cart", JSON.stringify(cart));
-      }
-    };
+    if (!user?.uid || isLoadingCart) return;
 
-    saveCart();
+    const signature = cartSignature(cart);
+    if (signature === syncedSignatureRef.current) return;
+
+    const timer = setTimeout(() => {
+      syncedSignatureRef.current = signature;
+      void CartService.saveCart(user.uid, cart);
+    }, 350);
+
+    return () => clearTimeout(timer);
   }, [cart, user?.uid, isLoadingCart]);
 
   // Process inventory update queue asynchronously
@@ -442,6 +449,7 @@ export function CartProvider({ children }: CartProviderProps) {
       totalAmount: 0,
       currency: cart.currency,
       selectedCustomer: null,
+      appliedCoupon: null,
     });
   };
 
@@ -453,6 +461,7 @@ export function CartProvider({ children }: CartProviderProps) {
       totalAmount: 0,
       currency: cart.currency,
       selectedCustomer: null,
+      appliedCoupon: null,
     });
   };
 
@@ -741,6 +750,13 @@ export function CartProvider({ children }: CartProviderProps) {
       setCart((prevCart) => ({
         ...prevCart,
         selectedCustomer: customer,
+        // A coupon belongs to one customer, so switching customers drops it.
+        appliedCoupon:
+          prevCart.appliedCoupon &&
+          customer &&
+          prevCart.appliedCoupon.customerUid === customer.uid
+            ? prevCart.appliedCoupon
+            : null,
       }));
     },
     [],
@@ -749,6 +765,20 @@ export function CartProvider({ children }: CartProviderProps) {
   const getSelectedCustomer = useCallback((): SelectedCustomer | null => {
     return cart.selectedCustomer || null;
   }, [cart.selectedCustomer]);
+
+  const applyCoupon = useCallback((coupon: AppliedCoupon) => {
+    setCart((prevCart) => ({
+      ...prevCart,
+      appliedCoupon: coupon,
+    }));
+  }, []);
+
+  const removeCoupon = useCallback(() => {
+    setCart((prevCart) => ({
+      ...prevCart,
+      appliedCoupon: null,
+    }));
+  }, []);
 
   const value: CartContextType = {
     cart,
@@ -761,6 +791,8 @@ export function CartProvider({ children }: CartProviderProps) {
     getCartItemCount,
     setSelectedCustomer,
     getSelectedCustomer,
+    applyCoupon,
+    removeCoupon,
     applyGroupDiscount,
     applyVariantDiscount,
     removeGroupDiscount,

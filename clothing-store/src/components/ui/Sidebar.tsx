@@ -31,6 +31,7 @@ import {
   RotateCcw,
   XCircle,
   DollarSign,
+  Gift,
 } from "lucide-react";
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -65,6 +66,7 @@ const iconMap = {
   RotateCcw,
   XCircle,
   DollarSign,
+  Gift,
 };
 
 interface SidebarProps extends NavigationProps {
@@ -267,26 +269,25 @@ export function Sidebar({
       ],
     },
     {
-      id: "inventory",
+      id: "stocks",
       label: t.inventory,
       icon: "Package",
+      href: "/owner/inventory/stocks",
+      roles: ["owner", "manager"],
+    },
+    {
+      id: "customers",
+      label: t.customers,
+      icon: "Users",
+      href: "/owner/inventory/customers",
       roles: ["owner", "manager", "staff"],
-      children: [
-        {
-          id: "stocks",
-          label: t.stocks,
-          icon: "Package",
-          href: "/owner/inventory/stocks",
-          roles: ["owner", "manager"],
-        },
-        {
-          id: "customers",
-          label: t.customers,
-          icon: "Users",
-          href: "/owner/inventory/customers",
-          roles: ["owner", "manager", "staff"],
-        },
-      ],
+    },
+    {
+      id: "membership",
+      label: "Membership",
+      icon: "Gift",
+      href: "/owner/membership",
+      roles: ["owner", "manager", "staff"],
     },
     {
       id: "expenses",
@@ -295,13 +296,13 @@ export function Sidebar({
       href: "/owner/expenses",
       roles: ["owner", "manager"], // Only owner and manager
     },
-    // {
-    //   id: "online-promotions",
-    //   label: "Online Promotions",
-    //   icon: "Tag",
-    //   href: "/owner/online-promotions",
-    //   roles: ["owner", "manager"],
-    // },
+    {
+      id: "online-promotions",
+      label: "Online Promotions",
+      icon: "Tag",
+      href: "/owner/online-promotions",
+      roles: ["owner", "manager"],
+    },
     {
       id: "barcode",
       label: t.barcode,

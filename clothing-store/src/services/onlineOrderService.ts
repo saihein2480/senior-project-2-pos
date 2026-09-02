@@ -21,6 +21,19 @@ export interface OnlineOrder {
   paymentStatus: string;
   paymentMethod?: string;
   provider?: string;
+  paymentProvider?: string;
+  transactionId?: string; // Link to transaction document
+  // Financial breakdown
+  subtotal?: number;
+  tax?: number;
+  taxRate?: number; // Percentage applied at checkout (e.g. 7 for 7%)
+  discount?: number;
+  exchangeRate?: number; // THB -> MMK rate used at checkout
+  // Coupon fields
+  couponCode?: string;
+  appliedCouponCode?: string;
+  couponId?: string;
+  couponDiscountTHB?: number;
   customer?: {
     uid?: string;
     email?: string;

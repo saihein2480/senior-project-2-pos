@@ -23,6 +23,75 @@ export type ReceiptPaperSize =
   | "114mm"
   | "210mm";
 
+/**
+ * A reward tier the owner can offer. Several packages can coexist, e.g.
+ * "2 points = 10% off" alongside "10 points = 50% off".
+ */
+export interface CouponPackage {
+  id: string;
+  name: string; // Label shown to the owner and the customer
+  pointsRequired: number; // Points this package costs; deducted when used
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  validityDays: number; // Days until the issued coupon expires
+  enabled: boolean;
+}
+
+export interface LoyaltySettings {
+  enabled: boolean;
+  minimumSpendAmount: number; // Minimum spend to earn 1 point
+  pointsPerPurchase: number; // Points earned per qualifying purchase (default: 1)
+  /** Reward tiers. When empty, the legacy single-coupon fields below are used. */
+  couponPackages?: CouponPackage[];
+  // Legacy single-coupon configuration. Kept so existing saved settings and
+  // already-issued coupons keep working; treated as one implicit package.
+  pointsForCoupon: number; // Points needed to get a coupon (default: 10)
+  couponDiscountType: 'percentage' | 'fixed'; // Discount type
+  couponDiscountValue: number; // Discount value (e.g., 10 for 10% or ฿10)
+  couponValidityDays: number; // Days until coupon expires (default: 30)
+}
+
+export const LEGACY_COUPON_PACKAGE_ID = "legacy-default";
+
+/**
+ * Normalise loyalty settings into a list of usable reward tiers.
+ *
+ * Owners who never configured packages still have the four legacy fields, so
+ * those are surfaced as a single implicit package. Returned sorted by cost so
+ * callers can reason about "cheapest" and "best" tiers.
+ */
+export function resolveCouponPackages(
+  loyaltySettings?: LoyaltySettings | null,
+): CouponPackage[] {
+  if (!loyaltySettings) return [];
+
+  const configured = (loyaltySettings.couponPackages || []).filter(
+    (pkg) => pkg && pkg.enabled !== false && Number(pkg.pointsRequired) > 0,
+  );
+
+  if (configured.length > 0) {
+    return [...configured].sort(
+      (a, b) => Number(a.pointsRequired) - Number(b.pointsRequired),
+    );
+  }
+
+  if (Number(loyaltySettings.pointsForCoupon) > 0) {
+    return [
+      {
+        id: LEGACY_COUPON_PACKAGE_ID,
+        name: "Reward Coupon",
+        pointsRequired: Number(loyaltySettings.pointsForCoupon),
+        discountType: loyaltySettings.couponDiscountType || "percentage",
+        discountValue: Number(loyaltySettings.couponDiscountValue) || 0,
+        validityDays: Number(loyaltySettings.couponValidityDays) || 30,
+        enabled: true,
+      },
+    ];
+  }
+
+  return [];
+}
+
 export interface BusinessSettings {
   businessName: string;
   shortName: string;
@@ -51,6 +120,7 @@ export interface BusinessSettings {
     showDates: boolean;
     showPrice: boolean;
   };
+  loyaltySettings?: LoyaltySettings;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -97,6 +167,16 @@ export class SettingsService {
           currencyRate: data.currencyRate || 0,
           currentBranch: data.currentBranch || "Main Branch",
           labelSettings: data.labelSettings,
+          loyaltySettings: data.loyaltySettings || {
+            enabled: false,
+            minimumSpendAmount: 500,
+            pointsPerPurchase: 1,
+            couponPackages: [],
+            pointsForCoupon: 10,
+            couponDiscountType: 'percentage',
+            couponDiscountValue: 10,
+            couponValidityDays: 30,
+          },
           createdAt:
             data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
           updatedAt:

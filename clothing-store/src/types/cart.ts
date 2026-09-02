@@ -38,12 +38,29 @@ export interface SelectedCustomer {
     | "other";
 }
 
+/**
+ * A loyalty coupon the cashier has applied for the selected customer.
+ *
+ * `pointsCost` travels with it so completing the sale deducts exactly what the
+ * coupon cost, matching how the storefront handles redemption.
+ */
+export interface AppliedCoupon {
+  id: string;
+  code: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  pointsCost?: number;
+  packageName?: string;
+  customerUid: string;
+}
+
 export interface Cart {
   items: CartItem[];
   totalItems: number;
   totalAmount: number;
   currency: "THB" | "MMK";
   selectedCustomer?: SelectedCustomer | null;
+  appliedCoupon?: AppliedCoupon | null;
 }
 
 export interface CartContextType {
@@ -58,6 +75,9 @@ export interface CartContextType {
   // Customer management functions
   setSelectedCustomer: (customer: SelectedCustomer | null) => void;
   getSelectedCustomer: () => SelectedCustomer | null;
+  // Loyalty coupon applied for the selected customer
+  applyCoupon: (coupon: AppliedCoupon) => void;
+  removeCoupon: () => void;
   // Discount management functions
   applyGroupDiscount: (groupName: string, discountPercent: number) => void;
   applyVariantDiscount: (itemId: string, discountPercent: number) => void;

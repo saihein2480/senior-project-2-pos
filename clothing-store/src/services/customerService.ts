@@ -72,6 +72,14 @@ export class CustomerService {
           return false;
         }
         
+        // Filter by customer source (online/pos)
+        if (filters.customerSource && filters.customerSource !== 'all') {
+          const customerSource = customer.customerSource || (customer.isOnline ? 'online' : 'pos');
+          if (customerSource !== filters.customerSource) {
+            return false;
+          }
+        }
+        
         // Filter by search term (name or email)
         if (filters.search) {
           const searchLower = filters.search.toLowerCase();
@@ -154,6 +162,55 @@ export class CustomerService {
   }
 
   /**
+   * Turn a customer's loyalty membership on or off.
+   *
+   * Points, coupons and history are never reset: activating only seeds those
+   * fields when they are missing, and deactivating leaves them in place so the
+   * customer keeps their standing if they are reactivated later.
+   */
+  static async setMembership(
+    customer: Customer,
+    isMember: boolean,
+  ): Promise<void> {
+    if (!db || !isFirebaseConfigured) {
+      throw new Error('Firebase is not configured');
+    }
+
+    try {
+      const docRef = doc(db, this.CUSTOMERS_COLLECTION, customer.uid);
+
+      if (!isMember) {
+        await updateDoc(docRef, {
+          isMember: false,
+          updatedAt: Timestamp.now(),
+        });
+        return;
+      }
+
+      await updateDoc(docRef, {
+        isMember: true,
+        memberId:
+          customer.memberId || customer.uid.substring(0, 12).toUpperCase(),
+        memberSince: customer.memberSince
+          ? Timestamp.fromDate(new Date(customer.memberSince))
+          : Timestamp.now(),
+        // Seed only what is absent; never clobber earned points or coupons.
+        loyaltyPoints: customer.loyaltyPoints ?? 0,
+        totalPointsEarned: customer.totalPointsEarned ?? 0,
+        pointsHistory: customer.pointsHistory ?? [],
+        coupons: customer.coupons ?? [],
+        activeCouponsCount: customer.activeCouponsCount ?? 0,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (error) {
+      console.error('Error updating customer membership:', error);
+      throw new Error(
+        `Failed to ${isMember ? 'activate' : 'deactivate'} membership`,
+      );
+    }
+  }
+
+  /**
    * Delete a customer
    */
   static async deleteCustomer(customerId: string): Promise<void> {
@@ -180,6 +237,8 @@ export class CustomerService {
         retailerCustomers: 0,
         wholesalerCustomers: 0,
         totalReceivables: 0,
+        onlineCustomers: 0,
+        posCustomers: 0,
       };
     }
 
@@ -191,6 +250,8 @@ export class CustomerService {
         retailerCustomers: customers.filter(c => c.customerType === 'retailer').length,
         wholesalerCustomers: customers.filter(c => c.customerType === 'wholesaler').length,
         totalReceivables: customers.reduce((sum, c) => sum + (c.receivables || 0), 0),
+        onlineCustomers: customers.filter(c => c.customerSource === 'online' || c.isOnline === true).length,
+        posCustomers: customers.filter(c => c.customerSource === 'pos' || (!c.customerSource && !c.isOnline)).length,
       };
 
       return stats;
@@ -202,6 +263,8 @@ export class CustomerService {
         retailerCustomers: 0,
         wholesalerCustomers: 0,
         totalReceivables: 0,
+        onlineCustomers: 0,
+        posCustomers: 0,
       };
     }
   }
@@ -231,6 +294,8 @@ export class CustomerService {
         totalPurchases: 0,
         totalSpent: 0,
         receivables: 0,
+        customerSource: 'pos', // Default to POS for manually created customers
+        isOnline: false,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };

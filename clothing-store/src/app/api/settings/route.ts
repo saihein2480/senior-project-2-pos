@@ -35,12 +35,58 @@ export async function PATCH(request: NextRequest) {
   }
 }
 import { NextRequest, NextResponse } from "next/server";
-import { SettingsService, BusinessSettings } from "@/services/settingsService";
+import {
+  SettingsService,
+  BusinessSettings,
+  CouponPackage,
+} from "@/services/settingsService";
 
 interface SettingsResponse {
   success: boolean;
   data?: BusinessSettings;
   error?: string;
+}
+
+/**
+ * Validate the owner-defined reward tiers. Anything malformed is dropped rather
+ * than saved half-formed, since these values drive real point deductions.
+ */
+function sanitizeCouponPackages(input: unknown): CouponPackage[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .filter((pkg): pkg is Record<string, unknown> => !!pkg && typeof pkg === "object")
+    .map((pkg, index) => {
+      const pointsRequired = Number(pkg.pointsRequired);
+      const discountValue = Number(pkg.discountValue);
+      const validityDays = Number(pkg.validityDays);
+
+      return {
+        id:
+          typeof pkg.id === "string" && pkg.id.trim()
+            ? pkg.id
+            : `pkg_${Date.now()}_${index}`,
+        name:
+          typeof pkg.name === "string" && pkg.name.trim()
+            ? pkg.name.trim()
+            : `Package ${index + 1}`,
+        pointsRequired:
+          Number.isFinite(pointsRequired) && pointsRequired > 0
+            ? Math.floor(pointsRequired)
+            : 0,
+        discountType:
+          pkg.discountType === "fixed" ? ("fixed" as const) : ("percentage" as const),
+        discountValue:
+          Number.isFinite(discountValue) && discountValue > 0 ? discountValue : 0,
+        validityDays:
+          Number.isFinite(validityDays) && validityDays > 0
+            ? Math.floor(validityDays)
+            : 30,
+        enabled: pkg.enabled !== false,
+      };
+    })
+    // A tier with no point cost or no discount cannot reward anything.
+    .filter((pkg) => pkg.pointsRequired > 0 && pkg.discountValue > 0);
 }
 
 // GET /api/settings - Get business settings
@@ -139,6 +185,25 @@ export async function POST(request: NextRequest) {
       currencyRate:
         typeof body.currencyRate === "number" ? body.currencyRate : 0,
       currentBranch: body.currentBranch || "Main Branch",
+      loyaltySettings: body.loyaltySettings ? {
+        enabled: typeof body.loyaltySettings.enabled === "boolean" ? body.loyaltySettings.enabled : false,
+        minimumSpendAmount: typeof body.loyaltySettings.minimumSpendAmount === "number" ? body.loyaltySettings.minimumSpendAmount : 500,
+        pointsPerPurchase: typeof body.loyaltySettings.pointsPerPurchase === "number" ? body.loyaltySettings.pointsPerPurchase : 1,
+        couponPackages: sanitizeCouponPackages(body.loyaltySettings.couponPackages),
+        pointsForCoupon: typeof body.loyaltySettings.pointsForCoupon === "number" ? body.loyaltySettings.pointsForCoupon : 10,
+        couponDiscountType: (body.loyaltySettings.couponDiscountType === "percentage" || body.loyaltySettings.couponDiscountType === "fixed") ? body.loyaltySettings.couponDiscountType : "percentage",
+        couponDiscountValue: typeof body.loyaltySettings.couponDiscountValue === "number" ? body.loyaltySettings.couponDiscountValue : 10,
+        couponValidityDays: typeof body.loyaltySettings.couponValidityDays === "number" ? body.loyaltySettings.couponValidityDays : 30,
+      } : {
+        enabled: false,
+        minimumSpendAmount: 500,
+        pointsPerPurchase: 1,
+        couponPackages: [],
+        pointsForCoupon: 10,
+        couponDiscountType: "percentage" as const,
+        couponDiscountValue: 10,
+        couponValidityDays: 30,
+      },
     };
 
     const savedSettings =

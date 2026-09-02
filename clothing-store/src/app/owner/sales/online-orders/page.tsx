@@ -169,6 +169,84 @@ function getCustomerAddress(row: OnlineOrder): string {
   return "-";
 }
 
+/** Trim floating point noise so labels read "7%" instead of "7.000000001%". */
+function formatRatePercent(percent: number) {
+  return String(Math.round(percent * 100) / 100);
+}
+
+/**
+ * Rebuild the money breakdown for an online order.
+ *
+ * Figures come from what the storefront stored at checkout so the owner sees
+ * exactly what the customer was charged. `discount` holds promotion savings
+ * only; coupon savings live in `couponDiscountTHB`.
+ */
+function getOrderSummary(row: OnlineOrder) {
+  const cartItems = row.cartItems || [];
+
+  let itemsSubtotal = 0;
+  if (cartItems.length > 0) {
+    itemsSubtotal = cartItems.reduce(
+      (sum, item) =>
+        sum + Number(item.priceTHB || 0) * Number(item.quantity || 1),
+      0,
+    );
+  } else if (row.product) {
+    itemsSubtotal =
+      Number(row.product.priceTHB || 0) * Number(row.product.quantity || 1);
+  }
+
+  const storedSubtotal = Number(row.subtotal || 0);
+  const subtotal = storedSubtotal > 0 ? storedSubtotal : itemsSubtotal;
+
+  const promotionDiscount = Math.max(0, Number(row.discount || 0));
+  const couponDiscount = Math.max(0, Number(row.couponDiscountTHB || 0));
+  const taxableBase = Math.max(
+    0,
+    subtotal - promotionDiscount - couponDiscount,
+  );
+
+  const tax = Math.max(0, Number(row.tax || 0));
+
+  // Prefer the rate stored with the order. Older orders predate that field, so
+  // fall back to deriving it from the amounts we do have.
+  const storedRate = Number(row.taxRate || 0);
+  const taxPercent =
+    storedRate > 0
+      ? storedRate
+      : taxableBase > 0 && tax > 0
+        ? (tax / taxableBase) * 100
+        : 0;
+
+  const storedTotal = Number(row.total || 0);
+  const computedTotal = taxableBase + tax;
+  // Trust the stored total (what was actually charged) unless it is missing.
+  const total = storedTotal > 0 ? storedTotal : computedTotal;
+
+  const exchangeRate = Number(row.exchangeRate || 0);
+  const storedMmk = Number(row.amountMmk || 0);
+  const amountMmk =
+    storedMmk > 0
+      ? storedMmk
+      : exchangeRate > 0
+        ? Math.round(total * exchangeRate)
+        : 0;
+
+  return {
+    subtotal,
+    promotionDiscount,
+    couponDiscount,
+    taxableBase,
+    tax,
+    taxPercent,
+    total,
+    amountMmk,
+    // True when the stored total disagrees with the line items, which means the
+    // order predates the full breakdown being persisted.
+    isInconsistent: storedTotal > 0 && Math.abs(storedTotal - computedTotal) > 0.01,
+  };
+}
+
 function getPaymentMethodLabel(row: OnlineOrder): string {
   const method = (row.paymentMethod || "").toLowerCase();
   
@@ -193,6 +271,17 @@ function OrderDetailsModal({
   const items = row.items || [];
   const hasProduct = !!row.product;
 
+  const summary = getOrderSummary(row);
+  const {
+    subtotal,
+    promotionDiscount,
+    couponDiscount,
+    tax,
+    taxPercent,
+    total: grandTotal,
+    amountMmk,
+  } = summary;
+
   let content: React.ReactNode[] = [];
 
   if (cartItems.length > 0) {
@@ -201,7 +290,7 @@ function OrderDetailsModal({
         key={`ci-${idx}`}
         className="flex justify-between py-3 border-b border-gray-100 last:border-0 text-sm"
       >
-        <div>
+        <div className="flex-1">
           <div className="font-semibold text-gray-900">{ci.productName}</div>
           {ci.color || ci.size ? (
             <div className="text-gray-500 mt-0.5">
@@ -210,8 +299,15 @@ function OrderDetailsModal({
           ) : (
             ""
           )}
+          <div className="text-xs text-gray-500 mt-1">
+            ฿{Number(ci.priceTHB || 0).toFixed(2)} × {ci.quantity || 1}
+          </div>
         </div>
-        <span className="text-gray-700 font-medium">x{ci.quantity || 1}</span>
+        <div className="text-right">
+          <div className="font-medium text-gray-900">
+            ฿{(Number(ci.priceTHB || 0) * Number(ci.quantity || 1)).toFixed(2)}
+          </div>
+        </div>
       </div>
     ));
   } else if (hasProduct) {
@@ -220,7 +316,7 @@ function OrderDetailsModal({
         key="prod-0"
         className="flex justify-between py-3 border-b border-gray-100 last:border-0 text-sm"
       >
-        <div>
+        <div className="flex-1">
           <div className="font-semibold text-gray-900">
             {row.product?.productName}
           </div>
@@ -233,10 +329,15 @@ function OrderDetailsModal({
           ) : (
             ""
           )}
+          <div className="text-xs text-gray-500 mt-1">
+            ฿{Number(row.product?.priceTHB || 0).toFixed(2)} × {row.product?.quantity || 1}
+          </div>
         </div>
-        <span className="text-gray-700 font-medium">
-          x{row.product?.quantity || 1}
-        </span>
+        <div className="text-right">
+          <div className="font-medium text-gray-900">
+            ฿{(Number(row.product?.priceTHB || 0) * Number(row.product?.quantity || 1)).toFixed(2)}
+          </div>
+        </div>
       </div>,
     ];
   } else if (items.length > 0) {
@@ -266,7 +367,7 @@ function OrderDetailsModal({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col z-10">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Order Items</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Order Details</h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {row.orderId || row.id}
             </p>
@@ -279,6 +380,7 @@ function OrderDetailsModal({
           </button>
         </div>
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
+          {/* Customer Details */}
           <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
             <div className="text-sm font-semibold text-gray-900 mb-2">
               Customer Details
@@ -307,11 +409,90 @@ function OrderDetailsModal({
             </div>
           </div>
 
+          {/* Items */}
           <div>
             <div className="text-sm font-semibold text-gray-900 mb-1">
               Items
             </div>
             {content}
+          </div>
+
+          {/* Order Summary */}
+          <div className="rounded-md border border-gray-200 bg-blue-50 p-3">
+            <div className="text-sm font-semibold text-gray-900 mb-2">
+              Order Summary
+            </div>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between text-gray-700">
+                <span>Subtotal:</span>
+                <span>฿{subtotal.toFixed(2)}</span>
+              </div>
+
+              {promotionDiscount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Promotion Discount:</span>
+                  <span>-฿{promotionDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              {couponDiscount > 0 && (
+                <div className="flex justify-between text-purple-700">
+                  <div className="flex items-center gap-1">
+                    <span>Coupon Discount:</span>
+                    {(row.couponCode || row.appliedCouponCode) && (
+                      <span className="text-xs bg-purple-100 px-1.5 py-0.5 rounded font-semibold">
+                        {row.couponCode || row.appliedCouponCode}
+                      </span>
+                    )}
+                  </div>
+                  <span>-฿{couponDiscount.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-gray-700">
+                <span>Tax ({formatRatePercent(taxPercent)}%):</span>
+                <span>฿{tax.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-300">
+                <span>Total:</span>
+                <span>฿{grandTotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-xs text-gray-600 pt-1">
+                <span>MMK Equivalent:</span>
+                <span>Ks {amountMmk.toLocaleString()}</span>
+              </div>
+
+              {summary.isInconsistent && (
+                <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                  This order was placed before the full tax breakdown was
+                  recorded, so the lines above may not add up to the charged
+                  total.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Payment Info */}
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+            <div className="text-sm font-semibold text-gray-900 mb-2">
+              Payment Information
+            </div>
+            <div className="grid grid-cols-1 gap-1 text-sm">
+              <div className="text-gray-700">
+                <span className="font-medium text-gray-900">Method: </span>
+                {getPaymentMethodLabel(row)}
+              </div>
+              <div className="text-gray-700">
+                <span className="font-medium text-gray-900">Status: </span>
+                {getPaymentStatusLabel(row)}
+              </div>
+              <div className="text-gray-700">
+                <span className="font-medium text-gray-900">Provider: </span>
+                {(row.provider || row.paymentProvider || "MMPAY").toUpperCase()}
+              </div>
+            </div>
           </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
@@ -1118,6 +1299,18 @@ function OnlineOrdersContent() {
     );
     const printSize = getPrintSizes(settings?.receiptPaperSize || "80mm");
 
+    // Reuse the same breakdown as the details modal so the printed receipt and
+    // the on-screen summary can never disagree.
+    const summary = getOrderSummary(row);
+    const {
+      subtotal,
+      promotionDiscount,
+      couponDiscount,
+      tax,
+      taxPercent,
+      total: grandTotal,
+    } = summary;
+
     const orderId = escapeHtml(row.orderId || row.id);
     const customerName = escapeHtml(row.customer?.displayName || "-");
     const customerEmail = escapeHtml(row.customer?.email || "-");
@@ -1129,9 +1322,11 @@ function OnlineOrdersContent() {
     const status = escapeHtml(
       `${row.status || "-"} / ${row.paymentStatus || "-"}`,
     );
-    const amount = Number(row.amountMmk || 0);
+    const amount = summary.amountMmk;
     const formatMmk = (value: number) =>
       `${Math.round(value).toLocaleString()} MMK`;
+    const formatThb = (value: number) =>
+      `THB ${Number(value || 0).toFixed(2)}`;
     const formatPrice = (value: number, currency: "THB" | "MMK") => {
       if (currency === "THB") {
         return `THB ${Number(value || 0).toFixed(2)}`;
@@ -1277,6 +1472,12 @@ function OnlineOrdersContent() {
               justify-content: space-between;
               margin: 4px 0;
             }
+            .coupon-line {
+              display: flex;
+              justify-content: space-between;
+              margin: 4px 0;
+              color: #7c3aed;
+            }
             .grand-total {
               font-weight: bold;
               font-size: ${printSize.titleSize};
@@ -1328,7 +1529,7 @@ function OnlineOrdersContent() {
           </div>
           <div class="info-row">
             <span>Payment:</span>
-            <span>${escapeHtml((row.provider || "MMPAY").toUpperCase())}</span>
+            <span>${escapeHtml(getPaymentMethodLabel(row))} - ${escapeHtml((row.provider || "MMPAY").toUpperCase())}</span>
           </div>
 
           <div class="items">
@@ -1336,8 +1537,32 @@ function OnlineOrdersContent() {
           </div>
 
           <div class="totals">
+            <div class="total-line">
+              <span>Subtotal:</span>
+              <span>${formatThb(subtotal)}</span>
+            </div>
+            ${promotionDiscount > 0 ? `
+            <div class="total-line">
+              <span>Promotion:</span>
+              <span>-${formatThb(promotionDiscount)}</span>
+            </div>
+            ` : ''}
+            ${couponDiscount > 0 ? `
+            <div class="coupon-line">
+              <span>Coupon (${escapeHtml(row.couponCode || 'DISCOUNT')}):</span>
+              <span>-${formatThb(couponDiscount)}</span>
+            </div>
+            ` : ''}
+            <div class="total-line">
+              <span>Tax (${escapeHtml(formatRatePercent(taxPercent))}%):</span>
+              <span>${formatThb(tax)}</span>
+            </div>
             <div class="total-line grand-total">
-              <span>TOTAL:</span>
+              <span>TOTAL (THB):</span>
+              <span>${formatThb(grandTotal)}</span>
+            </div>
+            <div class="total-line">
+              <span>TOTAL (MMK):</span>
               <span>${formatMmk(amount)}</span>
             </div>
           </div>

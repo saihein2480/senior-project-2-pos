@@ -1,3 +1,33 @@
+export interface LoyaltyCoupon {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  issuedAt: Date;
+  expiresAt: Date;
+  usedAt?: Date;
+  usedInTransaction?: string; // Transaction ID where coupon was used
+  status: 'active' | 'used' | 'expired';
+  /** Points spent to earn this coupon; deducted from the balance when used. */
+  pointsCost?: number;
+  /** Reward package that issued this coupon. */
+  packageId?: string;
+  /** Package label captured at issue time, so renames don't rewrite history. */
+  packageName?: string;
+  /** True while the customer has reserved this coupon for a pending checkout. */
+  inUse?: boolean;
+}
+
+export interface LoyaltyPointsHistory {
+  id: string;
+  pointsEarned: number;
+  transactionId: string;
+  transactionAmount: number;
+  earnedAt: Date;
+  source: 'pos' | 'online'; // Where the points were earned
+  description?: string;
+}
+
 export interface Customer {
   uid: string;
   email: string;
@@ -15,11 +45,23 @@ export interface Customer {
   township?: string;
   city?: string;
   customerImage?: string;
+  isOnline?: boolean; // true for online customers from e-commerce site
+  customerSource?: 'pos' | 'online'; // Source of the customer
+  // Loyalty Program Fields
+  isMember?: boolean; // Whether customer has joined the membership program
+  memberSince?: Date; // When the customer joined membership
+  memberId?: string; // Unique member ID (shortened version of uid)
+  loyaltyPoints?: number; // Current available points
+  totalPointsEarned?: number; // Lifetime points earned
+  pointsHistory?: LoyaltyPointsHistory[]; // History of points earned
+  coupons?: LoyaltyCoupon[]; // Available and used coupons
+  activeCouponsCount?: number; // Quick count of active coupons
 }
 
 export interface CustomerFilters {
   customerType?: 'retailer' | 'wholesaler' | 'distributor' | 'individual' | 'other';
   search?: string;
+  customerSource?: 'pos' | 'online' | 'all'; // Filter by customer source
 }
 
 export interface CustomerStats {
@@ -27,6 +69,8 @@ export interface CustomerStats {
   retailerCustomers: number;
   wholesalerCustomers: number;
   totalReceivables: number;
+  onlineCustomers: number;
+  posCustomers: number;
 }
 
 export interface CustomerResponse {

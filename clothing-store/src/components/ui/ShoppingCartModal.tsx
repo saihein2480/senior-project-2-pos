@@ -10,6 +10,7 @@ import { X, Minus, Plus, ShoppingCart, Eye, User, Users } from "lucide-react";
 import Image from "next/image";
 import { detectColorName } from "@/lib/colorUtils";
 import { CustomerSelectionModal } from "@/components/cart/CustomerSelectionModal";
+import { RewardRedemptionModal } from "@/components/cart/RewardRedemptionModal";
 import { PaymentClearanceModal } from "@/components/payment/PaymentClearanceModal";
 import { toast } from "react-hot-toast";
 
@@ -32,6 +33,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     removeWholesalePricing,
     setSelectedCustomer,
     getSelectedCustomer,
+    applyCoupon,
+    removeCoupon,
   } = useCart();
   const { formatPrice, getCurrencySymbol } = useCurrency();
   const { selectedCurrency, defaultCurrency, currencyRate } = useCurrency();
@@ -90,6 +93,170 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
   // Customer selection state
   const [isCustomerModalOpen, setIsCustomerModalOpen] = React.useState(false);
+  const [customerCoupons, setCustomerCoupons] = React.useState<
+    Array<{
+      id: string;
+      code: string;
+      discountType: "percentage" | "fixed";
+      discountValue: number;
+      pointsCost?: number;
+      packageName?: string;
+    }>
+  >([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = React.useState(false);
+  const [rewardPackages, setRewardPackages] = React.useState<
+    Array<{
+      id: string;
+      name: string;
+      pointsRequired: number;
+      discountType: "percentage" | "fixed";
+      discountValue: number;
+      affordable: boolean;
+      pointsShort: number;
+    }>
+  >([]);
+  const [availablePoints, setAvailablePoints] = React.useState(0);
+  const [redeemingPackageId, setRedeemingPackageId] = React.useState<
+    string | null
+  >(null);
+  const [loyaltyError, setLoyaltyError] = React.useState<string | null>(null);
+  const [currentPoints, setCurrentPoints] = React.useState(0);
+  const [isRewardModalOpen, setIsRewardModalOpen] = React.useState(false);
+
+  const selectedCustomerUid = cart.selectedCustomer?.uid || null;
+
+  // Rewards the customer can actually afford right now, shown as the headline
+  // number so the cashier knows whether opening the dialog is worthwhile.
+  const redeemableRewardCount = rewardPackages.filter(
+    (pkg) => pkg.affordable,
+  ).length;
+
+  /**
+   * Load the selected customer's coupons and reward tiers in one call, so the
+   * cashier can either apply a coupon they already hold or redeem a new one.
+   */
+  const loadCustomerLoyalty = React.useCallback(
+    async (customerUid: string | null) => {
+      if (!customerUid) {
+        setCustomerCoupons([]);
+        setRewardPackages([]);
+        setAvailablePoints(0);
+        setCurrentPoints(0);
+        return;
+      }
+
+      setIsLoadingCoupons(true);
+
+      try {
+        const { LoyaltyService } = await import("@/services/loyaltyService");
+        const result = await LoyaltyService.getLoyaltySummary(customerUid);
+
+        if (!result.success || !result.data) {
+          setCustomerCoupons([]);
+          setRewardPackages([]);
+          setAvailablePoints(0);
+          setCurrentPoints(0);
+          return;
+        }
+
+        setCustomerCoupons(
+          result.data.activeCoupons.map((coupon) => ({
+            id: coupon.id,
+            code: coupon.code,
+            discountType: coupon.discountType,
+            discountValue: Number(coupon.discountValue),
+            pointsCost: coupon.pointsCost,
+            packageName: coupon.packageName,
+          })),
+        );
+
+        setRewardPackages(
+          result.data.couponPackages.map((pkg) => ({
+            id: pkg.id,
+            name: pkg.name,
+            pointsRequired: Number(pkg.pointsRequired),
+            discountType: pkg.discountType,
+            discountValue: Number(pkg.discountValue),
+            affordable: pkg.affordable,
+            pointsShort: pkg.pointsShort,
+          })),
+        );
+
+        setAvailablePoints(result.data.availablePoints);
+        setCurrentPoints(result.data.currentPoints);
+      } catch (error) {
+        console.error("Error loading customer loyalty data:", error);
+        setCustomerCoupons([]);
+        setRewardPackages([]);
+        setAvailablePoints(0);
+        setCurrentPoints(0);
+      } finally {
+        setIsLoadingCoupons(false);
+      }
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    setLoyaltyError(null);
+    loadCustomerLoyalty(selectedCustomerUid);
+  }, [selectedCustomerUid, loadCustomerLoyalty]);
+
+  /**
+   * Redeem a reward tier for the customer at the till. Points are still spent
+   * when the resulting coupon is used, so this only hands them the coupon.
+   */
+  const handleRedeemPackage = async (packageId: string) => {
+    if (!selectedCustomerUid) return;
+
+    setRedeemingPackageId(packageId);
+    setLoyaltyError(null);
+
+    try {
+      const { LoyaltyService } = await import("@/services/loyaltyService");
+      const result = await LoyaltyService.redeemPackage({
+        customerId: selectedCustomerUid,
+        packageId,
+      });
+
+      if (!result.success) {
+        setLoyaltyError(result.error || "Failed to redeem this reward");
+        return;
+      }
+
+      await loadCustomerLoyalty(selectedCustomerUid);
+    } catch (error) {
+      console.error("Error redeeming reward for customer:", error);
+      setLoyaltyError("An error occurred. Please try again.");
+    } finally {
+      setRedeemingPackageId(null);
+    }
+  };
+
+  const handleApplyCoupon = (coupon: {
+    id: string;
+    code: string;
+    discountType: "percentage" | "fixed";
+    discountValue: number;
+    pointsCost?: number;
+    packageName?: string;
+  }) => {
+    if (!selectedCustomerUid) return;
+
+    // Omit optional fields when absent; the cart is persisted to Firestore,
+    // which rejects `undefined` values.
+    applyCoupon({
+      id: coupon.id,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      customerUid: selectedCustomerUid,
+      ...(typeof coupon.pointsCost === "number"
+        ? { pointsCost: coupon.pointsCost }
+        : {}),
+      ...(coupon.packageName ? { packageName: coupon.packageName } : {}),
+    });
+  };
 
   // Payment clearance state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
@@ -564,8 +731,37 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const subtotalAfterAllDiscountsDisplay =
     displaySubtotal - displayCartDiscount - groupFixedTotal - variantFixedTotal;
 
-  const taxDisplay = subtotalAfterAllDiscountsDisplay * (taxRate / 100);
-  const grandTotalDisplay = subtotalAfterAllDiscountsDisplay + taxDisplay;
+  // Loyalty coupon, applied after every other discount and before tax so the
+  // cashier's total matches how the storefront prices the same coupon.
+  const couponDiscountDisplay = (() => {
+    const coupon = cart.appliedCoupon;
+    if (!coupon) return 0;
+
+    const base = Math.max(0, subtotalAfterAllDiscountsDisplay);
+
+    if (coupon.discountType === "percentage") {
+      return base * (Number(coupon.discountValue) / 100);
+    }
+
+    // Fixed coupon amounts are configured in the base currency.
+    const fixedInDisplay = SettingsService.convertPrice(
+      Number(coupon.discountValue),
+      defaultCurrency as "THB" | "MMK",
+      selectedCurrency as "THB" | "MMK",
+      currencyRate,
+      defaultCurrency as "THB" | "MMK",
+    );
+
+    return Math.min(fixedInDisplay, base);
+  })();
+
+  const subtotalAfterCouponDisplay = Math.max(
+    0,
+    subtotalAfterAllDiscountsDisplay - couponDiscountDisplay,
+  );
+
+  const taxDisplay = subtotalAfterCouponDisplay * (taxRate / 100);
+  const grandTotalDisplay = subtotalAfterCouponDisplay + taxDisplay;
 
   // Convert display numbers back to base currency for payment/transaction processing
   const subtotalForPayment = SettingsService.convertPrice(
@@ -583,7 +779,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   );
 
   const discountForPayment = SettingsService.convertPrice(
-    displayCartDiscount + groupFixedTotal + variantFixedTotal,
+    displayCartDiscount +
+      groupFixedTotal +
+      variantFixedTotal +
+      couponDiscountDisplay,
     selectedCurrency as "THB" | "MMK",
     defaultCurrency as "THB" | "MMK",
     currencyRate,
@@ -592,6 +791,15 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
   const taxForPayment = SettingsService.convertPrice(
     taxDisplay,
+    selectedCurrency as "THB" | "MMK",
+    defaultCurrency as "THB" | "MMK",
+    currencyRate,
+    defaultCurrency as "THB" | "MMK",
+  );
+
+  // Coupon savings in base currency, recorded on the transaction.
+  const couponDiscountForPayment = SettingsService.convertPrice(
+    couponDiscountDisplay,
     selectedCurrency as "THB" | "MMK",
     defaultCurrency as "THB" | "MMK",
     currencyRate,
@@ -1278,6 +1486,64 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 <Users className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Loyalty coupons for the selected customer */}
+            {getSelectedCustomer() && (
+              <div className="mt-2 rounded-lg border border-purple-200 bg-purple-50 p-2">
+                {cart.appliedCoupon ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-purple-900 truncate">
+                        {cart.appliedCoupon.code}
+                        <span className="ml-1.5 font-medium text-purple-700">
+                          {cart.appliedCoupon.discountType === "percentage"
+                            ? `${cart.appliedCoupon.discountValue}% off`
+                            : `${cart.appliedCoupon.discountValue} off`}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-purple-700">
+                        {typeof cart.appliedCoupon.pointsCost === "number"
+                          ? `Uses ${cart.appliedCoupon.pointsCost} point${cart.appliedCoupon.pointsCost === 1 ? "" : "s"} on checkout`
+                          : "Applied at checkout"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={removeCoupon}
+                      className="shrink-0 text-xs font-semibold text-purple-700 underline hover:text-purple-900"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : isLoadingCoupons ? (
+                  <p className="text-xs text-purple-700">
+                    Loading loyalty info...
+                  </p>
+                ) : (
+                  // Compact summary only. The full list lives in its own dialog
+                  // so the cart stays short at the till.
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 text-xs">
+                      <p className="font-semibold text-purple-900">
+                        {redeemableRewardCount} reward
+                        {redeemableRewardCount === 1 ? "" : "s"} available
+                      </p>
+                      <p className="text-purple-700">
+                        {availablePoints} pt
+                        {availablePoints === 1 ? "" : "s"} to spend
+                        {customerCoupons.length > 0 &&
+                          ` · ${customerCoupons.length} coupon${customerCoupons.length === 1 ? "" : "s"} ready`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsRewardModalOpen(true)}
+                      className="shrink-0 px-2.5 py-1.5 rounded bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700"
+                    >
+                      View Rewards
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Footer with totals and checkout */}
@@ -1693,6 +1959,25 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       )}
                     </span>
                   </div>
+
+                  {cart.appliedCoupon && couponDiscountDisplay > 0 && (
+                    <div className="flex justify-between text-sm font-medium text-purple-700">
+                      <span className="flex items-center gap-1.5">
+                        Coupon
+                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-xs font-bold">
+                          {cart.appliedCoupon.code}
+                        </span>
+                      </span>
+                      <span className="font-bold">
+                        -
+                        {SettingsService.formatPrice(
+                          couponDiscountDisplay,
+                          selectedCurrency as "THB" | "MMK",
+                        )}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-sm font-medium text-gray-800">
                     <span>Tax ({taxRate}%):</span>
                     <span className="font-bold">
@@ -1743,6 +2028,30 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         selectedCustomer={getSelectedCustomer()}
       />
 
+      {/* Loyalty rewards for the selected customer */}
+      <RewardRedemptionModal
+        isOpen={isRewardModalOpen && !!cart.selectedCustomer}
+        onClose={() => setIsRewardModalOpen(false)}
+        customerName={
+          cart.selectedCustomer?.displayName ||
+          cart.selectedCustomer?.email ||
+          "Customer"
+        }
+        coupons={customerCoupons}
+        packages={rewardPackages}
+        currentPoints={currentPoints}
+        availablePoints={availablePoints}
+        isLoading={isLoadingCoupons}
+        error={loyaltyError}
+        redeemingPackageId={redeemingPackageId}
+        appliedCouponId={cart.appliedCoupon?.id || null}
+        onApplyCoupon={(coupon) => {
+          handleApplyCoupon(coupon);
+          setIsRewardModalOpen(false);
+        }}
+        onRedeemPackage={handleRedeemPackage}
+      />
+
       {/* Payment Clearance Modal */}
       <PaymentClearanceModal
         isOpen={isPaymentModalOpen}
@@ -1765,6 +2074,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         tax={taxForPayment}
         total={grandTotalForPayment}
         discountBreakdown={discountBreakdownForPayment}
+        couponId={cart.appliedCoupon?.id}
+        couponCode={cart.appliedCoupon?.code}
+        couponDiscount={couponDiscountForPayment}
       />
     </div>,
     document.body,

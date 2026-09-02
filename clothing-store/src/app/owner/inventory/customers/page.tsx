@@ -28,6 +28,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Gift,
 } from "lucide-react";
 import {
   Customer,
@@ -38,6 +39,8 @@ import {
 } from "@/types/customer";
 import NewCustomerModal from "@/components/customers/NewCustomerModal";
 import { DeleteConfirmationModal } from "@/components/customers/DeleteConfirmationModal";
+import { CustomerService } from "@/services/customerService";
+import { LoyaltyService } from "@/services/loyaltyService";
 
 function CustomerPageContent() {
   const { formatPrice } = useCurrency();
@@ -47,6 +50,8 @@ function CustomerPageContent() {
     retailerCustomers: 0,
     wholesalerCustomers: 0,
     totalReceivables: 0,
+    onlineCustomers: 0,
+    posCustomers: 0,
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +76,7 @@ function CustomerPageContent() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Pagination state - separate for each customer type table
+  const [onlinePage, setOnlinePage] = useState(1);
   const [retailerPage, setRetailerPage] = useState(1);
   const [wholesalerPage, setWholesalerPage] = useState(1);
   const [distributorPage, setDistributorPage] = useState(1);
@@ -78,7 +84,9 @@ function CustomerPageContent() {
   const [unassignedPage, setUnassignedPage] = useState(1);
   const [rowsPerPage] = useState(10);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [selectedCustomerType, setSelectedCustomerType] = useState<string | null>(null);
+  const [selectedCustomerType, setSelectedCustomerType] = useState<string | null>(null); // Can be "online", "retailer", "wholesaler", "distributor", "individual", or null
+  const [selectedCustomerSource, setSelectedCustomerSource] = useState<'all' | 'online' | 'pos'>('all');
+  const [membershipBusyId, setMembershipBusyId] = useState<string | null>(null);
 
   // Fetch customers from API
   const fetchCustomers = async () => {
@@ -177,6 +185,92 @@ function CustomerPageContent() {
     setIsRefreshing(true);
     await Promise.all([fetchCustomers(), fetchStats()]);
     setIsRefreshing(false);
+  };
+
+  const closeDropdown = () => {
+    setOpenDropdown(null);
+    setDropdownPosition(null);
+  };
+
+  const describeCustomer = (customer: Customer) =>
+    customer.displayName || customer.email || customer.uid;
+
+  /**
+   * Enrol a single customer in the loyalty program. Their existing points and
+   * coupons are preserved, so this is safe to run on any customer.
+   */
+  const handleActivateMembership = async (customer: Customer) => {
+    setError(null);
+
+    // Enrolling is pointless while the programme is switched off.
+    const loyaltySettings = await LoyaltyService.getLoyaltySettings().catch(
+      () => null,
+    );
+
+    if (!loyaltySettings?.enabled) {
+      closeDropdown();
+      setError(
+        "The loyalty program is disabled. Enable it in Settings before activating memberships.",
+      );
+      return;
+    }
+
+    setMembershipBusyId(customer.uid);
+
+    try {
+      await CustomerService.setMembership(customer, true);
+      await Promise.all([fetchCustomers(), fetchStats()]);
+
+      setSuccessMessage(
+        `Membership activated for ${describeCustomer(customer)}.`,
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error("Error activating membership:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to activate membership",
+      );
+    } finally {
+      setMembershipBusyId(null);
+      closeDropdown();
+    }
+  };
+
+  /**
+   * Turn membership off for a customer. Points and coupons are left in place so
+   * re-activating restores their standing.
+   */
+  const handleDeactivateMembership = async (customer: Customer) => {
+    const confirmed = window.confirm(
+      `Deactivate membership for ${describeCustomer(customer)}?\n\n` +
+        `Their points and coupons are kept, so you can reactivate them later.`,
+    );
+
+    if (!confirmed) {
+      closeDropdown();
+      return;
+    }
+
+    setError(null);
+    setMembershipBusyId(customer.uid);
+
+    try {
+      await CustomerService.setMembership(customer, false);
+      await Promise.all([fetchCustomers(), fetchStats()]);
+
+      setSuccessMessage(
+        `Membership deactivated for ${describeCustomer(customer)}.`,
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      console.error("Error deactivating membership:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to deactivate membership",
+      );
+    } finally {
+      setMembershipBusyId(null);
+      closeDropdown();
+    }
   };
 
   // Handle edit customer
@@ -324,27 +418,42 @@ function CustomerPageContent() {
       customer.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Apply customer source filter
+  const sourceFilteredCustomers = searchFilteredCustomers.filter((customer) => {
+    if (selectedCustomerSource === 'all') return true;
+    const customerSource = customer.customerSource || (customer.isOnline ? 'online' : 'pos');
+    return customerSource === selectedCustomerSource;
+  });
+
   // Group customers by type from the search-filtered list
-  const retailerCustomers = searchFilteredCustomers.filter(
-    (customer) => customer.customerType === "retailer",
+  const onlineCustomers = sourceFilteredCustomers.filter(
+    (customer) => customer.customerSource === "online" || customer.isOnline === true,
   );
-  const wholesalerCustomers = searchFilteredCustomers.filter(
-    (customer) => customer.customerType === "wholesaler",
+  const retailerCustomers = sourceFilteredCustomers.filter(
+    (customer) => customer.customerType === "retailer" && customer.customerSource !== "online" && !customer.isOnline,
   );
-  const distributorCustomers = searchFilteredCustomers.filter(
-    (customer) => customer.customerType === "distributor",
+  const wholesalerCustomers = sourceFilteredCustomers.filter(
+    (customer) => customer.customerType === "wholesaler" && customer.customerSource !== "online" && !customer.isOnline,
   );
-  const individualCustomers = searchFilteredCustomers.filter(
-    (customer) => customer.customerType === "individual",
+  const distributorCustomers = sourceFilteredCustomers.filter(
+    (customer) => customer.customerType === "distributor" && customer.customerSource !== "online" && !customer.isOnline,
   );
-  const unassignedCustomers = searchFilteredCustomers.filter(
-    (customer) => !customer.customerType || (customer.customerType !== "retailer" && customer.customerType !== "wholesaler" && customer.customerType !== "distributor" && customer.customerType !== "individual"),
+  const individualCustomers = sourceFilteredCustomers.filter(
+    (customer) => customer.customerType === "individual" && customer.customerSource !== "online" && !customer.isOnline,
+  );
+  const unassignedCustomers = sourceFilteredCustomers.filter(
+    (customer) => !customer.customerType && customer.customerSource !== "online" && !customer.isOnline,
   );
 
   // Calculate total filtered customers for the "no customers found" message
-  const filteredCustomers = searchFilteredCustomers;
+  const filteredCustomers = sourceFilteredCustomers;
 
   // Pagination calculations for each type
+  const onlineTotalPages = Math.ceil(onlineCustomers.length / rowsPerPage);
+  const onlineStartIndex = (onlinePage - 1) * rowsPerPage;
+  const onlineEndIndex = onlineStartIndex + rowsPerPage;
+  const onlinePageCustomers = onlineCustomers.slice(onlineStartIndex, onlineEndIndex);
+
   const retailerTotalPages = Math.ceil(retailerCustomers.length / rowsPerPage);
   const retailerStartIndex = (retailerPage - 1) * rowsPerPage;
   const retailerEndIndex = retailerStartIndex + rowsPerPage;
@@ -378,6 +487,28 @@ function CustomerPageContent() {
       month: "short",
       day: "numeric",
     });
+  };
+
+  // Get customer type label - show "Online Customer" for online customers
+  const getCustomerTypeLabel = (customer: Customer) => {
+    const isOnline = customer.customerSource === 'online' || customer.isOnline;
+    if (isOnline) {
+      return {
+        label: "Online Customer",
+        className: "bg-cyan-100 text-cyan-800 border-cyan-200"
+      };
+    }
+    
+    // Return regular customer type
+    const typeMap = {
+      retailer: { label: "Retailer", className: "bg-purple-100 text-purple-800 border-purple-200" },
+      wholesaler: { label: "Wholesaler", className: "bg-orange-100 text-orange-800 border-orange-200" },
+      distributor: { label: "Distributor", className: "bg-indigo-100 text-indigo-800 border-indigo-200" },
+      individual: { label: "Individual", className: "bg-green-100 text-green-800 border-green-200" },
+      other: { label: "Other", className: "bg-gray-100 text-gray-800 border-gray-200" },
+    };
+    
+    return typeMap[customer.customerType as keyof typeof typeMap] || { label: customer.customerType || "Unknown", className: "bg-gray-100 text-gray-800 border-gray-200" };
   };
 
   return (
@@ -438,6 +569,19 @@ function CustomerPageContent() {
                   }`}
                 >
                   All Types
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedCustomerType("online");
+                  }}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
+                    selectedCustomerType === "online"
+                      ? "bg-gradient-to-r from-cyan-400 to-cyan-300 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  🌐 Online Customers
                 </button>
                 <button
                   onClick={() => {
@@ -506,8 +650,45 @@ function CustomerPageContent() {
                 </button>
               </div>
 
+              {/* Customer Source Filter */}
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Filter by Source:</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setSelectedCustomerSource('all')}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
+                      selectedCustomerSource === 'all'
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                    }`}
+                  >
+                    All Customers
+                  </button>
+                  <button
+                    onClick={() => setSelectedCustomerSource('online')}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
+                      selectedCustomerSource === 'online'
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                    }`}
+                  >
+                    🌐 Online Customers
+                  </button>
+                  <button
+                    onClick={() => setSelectedCustomerSource('pos')}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
+                      selectedCustomerSource === 'pos'
+                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                    }`}
+                  >
+                    🏪 POS Customers
+                  </button>
+                </div>
+              </div>
+
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
                 {/* Total Customers */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between">
@@ -521,6 +702,40 @@ function CustomerPageContent() {
                     </div>
                     <div className="p-3 bg-cyan-100 rounded-xl">
                       <Users className="h-6 w-6 text-cyan-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Online Customers */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Online
+                      </p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
+                        {stats.onlineCustomers}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-100 rounded-xl">
+                      <Users className="h-6 w-6 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* POS Customers */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        POS
+                      </p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">
+                        {stats.posCustomers}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-blue-100 rounded-xl">
+                      <Store className="h-6 w-6 text-blue-600" />
                     </div>
                   </div>
                 </div>
@@ -587,6 +802,7 @@ function CustomerPageContent() {
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
+                      setOnlinePage(1);
                       setRetailerPage(1);
                       setWholesalerPage(1);
                       setDistributorPage(1);
@@ -643,7 +859,7 @@ function CustomerPageContent() {
               ) : (
                 <div className="space-y-8">
                   {/* Show message if no customers after filtering */}
-                  {retailerCustomers.length === 0 && wholesalerCustomers.length === 0 && distributorCustomers.length === 0 && individualCustomers.length === 0 && unassignedCustomers.length === 0 && (
+                  {onlineCustomers.length === 0 && retailerCustomers.length === 0 && wholesalerCustomers.length === 0 && distributorCustomers.length === 0 && individualCustomers.length === 0 && unassignedCustomers.length === 0 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -658,6 +874,201 @@ function CustomerPageContent() {
                         <p className="text-xs text-gray-400">
                           This might be a data structure issue. Check console for details.
                         </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Online Customers Section */}
+                  {(selectedCustomerType === null || selectedCustomerType === "online") && onlineCustomers.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-cyan-100 px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-white rounded-xl shadow-sm">
+                            <Users className="h-5 w-5 text-cyan-600" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-gray-900">Online Customers</h2>
+                            <p className="text-sm text-gray-600">{onlineCustomers.length} online {onlineCustomers.length === 1 ? 'customer' : 'customers'}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Customer
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Total Spent
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Receivables
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                Joined
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {onlinePageCustomers.map((customer) => (
+                              <tr key={customer.uid} className="hover:bg-cyan-50/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {customer.customerImage ? (
+                                        <img
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-cyan-100"
+                                          src={customer.customerImage}
+                                          alt={customer.displayName || customer.email}
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = "none";
+                                            target.nextElementSibling?.classList.remove("hidden");
+                                          }}
+                                        />
+                                      ) : null}
+                                      <div
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center ${
+                                          customer.customerImage ? "hidden" : ""
+                                        }`}
+                                      >
+                                        <User className="h-5 w-5 text-white" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-gray-500">{customer.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="space-y-1">
+                                    {customer.phone && (
+                                      <div className="flex items-center text-gray-700">
+                                        <Phone className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs">{customer.phone}</span>
+                                      </div>
+                                    )}
+                                    {customer.address && (
+                                      <div className="flex items-center text-gray-600">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                                        <span className="text-xs truncate max-w-xs">{customer.address}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-gray-900">
+                                    {formatPrice(customer.totalSpent || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm font-semibold text-red-600">
+                                    {formatPrice(customer.receivables || 0)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="text-sm text-gray-500">
+                                    {formatDate(customer.createdAt)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    ref={(el) => {
+                                      buttonRefs.current[customer.uid] = el;
+                                    }}
+                                    onClick={() => handleDropdownToggle(customer.uid)}
+                                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                                    aria-label="Customer actions"
+                                  >
+                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Online Pagination */}
+                      <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                        <div className="flex-1 flex justify-between sm:hidden">
+                          <button
+                            onClick={() => setOnlinePage(Math.max(1, onlinePage - 1))}
+                            disabled={onlinePage === 1}
+                            className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setOnlinePage(Math.min(onlineTotalPages, onlinePage + 1))}
+                            disabled={onlinePage === onlineTotalPages}
+                            className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                        <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm text-gray-700">Rows per page:</p>
+                            <span className="text-sm font-medium text-gray-900">{rowsPerPage}</span>
+                            <p className="text-sm text-gray-700">
+                              Showing {onlineStartIndex + 1} to {Math.min(onlineEndIndex, onlineCustomers.length)} of {onlineCustomers.length}
+                            </p>
+                          </div>
+                          <div>
+                            <nav className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px" aria-label="Pagination">
+                              <button
+                                onClick={() => setOnlinePage(Math.max(1, onlinePage - 1))}
+                                disabled={onlinePage === 1}
+                                className="relative inline-flex items-center px-2 py-2 rounded-l-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                                Page {onlinePage} of {onlineTotalPages || 1}
+                              </span>
+                              <button
+                                onClick={() => setOnlinePage(Math.min(onlineTotalPages, onlinePage + 1))}
+                                disabled={onlinePage === onlineTotalPages}
+                                className="relative inline-flex items-center px-2 py-2 rounded-r-lg border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </nav>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -727,8 +1138,31 @@ function CustomerPageContent() {
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="text-sm font-semibold text-gray-900">
-                                        {customer.displayName || "No Name"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-xs text-gray-500">{customer.email}</div>
                                     </div>
@@ -897,8 +1331,31 @@ function CustomerPageContent() {
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="text-sm font-semibold text-gray-900">
-                                        {customer.displayName || "No Name"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-xs text-gray-500">{customer.email}</div>
                                     </div>
@@ -1067,8 +1524,31 @@ function CustomerPageContent() {
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="text-sm font-semibold text-gray-900">
-                                        {customer.displayName || "No Name"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-xs text-gray-500">{customer.email}</div>
                                     </div>
@@ -1237,8 +1717,31 @@ function CustomerPageContent() {
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="text-sm font-semibold text-gray-900">
-                                        {customer.displayName || "No Name"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-xs text-gray-500">{customer.email}</div>
                                     </div>
@@ -1407,8 +1910,31 @@ function CustomerPageContent() {
                                       </div>
                                     </div>
                                     <div>
-                                      <div className="text-sm font-semibold text-gray-900">
-                                        {customer.displayName || "No Name"}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-gray-900">
+                                          {customer.displayName || "No Name"}
+                                        </span>
+                                        {(() => {
+                                          const typeInfo = getCustomerTypeLabel(customer);
+                                          return (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full border ${typeInfo.className}`}>
+                                              {typeInfo.label}
+                                            </span>
+                                          );
+                                        })()}
+                                        {customer.isMember && (
+                                          <span
+                                            className="text-xs px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-200 inline-flex items-center gap-1"
+                                            title={
+                                              customer.memberId
+                                                ? `Member ID: ${customer.memberId}`
+                                                : "Loyalty member"
+                                            }
+                                          >
+                                            <Gift className="h-3 w-3" />
+                                            Member
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-xs text-gray-500">{customer.email}</div>
                                     </div>
@@ -1546,6 +2072,42 @@ function CustomerPageContent() {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Customer
               </button>
+
+              {(() => {
+                const customer = customers.find((c) => c.uid === openDropdown);
+                if (!customer) return null;
+
+                const busy = membershipBusyId === customer.uid;
+
+                return customer.isMember ? (
+                  <button
+                    onClick={() => handleDeactivateMembership(customer)}
+                    disabled={busy}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Gift className="h-4 w-4 mr-2 text-purple-500" />
+                    )}
+                    {busy ? "Updating..." : "Deactivate Membership"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleActivateMembership(customer)}
+                    disabled={busy}
+                    className="flex items-center w-full px-4 py-2 text-sm text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                  >
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Gift className="h-4 w-4 mr-2" />
+                    )}
+                    {busy ? "Activating..." : "Activate Membership"}
+                  </button>
+                );
+              })()}
+
               <button
                 onClick={() => {
                   const customer = customers.find(

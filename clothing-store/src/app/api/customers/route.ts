@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const filters: CustomerFilters = {
       customerType: searchParams.get('customerType') as 'retailer' | 'wholesaler' | 'distributor' | 'individual' | 'other' | undefined,
       search: searchParams.get('search') || undefined,
+      customerSource: searchParams.get('customerSource') as 'pos' | 'online' | 'all' | undefined,
     };
 
     // Remove undefined values
