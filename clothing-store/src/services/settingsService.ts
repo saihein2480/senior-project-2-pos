@@ -51,6 +51,36 @@ export interface LoyaltySettings {
   couponValidityDays: number; // Days until coupon expires (default: 30)
 }
 
+/**
+ * Customer-facing store facts.
+ *
+ * These back the storefront chatbot's answers about location, hours, delivery
+ * and policies. Anything left blank is reported to customers as "not on file"
+ * rather than guessed, so filling these in is what makes those answers useful.
+ */
+export interface StoreInfoSettings {
+  address?: string;
+  phone?: string;
+  email?: string;
+  openingHours?: string;
+  branches?: Array<{
+    name: string;
+    address?: string;
+    phone?: string;
+    hours?: string;
+  }>;
+  deliveryAvailable?: boolean;
+  deliveryAreas?: string;
+  deliveryFee?: string;
+  deliveryTime?: string;
+  codAvailable?: boolean;
+  codMaxAmount?: number;
+  paymentMethods?: string[];
+  returnPolicy?: string;
+  exchangePolicy?: string;
+  cancellationPolicy?: string;
+}
+
 export const LEGACY_COUPON_PACKAGE_ID = "legacy-default";
 
 /**
@@ -121,6 +151,7 @@ export interface BusinessSettings {
     showPrice: boolean;
   };
   loyaltySettings?: LoyaltySettings;
+  storeInfo?: StoreInfoSettings;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -167,6 +198,7 @@ export class SettingsService {
           currencyRate: data.currencyRate || 0,
           currentBranch: data.currentBranch || "Main Branch",
           labelSettings: data.labelSettings,
+          storeInfo: data.storeInfo || {},
           loyaltySettings: data.loyaltySettings || {
             enabled: false,
             minimumSpendAmount: 500,

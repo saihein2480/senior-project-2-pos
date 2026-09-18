@@ -1185,6 +1185,25 @@ class TransactionService {
         },
       });
 
+      // Create an owner-facing notification for the pending refund payment
+      try {
+        const notificationsRef = collection(db, "notifications");
+        await addDoc(notificationsRef, {
+          type: "refund_payment",
+          title: "Refund Payment Pending",
+          message: `Refund payment pending for cancelled order #${transaction.transactionId || transactionId}`,
+          link: "/owner/requests/pending-refunds",
+          metadata: {
+            transactionId,
+            orderId: transaction.transactionId || transactionId,
+          },
+          read: false,
+          createdAt: Timestamp.now(),
+        });
+      } catch (notifError) {
+        console.error("Error creating owner notification for pending cancellation refund:", notifError);
+      }
+
       console.log(`Paid order cancelled - Refund of ${refundAmount} pending confirmation`);
     } catch (error) {
       console.error("Error cancelling paid transaction:", error);

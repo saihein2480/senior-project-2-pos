@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
@@ -44,6 +45,7 @@ import { LoyaltyService } from "@/services/loyaltyService";
 
 function CustomerPageContent() {
   const { formatPrice } = useCurrency();
+  const permissions = usePermissions();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<CustomerStats>({
     totalCustomers: 0,
@@ -539,15 +541,15 @@ function CustomerPageContent() {
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h1 className="text-3xl font-bold text-gray-900">
+                    <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                       Customers
                     </h1>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="text-sm text-gray-600 mt-1">
                       Manage your customer database and relationships
                     </p>
                   </div>
                   <Button
-                    className="flex items-center bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white font-medium shadow-md border-0"
+                    className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
                     onClick={() => setIsModalOpen(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -564,7 +566,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
                     selectedCustomerType === null
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -576,8 +578,8 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "online"
-                      ? "bg-gradient-to-r from-cyan-400 to-cyan-300 text-white shadow-md"
-                      : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
+                      : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
                   <Users className="h-4 w-4" />
@@ -589,7 +591,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "retailer"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -602,7 +604,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "wholesaler"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -615,7 +617,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "distributor"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -628,7 +630,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "individual"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -641,7 +643,7 @@ function CustomerPageContent() {
                   }}
                   className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border-0 ${
                     selectedCustomerType === "others"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
                       : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                   }`}
                 >
@@ -658,8 +660,8 @@ function CustomerPageContent() {
                     onClick={() => setSelectedCustomerSource('all')}
                     className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
                       selectedCustomerSource === 'all'
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
-                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                        ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                     }`}
                   >
                     All Customers
@@ -668,8 +670,8 @@ function CustomerPageContent() {
                     onClick={() => setSelectedCustomerSource('online')}
                     className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
                       selectedCustomerSource === 'online'
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
-                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                        ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                     }`}
                   >
                     🌐 Online Customers
@@ -678,8 +680,8 @@ function CustomerPageContent() {
                     onClick={() => setSelectedCustomerSource('pos')}
                     className={`px-4 py-2 rounded-xl font-medium transition-all border-0 ${
                       selectedCustomerSource === 'pos'
-                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md"
-                        : "bg-white text-gray-700 shadow-sm hover:bg-cyan-50"
+                        ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md"
+                        : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                     }`}
                   >
                     🏪 POS Customers
@@ -848,7 +850,7 @@ function CustomerPageContent() {
                         : "Get started by adding your first customer."}
                     </p>
                     <Button
-                      className="flex items-center bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white font-medium shadow-md border-0"
+                      className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
                       onClick={() => setIsModalOpen(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -2108,18 +2110,20 @@ function CustomerPageContent() {
                 );
               })()}
 
-              <button
-                onClick={() => {
-                  const customer = customers.find(
-                    (c) => c.uid === openDropdown,
-                  );
-                  if (customer) handleDeleteCustomer(customer);
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Customer
-              </button>
+              {permissions.canDeleteCustomers && (
+                <button
+                  onClick={() => {
+                    const customer = customers.find(
+                      (c) => c.uid === openDropdown,
+                    );
+                    if (customer) handleDeleteCustomer(customer);
+                  }}
+                  className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Customer
+                </button>
+              )}
             </div>
           </div>,
           document.body,
@@ -2185,6 +2189,10 @@ function CustomerPageContent() {
 }
 
 export default function CustomerPage() {
-  return <CustomerPageContent />;
+  return (
+    <ProtectedRoute requiredRole={["owner", "manager", "staff"]}>
+      <CustomerPageContent />
+    </ProtectedRoute>
+  );
 }
 

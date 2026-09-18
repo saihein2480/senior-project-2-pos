@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -18,10 +20,17 @@ import {
   User,
   Menu,
   Bell,
+  Clock,
+  Check,
+  Trash2,
+  XCircle,
+  RotateCcw,
+  AlertCircle,
+  Package,
+  DollarSign,
 } from "lucide-react";
 import { ShoppingCartModal } from "./ShoppingCartModal";
 import { useOnlineOrdersNotification } from "@/hooks/useOnlineOrdersNotification";
-import Link from "next/link";
 
 interface TopNavBarProps {
   onCartModalStateChange?: (isOpen: boolean) => void;
@@ -32,6 +41,7 @@ export function TopNavBar({
   onCartModalStateChange,
   onMenuToggle,
 }: TopNavBarProps) {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { getCartItemCount } = useCart();
   const {
@@ -49,10 +59,13 @@ export function TopNavBar({
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [shops, setShops] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingShops, setIsLoadingShops] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
   const branchDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+  const notificationDropdownRef = useRef<HTMLDivElement>(null);
 
   const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
 
@@ -98,19 +111,43 @@ export function TopNavBar({
         return;
       }
 
-      // Save branch selection to localStorage
+      // Save branch selection to localStorage for immediate effect
       const storageKey = `userBranch_${userId}`;
       localStorage.setItem(storageKey, branchName);
       console.log("Saved to localStorage:", storageKey, branchName);
+
+      // Also save to Firebase settings if user is owner/manager
+      if (user?.role !== "staff") {
+        try {
+          // Use PATCH endpoint to update only currentBranch without affecting other fields
+          const response = await fetch("/api/settings", {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ currentBranch: branchName }),
+          });
+
+          if (!response.ok) {
+            console.error("Failed to save branch to Firebase");
+          }
+        } catch (error) {
+          console.error("Error saving branch to Firebase:", error);
+        }
+      }
 
       // Immediately close dropdown
       setIsBranchDropdownOpen(false);
       console.log("Dropdown closed");
 
-      // Refresh settings to reflect the new branch
+      // Refresh settings to reflect the new branch across all pages
       console.log("Refreshing settings...");
       await refreshSettings();
       console.log("Settings refreshed");
+
+      // Force Next.js to refresh the current page to pick up the new branch
+      router.refresh();
+      console.log("Page refreshed");
 
       // Show success notification
       toast.success(`Switched to ${branchName}`, {
@@ -181,12 +218,44 @@ export function TopNavBar({
       ) {
         setIsBranchDropdownOpen(false);
       }
+      // Notification dropdown outside-click handling is managed inside
+      // NotificationDropdown itself, since it's rendered via a portal and
+      // notificationDropdownRef (which only wraps the bell button) would
+      // never "contain" clicks made inside the portaled dropdown content.
     }
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, []);
+
+  // Listen to unread notifications count
+  useEffect(() => {
+    const fetchUnreadNotifications = async () => {
+      try {
+        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        
+        if (!db) return;
+        
+        const notificationsRef = collection(db, "notifications");
+        const q = query(
+          notificationsRef,
+          where("read", "==", false)
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          setUnreadNotificationsCount(snapshot.size);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error fetching unread notifications:", error);
+      }
+    };
+    
+    fetchUnreadNotifications();
   }, []);
 
   return (
@@ -221,7 +290,7 @@ export function TopNavBar({
                 }}
                 aria-haspopup="menu"
                 aria-expanded={isBranchDropdownOpen}
-                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"
+                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
                 title="Click to change branch"
               >
                 <Store className="w-4 h-4 text-gray-900" />
@@ -271,7 +340,7 @@ export function TopNavBar({
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors cursor-pointer ${
                               isSelected
-                                ? "bg-cyan-100 text-gray-900 font-medium"
+                                ? "bg-pink-100 text-gray-900 font-medium"
                                 : "text-gray-700 hover:bg-gray-100"
                             }`}
                           >
@@ -316,7 +385,7 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isCurrencyDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded-lg transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded-lg transition-all"
               >
                 <span className="text-sm font-semibold text-gray-900">
                   {currencies.find((c) => c.code === selectedCurrency)?.symbol}
@@ -348,7 +417,7 @@ export function TopNavBar({
                         }
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-cyan-50 text-gray-700"
+                            ? "bg-pink-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -380,7 +449,7 @@ export function TopNavBar({
                 }
                 aria-haspopup="menu"
                 aria-expanded={isLanguageDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded-lg transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded-lg transition-all"
               >
                 <span className="text-sm font-medium text-gray-900">
                   {languages.find((l) => l.value === language)?.name}
@@ -407,7 +476,7 @@ export function TopNavBar({
                         onClick={() => handleLanguageChange(lang.value)}
                         className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
                           isSelected
-                            ? "bg-cyan-50 text-gray-700"
+                            ? "bg-pink-50 text-gray-700"
                             : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
@@ -449,18 +518,28 @@ export function TopNavBar({
             </div>
 
             {/* Notifications */}
-            <Link
-              href="/owner/sales/online-orders"
-              className="relative cursor-pointer"
-              onClick={() => markAsSeen()}
-            >
-              <Bell className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
-              {unseenOrdersCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
-                </span>
+            <div className="relative" ref={notificationDropdownRef}>
+              <button
+                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                className="relative cursor-pointer focus:outline-none flex items-center"
+                aria-label="Notifications"
+              >
+                <Bell className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotificationDropdown && (
+                <NotificationDropdown 
+                  onClose={() => setShowNotificationDropdown(false)} 
+                  triggerRef={notificationDropdownRef}
+                />
               )}
-            </Link>
+            </div>
 
             {/* User Profile Dropdown */}
             <div className="relative" ref={profileDropdownRef}>
@@ -507,4 +586,296 @@ export function TopNavBar({
       />
     </header>
   );
+}
+
+
+
+// Notification Dropdown Component
+interface NotificationDropdownProps {
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+interface Notification {
+  id: string;
+  type: "online_order" | "cancellation_request" | "refund_request" | "refund_payment" | "low_stock" | "out_of_stock";
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: Date;
+  link?: string;
+}
+
+// The "notifications" collection is shared with customer-facing
+// notifications (written with a `userId` field for the storefront
+// account). Only these types are meant for the owner/staff POS UI.
+const OWNER_NOTIFICATION_TYPES = new Set<Notification["type"]>([
+  "online_order",
+  "cancellation_request",
+  "refund_request",
+  "refund_payment",
+  "low_stock",
+  "out_of_stock",
+]);
+
+function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps) {
+  const router = useRouter();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [position, setPosition] = useState({ top: 0, right: 0 });
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Get default link based on notification type
+  const getDefaultLink = (type: Notification["type"]) => {
+    switch (type) {
+      case "online_order":
+        return "/owner/sales/online-orders";
+      case "cancellation_request":
+        return "/owner/requests/cancellations";
+      case "refund_request":
+        return "/owner/requests/refunds";
+      case "refund_payment":
+        return "/owner/requests/pending-refunds";
+      case "low_stock":
+      case "out_of_stock":
+        return "/owner/inventory/stocks";
+      default:
+        return "/owner/notifications";
+    }
+  };
+
+  // Calculate position based on trigger element
+  useEffect(() => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + 8, // 8px gap below the button
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [triggerRef]);
+
+  // Close on outside click / Escape. Handled here (not in TopNavBar) because
+  // this dropdown is rendered via a portal into document.body, so it is not
+  // a DOM descendant of the bell button's ref.
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      const clickedInsideDropdown = dropdownRef.current?.contains(target);
+      const clickedTrigger = triggerRef.current?.contains(target);
+      if (!clickedInsideDropdown && !clickedTrigger) {
+        onClose();
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose, triggerRef]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const { collection, query, orderBy, limit, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        
+        if (!db) return;
+        
+        const notificationsRef = collection(db, "notifications");
+        // Fetch extra and filter client-side since customer-facing
+        // notifications (with userId) live in the same collection.
+        const q = query(
+          notificationsRef,
+          orderBy("createdAt", "desc"),
+          limit(20)
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const notifs: Notification[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.userId || !OWNER_NOTIFICATION_TYPES.has(data.type)) return;
+            notifs.push({
+              id: doc.id,
+              type: data.type,
+              title: data.title,
+              message: data.message,
+              read: data.read || false,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              link: data.link,
+            });
+          });
+          setNotifications(notifs.slice(0, 5));
+          setLoading(false);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        setLoading(false);
+      }
+    };
+    
+    fetchNotifications();
+  }, []);
+
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const { db } = await import("@/lib/firebase");
+      
+      if (!db) return;
+      
+      const notifRef = doc(db as any, "notifications", notificationId);
+      await updateDoc(notifRef, { read: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
+  const getNotificationIcon = (type: Notification["type"]) => {
+    switch (type) {
+      case "online_order":
+        return <ShoppingCart className="w-4 h-4 text-blue-600" />;
+      case "cancellation_request":
+        return <XCircle className="w-4 h-4 text-orange-600" />;
+      case "refund_request":
+        return <RotateCcw className="w-4 h-4 text-purple-600" />;
+      case "refund_payment":
+        return <DollarSign className="w-4 h-4 text-green-600" />;
+      case "low_stock":
+        return <AlertCircle className="w-4 h-4 text-yellow-600" />;
+      case "out_of_stock":
+        return <Package className="w-4 h-4 text-red-600" />;
+      default:
+        return <Bell className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getTimeAgo = (date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const dropdownContent = (
+    <div 
+      ref={dropdownRef}
+      className="fixed w-96 bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden"
+      style={{ 
+        top: `${position.top}px`, 
+        right: `${position.right}px`,
+        zIndex: 999999
+      }}
+    >
+      {/* Header */}
+      <div className="bg-gradient-to-r from-rose-500 to-pink-500 px-4 py-3 flex items-center justify-between">
+        <h3 className="text-white font-semibold text-lg">Notifications</h3>
+        <button
+          onClick={() => {
+            onClose();
+            window.location.href = "/owner/notifications";
+          }}
+          className="text-white text-sm hover:underline cursor-pointer bg-transparent border-none"
+        >
+          View All
+        </button>
+      </div>
+
+      {/* Notifications List */}
+      <div className="max-h-[400px] overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="py-8 text-center">
+            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No notifications yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {notifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+                  !notification.read ? "bg-blue-50" : ""
+                }`}
+                onClick={() => {
+                  if (!notification.read) {
+                    markAsRead(notification.id);
+                  }
+                  const link = notification.link || getDefaultLink(notification.type);
+                  onClose();
+                  window.location.href = link;
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${!notification.read ? "bg-white" : "bg-gray-100"}`}>
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-0.5">
+                          {notification.title}
+                        </h4>
+                        <p className="text-xs text-gray-600 line-clamp-2">
+                          {notification.message}
+                        </p>
+                      </div>
+                      {!notification.read && (
+                        <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500">
+                        {getTimeAgo(notification.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      {notifications.length > 0 && (
+        <div className="border-t border-gray-200 px-4 py-2 bg-gray-50">
+          <button
+            onClick={() => {
+              onClose();
+              window.location.href = "/owner/notifications";
+            }}
+            className="text-sm text-pink-600 hover:text-pink-700 font-medium block text-center w-full cursor-pointer bg-transparent border-none"
+          >
+            See all notifications →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render dropdown using portal to escape z-index stacking context
+  return typeof window !== 'undefined' ? createPortal(dropdownContent, document.body) : null;
 }

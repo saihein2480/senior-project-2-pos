@@ -748,11 +748,11 @@ export function PaymentClearanceModal({
   // Show receipt modal if receipt data is available
   if (showReceipt && receiptData) {
     return (
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6">
-        <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6">
+        <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col border-2 border-pink-200">
           {/* Receipt Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-gray-200 flex-shrink-0">
-            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">
               Payment Complete
             </h2>
             <button
@@ -763,16 +763,16 @@ export function PaymentClearanceModal({
                 setReceiptData(null);
                 setIsProcessing(false);
               }}
-              className="text-gray-600 hover:text-gray-800 transition-colors p-1 rounded-full hover:bg-gray-200"
+              className="text-white hover:bg-white/20 transition-colors p-2 rounded-full"
             >
               <X className="h-6 w-6" />
             </button>
           </div>
 
           {/* Receipt Preview */}
-          <div className="p-3 sm:p-4 lg:p-6 flex-1 flex flex-col overflow-hidden">
+          <div className="p-3 sm:p-4 lg:p-6 flex-1 flex flex-col overflow-hidden bg-white/50">
             {/* Thermal Receipt Preview */}
-            <div className="bg-gray-100 border-2 border-gray-300 rounded-lg shadow-sm flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
+            <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl shadow-md flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
               <div
                 className={`mx-auto bg-white ${getReceiptWidth(receiptSize)} p-3 sm:p-4 lg:p-5 xl:p-6 text-black`}
                 style={{
@@ -958,7 +958,7 @@ export function PaymentClearanceModal({
               <button
                 onClick={handlePrintReceipt}
                 disabled={isProcessing}
-                className="flex-1 bg-blue-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-blue-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
+                className="flex-1 bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:from-rose-600 hover:to-pink-600 transition-all text-sm lg:text-base font-bold shadow-md hover:shadow-lg"
               >
                 <span className="text-white">Print Receipt</span>
               </button>
@@ -968,9 +968,9 @@ export function PaymentClearanceModal({
                   router.push("/owner/home");
                 }}
                 disabled={isProcessing}
-                className="flex-1 bg-gray-600 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-lg hover:bg-gray-700 transition-colors text-sm lg:text-base font-medium shadow-sm"
+                className="flex-1 bg-white text-gray-700 border-2 border-pink-300 px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-pink-50 transition-all text-sm lg:text-base font-bold shadow-sm hover:shadow-md"
               >
-                <span className="text-white">Skip Print</span>
+                <span>Skip Print</span>
               </button>
             </div>
           </div>
@@ -980,19 +980,19 @@ export function PaymentClearanceModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border border-white/20">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 md:p-4">
+      <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border-2 border-pink-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 md:p-4 border-b-2 border-gray-300/50 bg-white/50 backdrop-blur-sm flex-shrink-0">
+        <div className="flex items-center justify-between p-3 md:p-4 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center space-x-2 md:space-x-3">
-            <h2 className="text-lg md:text-xl font-bold text-gray-900">
+            <h2 className="text-lg md:text-xl font-bold text-white">
               Payment Clearance
             </h2>
             {selectedCurrency !== defaultCurrency && (
               <button
                 title="View detailed currency information"
                 onClick={() => setShowDetailModal(true)}
-                className="text-cyan-600 hover:text-blue-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-cyan-100 touch-manipulation"
+                className="text-white hover:bg-white/20 transition-colors p-1.5 md:p-2 rounded-full touch-manipulation"
               >
                 <Eye className="h-4 w-4 md:h-5 md:w-5" />
               </button>
@@ -1001,7 +1001,7 @@ export function PaymentClearanceModal({
           <button
             title="Close"
             onClick={onClose}
-            className="text-gray-600 hover:text-gray-800 transition-colors p-1.5 md:p-2 rounded-full hover:bg-gray-200 touch-manipulation"
+            className="text-white hover:bg-white/20 transition-colors p-1.5 md:p-2 rounded-full touch-manipulation"
           >
             <X className="h-5 w-5 md:h-6 md:w-6" />
           </button>
@@ -1009,10 +1009,10 @@ export function PaymentClearanceModal({
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           {/* Left Side - Customer Info & Payment Summary */}
-          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r border-gray-200 overflow-y-auto">
+          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 overflow-y-auto bg-white/50">
             {/* Customer Information */}
-            <div className="flex items-center space-x-2 md:space-x-3 mb-3">
-              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-cyan-500 flex items-center justify-center">
+            <div className="flex items-center space-x-2 md:space-x-3 mb-3 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
+              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
                 {customer?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1041,8 +1041,9 @@ export function PaymentClearanceModal({
             </div>
 
             {/* Items Summary */}
-            <div className="mb-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">
+            <div className="mb-4 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-rose-600" />
                 Items ({items.length})
               </h3>
               <div className="max-h-32 overflow-y-auto space-y-1">
@@ -1075,10 +1076,129 @@ export function PaymentClearanceModal({
             </div>
 
             {/* Payment Summary */}
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-sm font-medium text-gray-700">Total</span>
-                <span className="text-lg font-bold text-gray-900">
+            <div className="space-y-2 mb-4 bg-gradient-to-br from-rose-50 to-pink-100 rounded-xl p-3 border-2 border-pink-300 shadow-md">
+              {/* Subtotal */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-700 font-medium">Subtotal</span>
+                <span className="text-gray-900 font-semibold">
+                  {formatPrice(subtotal)}
+                </span>
+              </div>
+
+              {/* Discount Breakdown */}
+              {discountBreakdown && (
+                <>
+                  {/* Wholesale Savings */}
+                  {discountBreakdown.wholesaleSavings > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-amber-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-amber-100 rounded text-[10px] font-bold">WHOLESALE</span>
+                        Savings
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.wholesaleSavings)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Group Percent Discount */}
+                  {discountBreakdown.groupPercentSavings > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-rose-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">GROUP %</span>
+                        Discount
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.groupPercentSavings)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Group Fixed Discount */}
+                  {discountBreakdown.groupFixedTotal > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-rose-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">GROUP</span>
+                        Fixed
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.groupFixedTotal)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Variant Percent Discount */}
+                  {discountBreakdown.variantPercentSavings > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-purple-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">VARIANT %</span>
+                        Discount
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.variantPercentSavings)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Variant Fixed Discount */}
+                  {discountBreakdown.variantFixedTotal > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-purple-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">VARIANT</span>
+                        Fixed
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.variantFixedTotal)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Cart Discount */}
+                  {discountBreakdown.cartDiscount > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-green-700 flex items-center gap-1">
+                        <span className="px-1.5 py-0.5 bg-green-100 rounded text-[10px] font-bold">
+                          CART {discountBreakdown.cartDiscountPercent > 0 ? `${discountBreakdown.cartDiscountPercent}%` : ''}
+                        </span>
+                        Discount
+                      </span>
+                      <span className="text-red-600 font-semibold">
+                        -{formatPrice(discountBreakdown.cartDiscount)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Coupon Discount */}
+              {couponDiscount && couponDiscount > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-purple-700 flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">
+                      {couponCode || 'COUPON'}
+                    </span>
+                    Loyalty
+                  </span>
+                  <span className="text-red-600 font-semibold">
+                    -{formatPrice(couponDiscount)}
+                  </span>
+                </div>
+              )}
+
+              {/* Tax */}
+              {tax > 0 && (
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-pink-300">
+                  <span className="text-gray-700 font-medium">Tax</span>
+                  <span className="text-gray-900 font-semibold">
+                    +{formatPrice(tax)}
+                  </span>
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="flex justify-between items-center py-2 border-t-2 border-pink-300">
+                <span className="text-sm font-bold text-gray-900">Total</span>
+                <span className="text-lg font-black text-rose-600">
                   {formatPrice(total)}
                 </span>
               </div>
@@ -1108,57 +1228,45 @@ export function PaymentClearanceModal({
 
             {/* Payment Methods */}
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">
+              <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-rose-600" />
                 Payment Method
               </h3>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {/* Cash Payment */}
                 <button
                   onClick={() => setSelectedPaymentMethod("cash")}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
+                  className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center space-y-1 shadow-sm hover:shadow-md ${
                     selectedPaymentMethod === "cash"
-                      ? "border-pink-500 bg-pink-50 text-pink-700"
-                      : "border-gray-200 hover:border-gray-300 text-gray-700"
+                      ? "border-rose-500 bg-gradient-to-br from-rose-50 to-pink-100 text-rose-700"
+                      : "border-pink-200 hover:border-pink-300 text-gray-700 bg-white"
                   }`}
                 >
                   <CreditCard className="h-5 w-5" />
-                  <span className="text-xs font-medium">Cash</span>
-                </button>
-
-                {/* Scan Payment */}
-                <button
-                  onClick={() => setSelectedPaymentMethod("scan")}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
-                    selectedPaymentMethod === "scan"
-                      ? "border-pink-500 bg-pink-50 text-pink-700"
-                      : "border-gray-200 hover:border-gray-300 text-gray-700"
-                  }`}
-                >
-                  <QrCode className="h-5 w-5" />
-                  <span className="text-xs font-medium">Scan</span>
+                  <span className="text-xs font-bold">Cash</span>
                 </button>
 
                 {/* COD (Cash On Delivery) */}
                 <button
                   onClick={() => setSelectedPaymentMethod("cod")}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors flex flex-col items-center space-y-1 ${
+                  className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center space-y-1 shadow-sm hover:shadow-md ${
                     selectedPaymentMethod === "cod"
-                      ? "border-pink-500 bg-pink-50 text-pink-700"
-                      : "border-gray-200 hover:border-gray-300 text-gray-700"
+                      ? "border-rose-500 bg-gradient-to-br from-rose-50 to-pink-100 text-rose-700"
+                      : "border-pink-200 hover:border-pink-300 text-gray-700 bg-white"
                   }`}
                 >
                   <Truck className="h-5 w-5" />
-                  <span className="text-xs font-medium">COD</span>
+                  <span className="text-xs font-bold">COD</span>
                 </button>
               </div>
             </div>
           </div>
 
           {/* Right Side - Calculator */}
-          <div className="w-2/5 p-3 overflow-y-auto">
+          <div className="w-2/5 p-3 overflow-y-auto bg-white/50">
             {/* Amount Display */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+            <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl p-3 mb-3 shadow-sm">
               <input
                 type="number"
                 value={calculatorDisplay === "0" ? "" : calculatorDisplay}
@@ -1260,12 +1368,12 @@ export function PaymentClearanceModal({
                 (selectedPaymentMethod === "cash" &&
                   amountPaid < totalInSellingCurrency)
               }
-              className={`w-full p-2 rounded font-medium text-white transition-colors ${
+              className={`w-full p-3 rounded-xl font-black text-white transition-all shadow-md hover:shadow-lg ${
                 isProcessing ||
                 (selectedPaymentMethod === "cash" &&
                   amountPaid < totalInSellingCurrency)
                   ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
+                  : "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600"
               }`}
             >
               {isProcessing ? "Processing..." : "Pay Now"}

@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
       secondaryPhone: body.secondaryPhone?.trim() || undefined,
       township: body.township.trim(),
       city: body.city.trim(),
+      openingHours: body.openingHours?.trim() || undefined,
       status: body.status || "active",
     };
 

@@ -3,6 +3,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  limit,
   Unsubscribe,
   doc,
   DocumentSnapshot,
@@ -19,16 +20,25 @@ export class InventoryRealtimeService {
   /**
    * Subscribe to real-time updates for all stocks
    */
-  static subscribeToAllStocks(callback: InventoryUpdateCallback): Unsubscribe | null {
+  static subscribeToAllStocks(callback: InventoryUpdateCallback, limitCount?: number): Unsubscribe | null {
     if (!db || !isFirebaseConfigured) {
       console.warn('Firebase not configured, real-time updates disabled');
       return null;
     }
 
     try {
+      // Add limit to query if provided (default: no limit for backward compatibility)
+      const constraints: any[] = [
+        orderBy('createdAt', 'desc')
+      ];
+      
+      if (limitCount) {
+        constraints.push(limit(limitCount));
+      }
+
       const q = query(
         collection(db, 'stocks'),
-        orderBy('createdAt', 'desc')
+        ...constraints
       );
 
       const unsubscribe = onSnapshot(

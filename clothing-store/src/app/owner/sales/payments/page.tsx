@@ -156,10 +156,10 @@ function PaymentsPageContent() {
   }, []);
 
   useEffect(() => {
-    if (businessSettings?.currentBranch && filterBranch === "") {
+    if (businessSettings?.currentBranch) {
       setFilterBranch(businessSettings.currentBranch);
     }
-  }, [businessSettings, filterBranch]);
+  }, [businessSettings?.currentBranch]);
 
   // Initialize date filters
   useEffect(() => {
@@ -1218,7 +1218,7 @@ function PaymentsPageContent() {
 
 export default function PaymentsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={["owner", "manager", "staff"]}>
       <PaymentsPageContent />
     </ProtectedRoute>
   );

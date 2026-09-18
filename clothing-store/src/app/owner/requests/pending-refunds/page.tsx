@@ -365,10 +365,10 @@ export default function PendingRefundsPage() {
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-gray-900">
-                    Pending Refund Payments
+                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                    Refund Payment
                   </h1>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-sm text-gray-600 mt-1">
                     Confirm refund payments for cash and scan orders
                   </p>
                 </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +22,14 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function CancellationRequestsPage() {
+  return (
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
+      <CancellationRequestsContent />
+    </ProtectedRoute>
+  );
+}
+
+function CancellationRequestsContent() {
   const { user } = useAuth();
   const { formatPrice } = useCurrency();
   const [requests, setRequests] = useState<Transaction[]>([]);
@@ -210,10 +219,10 @@ export default function CancellationRequestsPage() {
                     <XCircle className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                      Cancellation Requests
+                    <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                      Order Cancellation Requests
                     </h1>
-                    <p className="text-sm text-gray-500 mt-0.5">
+                    <p className="text-sm text-gray-600 mt-1">
                       Review and process customer cancellations
                     </p>
                   </div>

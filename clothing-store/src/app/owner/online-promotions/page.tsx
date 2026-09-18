@@ -183,10 +183,10 @@ function OnlinePromotionsContent() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-screen-2xl mx-auto space-y-6">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                 Online Promotions
               </h1>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="text-sm text-gray-600 mt-1">
                 Create targeted discounts for product groups or variants.
               </p>
             </div>
@@ -320,7 +320,7 @@ function OnlinePromotionsContent() {
                   type="button"
                   onClick={createPromotion}
                   disabled={saving}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="rounded-md bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Create Promotion"}
                 </button>

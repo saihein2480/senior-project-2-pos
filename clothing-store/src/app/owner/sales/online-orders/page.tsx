@@ -1666,10 +1666,10 @@ function OnlineOrdersContent() {
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-screen-2xl mx-auto">
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
               Online Orders
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="text-sm text-gray-600 mt-1">
               Orders created by frontstore checkout and MyanMyanPay payment
               flow.
             </p>

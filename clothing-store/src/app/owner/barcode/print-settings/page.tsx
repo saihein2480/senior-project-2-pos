@@ -189,10 +189,10 @@ function PrintSettingsContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                   Barcode Label Settings
                 </h1>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-600 mt-1">
                   Configure barcode label dimensions and content
                 </p>
               </div>

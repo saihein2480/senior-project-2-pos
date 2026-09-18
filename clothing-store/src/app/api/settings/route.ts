@@ -39,12 +39,85 @@ import {
   SettingsService,
   BusinessSettings,
   CouponPackage,
+  StoreInfoSettings,
 } from "@/services/settingsService";
 
 interface SettingsResponse {
   success: boolean;
   data?: BusinessSettings;
   error?: string;
+}
+
+/**
+ * Validate the customer-facing store facts. Blank strings are dropped entirely
+ * so the storefront chatbot can tell the difference between "not configured"
+ * and "configured as empty", and answer honestly either way.
+ */
+function sanitizeStoreInfo(input: unknown): StoreInfoSettings {
+  if (!input || typeof input !== "object") return {};
+
+  const raw = input as Record<string, unknown>;
+  const result: StoreInfoSettings = {};
+
+  const text = (value: unknown): string | undefined => {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+
+  const assign = <K extends keyof StoreInfoSettings>(
+    key: K,
+    value: StoreInfoSettings[K] | undefined,
+  ) => {
+    if (value !== undefined) result[key] = value;
+  };
+
+  assign("address", text(raw.address));
+  assign("phone", text(raw.phone));
+  assign("email", text(raw.email));
+  assign("openingHours", text(raw.openingHours));
+  assign("deliveryAreas", text(raw.deliveryAreas));
+  assign("deliveryFee", text(raw.deliveryFee));
+  assign("deliveryTime", text(raw.deliveryTime));
+  assign("returnPolicy", text(raw.returnPolicy));
+  assign("exchangePolicy", text(raw.exchangePolicy));
+  assign("cancellationPolicy", text(raw.cancellationPolicy));
+
+  if (typeof raw.deliveryAvailable === "boolean") {
+    result.deliveryAvailable = raw.deliveryAvailable;
+  }
+  if (typeof raw.codAvailable === "boolean") {
+    result.codAvailable = raw.codAvailable;
+  }
+
+  const codMax = Number(raw.codMaxAmount);
+  if (Number.isFinite(codMax) && codMax > 0) {
+    result.codMaxAmount = codMax;
+  }
+
+  if (Array.isArray(raw.paymentMethods)) {
+    const methods = raw.paymentMethods
+      .map((method) => text(method))
+      .filter((method): method is string => !!method);
+    if (methods.length > 0) result.paymentMethods = methods;
+  }
+
+  if (Array.isArray(raw.branches)) {
+    const branches = (raw.branches as Array<Record<string, unknown>>)
+      .filter((branch) => branch && typeof branch === "object")
+      .map((branch) => ({
+        name: text(branch.name) || "Branch",
+        address: text(branch.address),
+        phone: text(branch.phone),
+        hours: text(branch.hours),
+      }))
+      // A branch with no contact detail tells the customer nothing.
+      .filter((branch) => branch.address || branch.phone || branch.hours);
+
+    if (branches.length > 0) result.branches = branches;
+  }
+
+  return result;
 }
 
 /**
@@ -185,6 +258,7 @@ export async function POST(request: NextRequest) {
       currencyRate:
         typeof body.currencyRate === "number" ? body.currencyRate : 0,
       currentBranch: body.currentBranch || "Main Branch",
+      storeInfo: sanitizeStoreInfo(body.storeInfo),
       loyaltySettings: body.loyaltySettings ? {
         enabled: typeof body.loyaltySettings.enabled === "boolean" ? body.loyaltySettings.enabled : false,
         minimumSpendAmount: typeof body.loyaltySettings.minimumSpendAmount === "number" ? body.loyaltySettings.minimumSpendAmount : 500,

@@ -236,10 +236,10 @@ function ReportsPageContent() {
   }, []);
 
   useEffect(() => {
-    if (businessSettings?.currentBranch && filterBranch === "") {
+    if (businessSettings?.currentBranch) {
       setFilterBranch(businessSettings.currentBranch);
     }
-  }, [businessSettings, filterBranch]);
+  }, [businessSettings?.currentBranch]);
 
   // Initialize date filters
   useEffect(() => {
@@ -2867,7 +2867,7 @@ function ReportsPageContent() {
 
 export default function ReportsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <ReportsPageContent />
     </ProtectedRoute>
   );

@@ -7,6 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
 import { Sidebar } from "@/components/ui/Sidebar";
@@ -35,7 +37,16 @@ import {
 import { detectColorName } from "@/lib/colorUtils";
 
 export default function TransactionsPage() {
+  return (
+    <ProtectedRoute requiredRole={["owner", "manager", "staff"]}>
+      <TransactionsPageContent />
+    </ProtectedRoute>
+  );
+}
+
+function TransactionsPageContent() {
   const { user } = useAuth();
+  const permissions = usePermissions();
   const isOwner = user?.role === "owner";
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
@@ -129,14 +140,14 @@ export default function TransactionsPage() {
       }
     };
     fetchShops();
-  }, []);
+  }, [businessSettings?.currentBranch]); // Reload when branch changes
 
   // Set initial branch filter from settings
   useEffect(() => {
-    if (businessSettings?.currentBranch && filterBranch === "") {
+    if (businessSettings?.currentBranch) {
       setFilterBranch(businessSettings.currentBranch);
     }
-  }, [businessSettings, filterBranch]);
+  }, [businessSettings?.currentBranch]);
 
   // Initialize date filters
   useEffect(() => {

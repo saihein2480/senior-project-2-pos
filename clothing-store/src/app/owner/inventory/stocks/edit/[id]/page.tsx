@@ -634,7 +634,7 @@ function EditStockContent() {
             <div class="flex gap-2 mt-4">
               <button id="cancel-scan" class="flex-1 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">Cancel</button>
               <input id="manual-barcode" type="text" placeholder="Or enter manually" class="flex-1 px-3 py-2 border rounded">
-              <button id="manual-submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">OK</button>
+              <button id="manual-submit" class="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded">OK</button>
             </div>
           </div>
         `;
@@ -944,7 +944,7 @@ function EditStockContent() {
               <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                 <div className="px-6 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
+                    <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
                     <h2 className="text-sm font-bold text-gray-900">
                       Group Image
                     </h2>
@@ -965,7 +965,7 @@ function EditStockContent() {
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="px-6 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
+                    <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
                     <h2 className="text-sm font-bold text-gray-900">
                       Product Information
                     </h2>
@@ -1006,7 +1006,7 @@ function EditStockContent() {
                       <button
                         type="button"
                         onClick={() => setShowCategoryModal(true)}
-                        className="px-4 py-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 font-medium transition-colors whitespace-nowrap"
+                        className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-xl focus:ring-2 focus:ring-rose-500 font-medium transition-colors whitespace-nowrap"
                       >
                         + Add
                       </button>
@@ -1116,14 +1116,14 @@ function EditStockContent() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+                  <div className="w-1 h-6 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
                   <h2 className="text-lg font-semibold text-gray-900">
                     Wholesale Pricing Tiers
                   </h2>
                 </div>
                 <Button
                   onClick={addWholesaleTier}
-                  className="flex items-center bg-green-50 text-green-600 hover:bg-green-100"
+                  className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Tier
@@ -1284,16 +1284,14 @@ function EditStockContent() {
                                 <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                   Variant Image
                                 </label>
-                                <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-50 border-2 border-dashed border-gray-200 hover:border-pink-300 transition-colors group">
-                                  <ImageUpload
-                                    value={variant.image || ""}
-                                    onChange={(url) =>
-                                      handleImageUpload(variant.id, url)
-                                    }
-                                    folder="pos-clothing-store/variants"
-                                    placeholder="Upload"
-                                  />
-                                </div>
+                                <ImageUpload
+                                  value={variant.image || ""}
+                                  onChange={(url) =>
+                                    handleImageUpload(variant.id, url)
+                                  }
+                                  folder="pos-clothing-store/variants"
+                                  placeholder="Upload"
+                                />
                               </div>
 
                               {/* Color & Barcode - 4 columns */}
@@ -1546,7 +1544,7 @@ function EditStockContent() {
                 <Button
                   onClick={handleUpdateStock}
                   disabled={isLoading}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                  className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                 >
                   {isLoading ? (
                     <>
@@ -1678,7 +1676,7 @@ function EditStockContent() {
                     }
                   }
                 }}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white rounded-lg font-medium disabled:opacity-50 transition-colors shadow-md border-0"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors shadow-md border-0"
                 disabled={
                   !newCategoryName.trim() ||
                   categories.includes(newCategoryName.trim())

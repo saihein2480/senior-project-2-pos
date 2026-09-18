@@ -7,6 +7,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
+import { useSettings } from "@/contexts/SettingsContext";
 import Image from "next/image";
 import {
   Search,
@@ -35,6 +36,7 @@ import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
 
 function InventoryStocksContent() {
   const router = useRouter();
+  const { businessSettings } = useSettings();
   const [activeItem, setActiveItem] = useState("stocks");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -189,6 +191,65 @@ function InventoryStocksContent() {
 
     fetchStocks();
   }, []);
+
+  // Set shop filter to current branch from settings
+  useEffect(() => {
+    if (businessSettings?.currentBranch && shops.length > 0) {
+      // Find the shop that matches the current branch name
+      const currentShop = shops.find((s) => s.name === businessSettings.currentBranch);
+      if (currentShop) {
+        setSelectedShop(currentShop.id);
+      } else if (businessSettings.currentBranch !== "No Branch") {
+        // If branch name doesn't match a shop ID, try setting it directly (might be the shop ID)
+        setSelectedShop(businessSettings.currentBranch);
+      }
+    }
+  }, [businessSettings?.currentBranch, shops]);
+
+  // Reload stocks when branch changes
+  useEffect(() => {
+    if (businessSettings?.currentBranch) {
+      const fetchStocks = async () => {
+        try {
+          setIsLoading(true);
+          setError(null);
+
+          const [stocksResponse, settings] = await Promise.all([
+            fetch("/api/stocks"),
+            SettingsService.getBusinessSettings(),
+          ]);
+
+          if (!stocksResponse.ok) {
+            throw new Error("Failed to fetch stocks");
+          }
+
+          const stocksData = await stocksResponse.json();
+
+          if (!stocksData.success || !stocksData.data) {
+            throw new Error(stocksData.error || "Invalid response format");
+          }
+
+          // Set currency from settings
+          const currency = (settings?.defaultCurrency as "THB" | "MMK") || "THB";
+          setDefaultCurrency(currency);
+
+          // Transform API data using the display service with currency
+          const transformedGroups = StockDisplayService.transformStocksForDisplay(
+            stocksData.data,
+            currency,
+          );
+          setStockGroups(transformedGroups);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to fetch stocks");
+          console.error("Error fetching stocks:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchStocks();
+    }
+  }, [businessSettings?.currentBranch]);
 
   // Filter groups based on search term and filters
   const filteredGroups = stockGroups.filter((group) => {
@@ -521,23 +582,18 @@ function InventoryStocksContent() {
           onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
         />
 
-        {/* Page Title */}
-        <div className="bg-wite border-b border-gray-200 px-4 md:px-8 lg:px-12 py-6">
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-screen-2xl mx-auto">
+            {/* Page Title */}
+            <div className="mb-8">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                 Inventory Stocks
               </h1>
               <p className="text-sm text-gray-600 mt-1">
                 Manage and track all your product inventory
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="max-w-screen-2xl mx-auto">
             {/* Category Tabs */}
             <div className="mb-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 overflow-x-auto pb-2">
@@ -549,7 +605,7 @@ function InventoryStocksContent() {
                   }}
                   className={`px-4 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap transition-all border-0 ${
                     selectedCategory === "all"
-                      ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md hover:from-rose-600 hover:to-pink-600"
                       : "bg-gray-100 text-gray-700 hover:bg-pink-50"
                   }`}
                 >
@@ -566,7 +622,7 @@ function InventoryStocksContent() {
                     }}
                     className={`px-4 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap transition-all border-0 ${
                       selectedCategory === category
-                        ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
+                        ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md hover:from-rose-600 hover:to-pink-600"
                         : "bg-gray-100 text-gray-700 hover:bg-pink-50"
                     }`}
                   >
@@ -747,7 +803,7 @@ function InventoryStocksContent() {
                     Export
                   </Button>
                   <Button
-                    className="flex items-center gap-2 whitespace-nowrap bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white shadow-md border-0"
+                    className="flex items-center gap-2 whitespace-nowrap bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md border-0"
                     onClick={() =>
                       router.push("/owner/inventory/stocks/new-stock")
                     }
@@ -1324,7 +1380,7 @@ function InventoryStocksContent() {
 
 export default function InventoryStocksPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <InventoryStocksContent />
     </ProtectedRoute>
   );

@@ -6,7 +6,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { SettingsService } from "@/services/settingsService";
 import { useSettings } from "@/contexts/SettingsContext";
-import { X, Minus, Plus, ShoppingCart, Eye, User, Users } from "lucide-react";
+import { X, Minus, Plus, ShoppingCart, Eye, User, Users, Gift } from "lucide-react";
 import Image from "next/image";
 import { detectColorName } from "@/lib/colorUtils";
 import { CustomerSelectionModal } from "@/components/cart/CustomerSelectionModal";
@@ -854,24 +854,32 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       />
 
       {/* Full Screen Cart - Combined View */}
-      <div className="absolute inset-0 bg-white shadow-xl flex flex-col md:flex-row">
-        {/* Left Side - Cart Big View */}
-        <div className="flex-1 flex flex-col md:border-r border-gray-200">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 bg-gradient-to-r from-rose-50 to-pink-100">
-            <div className="flex items-center space-x-2 md:space-x-3">
-              <Eye className="h-5 w-5 md:h-6 md:w-6 text-rose-600" />
-              <h2 className="text-lg md:text-xl font-bold text-gray-900">
-                Cart Items
-              </h2>
-              <span className="bg-pink-100 text-pink-800 text-xs md:text-sm font-medium px-2 md:px-2.5 py-0.5 rounded-full">
-                {cart.totalItems} items
-              </span>
-            </div>
+      <div className="absolute inset-0 bg-white shadow-xl flex flex-col">
+        {/* Single Top Header spanning full width */}
+        <div className="flex items-center justify-between border-b border-pink-200 px-3 md:px-6 py-4 bg-gradient-to-r from-rose-500 to-pink-500 shadow-md">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <ShoppingCart className="h-6 w-6 text-white" />
+            <h2 className="text-lg md:text-xl font-bold text-white">
+              Shopping Cart
+            </h2>
+            <span className="bg-white text-rose-600 text-xs md:text-sm font-bold px-2 md:px-2.5 py-0.5 rounded-full shadow-sm">
+              {cart.totalItems} items
+            </span>
           </div>
+          <button
+            title="Close cart"
+            onClick={onClose}
+            className="rounded-full p-2 text-white hover:bg-white/20 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
 
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+          {/* Left Side - Cart Items */}
+          <div className="flex-1 flex flex-col md:border-r border-pink-200">
+            {/* Cart Items */}
+            <div className="flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6">
             {cart.items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <ShoppingCart className="h-16 w-16 mb-6 text-gray-300" />
@@ -887,12 +895,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   return sortedItems.map((item, index) => (
                     <div
                       key={item.id}
-                      className="bg-white border border-gray-200 rounded-lg p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow"
+                      className="bg-gradient-to-br from-white to-pink-50 border-2 border-pink-200 rounded-xl p-3 md:p-4 shadow-md hover:shadow-lg hover:border-rose-300 transition-all duration-200"
                     >
                       <div className="flex items-center gap-4">
                         {/* Product Image */}
                         <div className="flex-shrink-0">
-                          <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
+                          <div className="w-25 h-30 bg-gradient-to-br from-pink-100 to-rose-100 rounded-xl overflow-hidden shadow-sm border-2 border-pink-200">
                             {item.image ? (
                               <Image
                                 src={item.image}
@@ -902,7 +910,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                              <div className="w-full h-full bg-gradient-to-br from-gray-100 to-pink-100 flex items-center justify-center">
                                 <span className="text-gray-400 text-xs">
                                   No Image
                                 </span>
@@ -925,7 +933,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             <button
                               title="Remove item from cart"
                               onClick={() => removeFromCart(item.id)}
-                              className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-colors ml-2"
+                              className="text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 p-1.5 rounded-full transition-all ml-2 shadow-sm"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1048,7 +1056,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Group Discount Badge (percentage or fixed amount) */}
                               {item.groupDiscount && item.groupDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-pink-100 text-pink-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
                                     Group: {item.groupDiscount}% OFF
                                   </span>
                                   <button
@@ -1062,7 +1070,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                               ) : groupFixedDiscounts[item.groupName] ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-pink-100 text-pink-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
                                     Group:{" "}
                                     {SettingsService.formatPrice(
                                       groupFixedDiscounts[item.groupName],
@@ -1087,7 +1095,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {item.variantDiscount &&
                               item.variantDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
                                     Variant: {item.variantDiscount}% OFF
                                   </span>
                                   <button
@@ -1101,7 +1109,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                               ) : variantFixedDiscounts[item.id] ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
                                     Variant:{" "}
                                     {SettingsService.formatPrice(
                                       variantFixedDiscounts[item.id],
@@ -1123,7 +1131,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Wholesale Pricing Badge */}
                               {item.isWholesalePricing && (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
+                                  <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200 shadow-sm">
                                     WHOLESALE PRICING
                                   </span>
                                   <button
@@ -1322,7 +1330,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 <span className="text-xs font-medium text-gray-700">
                                   Quantity:
                                 </span>
-                                <div className="flex items-center space-x-2 bg-gray-100 rounded-sm p-1">
+                                <div className="flex items-center space-x-2 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg p-1.5 border border-pink-200 shadow-sm">
                                   <button
                                     onClick={() =>
                                       updateQuantity(
@@ -1330,10 +1338,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                         Math.max(1, item.quantity - 1),
                                       )
                                     }
-                                    className="p-1 hover:bg-white rounded transition-colors"
+                                    className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
                                     title="Decrease quantity"
                                   >
-                                    <Minus className="h-3 w-3 text-gray-600" />
+                                    <Minus className="h-3 w-3" />
                                   </button>
                                   <span className="text-sm font-bold text-gray-900 min-w-[30px] text-center">
                                     {item.quantity}
@@ -1342,16 +1350,16 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     onClick={() =>
                                       updateQuantity(item.id, item.quantity + 1)
                                     }
-                                    className="p-1 hover:bg-white rounded transition-colors"
+                                    className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
                                     title="Increase quantity"
                                   >
-                                    <Plus className="h-3 w-3 text-gray-600" />
+                                    <Plus className="h-3 w-3" />
                                   </button>
                                 </div>
                               </div>
 
                               {/* Item Subtotal */}
-                              <div className="mt-2  p-2 bg-pink-50 rounded-lg">
+                              <div className="mt-2 p-2 bg-gradient-to-r from-rose-50 to-pink-100 rounded-lg border border-pink-200 shadow-sm">
                                 <div className="text-xs font-medium  text-gray-700 mb-1">
                                   Item Total:
                                 </div>
@@ -1421,27 +1429,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         </div>
 
         {/* Right Side - Shopping Cart Summary */}
-        <div className="w-full md:max-w-md lg:max-w-lg flex flex-col border-t md:border-t-0 md:border-l border-gray-200">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-gray-200 px-3 md:px-6 py-3 md:py-4">
-            <h2 className="text-base md:text-lg font-semibold text-gray-900">
-              Shopping Cart
-            </h2>
-            <div className="flex items-center space-x-2">
-              <button
-                title="Close cart"
-                onClick={onClose}
-                className="rounded-full p-2 md:p-2.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                <X className="h-5 w-5 md:h-6 md:w-6" />
-              </button>
-            </div>
-          </div>
+        <div className="w-full md:max-w-md lg:max-w-lg flex flex-col border-t md:border-t-0 md:border-l border-pink-200 bg-gradient-to-br from-white to-pink-50">
 
           {/* Customer Info */}
-          <div className="border-b border-gray-200 px-3 md:px-6 py-3 md:py-4">
+          <div className="border-b border-pink-200 px-3 md:px-6 py-3 md:py-4 bg-white/50">
             <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 rounded-full bg-cyan-500 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
                 {getSelectedCustomer()?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1469,7 +1462,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 <p className="text-sm font-medium text-gray-900">
                   {getSelectedCustomer()?.displayName || "Unknown Customer"}
                 </p>
-                <p className="text-xs text-cyan-600">
+                <p className="text-xs text-rose-600 font-medium">
                   {getSelectedCustomer()?.email || "Walk-in customer"}
                 </p>
                 {getSelectedCustomer()?.customerType && (
@@ -1480,7 +1473,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
               </div>
               <button
                 onClick={() => setIsCustomerModalOpen(true)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-full p-1.5 transition-all"
                 title="Select customer"
               >
                 <Users className="h-4 w-4" />
@@ -1489,19 +1482,19 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
             {/* Loyalty coupons for the selected customer */}
             {getSelectedCustomer() && (
-              <div className="mt-2 rounded-lg border border-purple-200 bg-purple-50 p-2">
+              <div className="mt-2 rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 p-3 shadow-sm">
                 {cart.appliedCoupon ? (
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-purple-900 truncate">
                         {cart.appliedCoupon.code}
-                        <span className="ml-1.5 font-medium text-purple-700">
+                        <span className="ml-1.5 font-semibold text-purple-700">
                           {cart.appliedCoupon.discountType === "percentage"
                             ? `${cart.appliedCoupon.discountValue}% off`
                             : `${cart.appliedCoupon.discountValue} off`}
                         </span>
                       </p>
-                      <p className="text-[11px] text-purple-700">
+                      <p className="text-[11px] text-purple-700 font-medium">
                         {typeof cart.appliedCoupon.pointsCost === "number"
                           ? `Uses ${cart.appliedCoupon.pointsCost} point${cart.appliedCoupon.pointsCost === 1 ? "" : "s"} on checkout`
                           : "Applied at checkout"}
@@ -1509,13 +1502,13 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     </div>
                     <button
                       onClick={removeCoupon}
-                      className="shrink-0 text-xs font-semibold text-purple-700 underline hover:text-purple-900"
+                      className="shrink-0 text-xs font-bold text-rose-600 underline hover:text-rose-800"
                     >
                       Remove
                     </button>
                   </div>
                 ) : isLoadingCoupons ? (
-                  <p className="text-xs text-purple-700">
+                  <p className="text-xs text-purple-700 font-medium">
                     Loading loyalty info...
                   </p>
                 ) : (
@@ -1523,11 +1516,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   // so the cart stays short at the till.
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 text-xs">
-                      <p className="font-semibold text-purple-900">
+                      <p className="font-bold text-purple-900 flex items-center gap-1">
+                        <Gift className="h-3.5 w-3.5" />
                         {redeemableRewardCount} reward
                         {redeemableRewardCount === 1 ? "" : "s"} available
                       </p>
-                      <p className="text-purple-700">
+                      <p className="text-purple-700 font-medium">
                         {availablePoints} pt
                         {availablePoints === 1 ? "" : "s"} to spend
                         {customerCoupons.length > 0 &&
@@ -1536,7 +1530,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     </div>
                     <button
                       onClick={() => setIsRewardModalOpen(true)}
-                      className="shrink-0 px-2.5 py-1.5 rounded bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700"
+                      className="shrink-0 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-bold hover:from-rose-600 hover:to-pink-600 shadow-sm"
                     >
                       View Rewards
                     </button>
@@ -1557,12 +1551,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             <div className="flex-1 border-t border-gray-200 overflow-y-auto">
               <div className="px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
                 {/* Discount section */}
-                <div className="p-3 bg-pink-50 rounded-lg border-2 border-pink-200">
-                  <div className="flex items-center space-x-2 text-pink-700 mb-3">
-                    <div className="w-7 h-7 bg-pink-200 rounded-full flex items-center justify-center border border-pink-300">
-                      <span className="text-sm font-bold text-pink-800">%</span>
+                <div className="p-3 bg-gradient-to-br from-rose-50 to-pink-100 rounded-xl border-2 border-pink-300 shadow-sm">
+                  <div className="flex items-center space-x-2 text-rose-700 mb-3">
+                    <div className="w-7 h-7 bg-gradient-to-r from-rose-500 to-pink-500 rounded-full flex items-center justify-center border border-rose-300 shadow-sm">
+                      <span className="text-sm font-bold text-white">%</span>
                     </div>
-                    <span className="text-sm font-bold text-pink-800">
+                    <span className="text-sm font-bold text-rose-800">
                       Discount Management
                     </span>
                   </div>
@@ -1614,7 +1608,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           }
                           value={discountAmount}
                           onChange={(e) => setDiscountAmount(e.target.value)}
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
                           min="0"
                           max={
                             discountType === "percentage" ? "100" : undefined
@@ -1625,8 +1619,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setDiscountType("percentage")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             discountType === "percentage"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           %
@@ -1635,8 +1629,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setDiscountType("amount")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             discountType === "amount"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           {getCurrencySymbol()}
@@ -1696,7 +1690,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setGroupDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
                           min="0"
                           max={
                             groupDiscountType === "percentage"
@@ -1709,8 +1703,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setGroupDiscountType("percentage")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             groupDiscountType === "percentage"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           %
@@ -1719,8 +1713,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setGroupDiscountType("amount")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             groupDiscountType === "amount"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           {getCurrencySymbol()}
@@ -1786,7 +1780,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setVariantDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
                           min="0"
                           max={
                             variantDiscountType === "percentage"
@@ -1799,8 +1793,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setVariantDiscountType("percentage")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             variantDiscountType === "percentage"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           %
@@ -1809,8 +1803,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={() => setVariantDiscountType("amount")}
                           className={`px-3 py-2 text-xs font-medium rounded ${
                             variantDiscountType === "amount"
-                              ? "bg-green-600 text-white"
-                              : "bg-white text-green-600 border border-green-300"
+                              ? "bg-rose-400 text-white"
+                              : "bg-white text-rose-600 border border-rose-300"
                           }`}
                         >
                           {getCurrencySymbol()}
@@ -1827,10 +1821,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 </div>
 
                 {/* Totals */}
-                <div className="border-t border-gray-300 pt-4 space-y-2 bg-gray-50 p-3 rounded-lg">
+                <div className="border-t-2 border-pink-200 pt-4 space-y-2 bg-gradient-to-br from-rose-50 to-pink-50 p-4 rounded-xl shadow-sm">
                   <div className="flex justify-between text-sm font-medium text-gray-800">
                     <span>Original Subtotal:</span>
-                    <span className="font-bold">
+                    <span className="font-bold text-gray-900">
                       {formatPrice(originalSubtotal)}
                     </span>
                   </div>
@@ -1840,7 +1834,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Wholesale Pricing:</span>
-                        <span className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
                           WHOLESALE
                         </span>
                       </span>
@@ -1858,7 +1852,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Group Discount:</span>
-                        <span className="text-xs bg-cyan-100 text-blue-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
                           GROUP
                         </span>
                       </span>
@@ -1876,7 +1870,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Group Fixed Discount:</span>
-                        <span className="text-xs bg-cyan-100 text-blue-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
                           GROUP
                         </span>
                       </span>
@@ -1894,7 +1888,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Variant Discount:</span>
-                        <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
                           VARIANT
                         </span>
                       </span>
@@ -1912,7 +1906,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>Variant Fixed Discount:</span>
-                        <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
                           VARIANT
                         </span>
                       </span>
@@ -1936,7 +1930,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             : ""}
                           :
                         </span>
-                        <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                        <span className="text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 px-2 py-0.5 rounded-full font-semibold border border-green-200">
                           CART
                         </span>
                       </span>
@@ -1987,16 +1981,16 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       )}
                     </span>
                   </div>
-                  <div className="border-t border-gray-300 pt-2">
-                    <div className="flex justify-between items-center bg-white p-2 rounded">
-                      <span className="font-bold text-lg text-gray-900">
+                  <div className="border-t-2 border-pink-300 pt-2 mt-2">
+                    <div className="flex justify-between items-center bg-gradient-to-r from-rose-500 to-pink-500 p-3 rounded-xl shadow-md">
+                      <span className="font-bold text-lg text-white">
                         Grand Total:
                       </span>
                       <div className="text-right">
-                        <div className="text-xs font-medium text-gray-700">
+                        <div className="text-xs font-medium text-white/90">
                           (Qty. {cart.totalItems})
                         </div>
-                        <div className="font-bold text-lg text-green-600">
+                        <div className="font-bold text-xl text-white">
                           {SettingsService.formatPrice(
                             grandTotalDisplay,
                             selectedCurrency as "THB" | "MMK",
@@ -2017,6 +2011,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 

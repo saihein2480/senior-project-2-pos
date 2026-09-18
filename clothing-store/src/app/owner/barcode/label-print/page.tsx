@@ -753,10 +753,10 @@ function LabelPrintContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div>
-                <h1 className="text-xl font-semibold text-gray-800">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                   Label Printing
                 </h1>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-600 mt-1">
                   Create barcode labels for your products
                 </p>
               </div>

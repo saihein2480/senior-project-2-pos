@@ -365,10 +365,10 @@ function ShopReportsContent() {
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-2">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
+                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                     Shop Reports
                   </h1>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-gray-600 mt-1">
                     Performance comparison across all branches
                   </p>
                 </div>

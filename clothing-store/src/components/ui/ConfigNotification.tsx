@@ -8,11 +8,9 @@ export default function ConfigNotification() {
   }
 
   return (
-    <div className="border border-gray-300 p-4 mb-6">
-      <p className="text-sm text-gray-700">
-        <strong>Firebase Configuration Required:</strong> To use authentication features, please set up your Firebase configuration. 
-        Check the <code className="bg-gray-100 px-1">SETUP.md</code> file for detailed instructions.
-      </p>
+    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
+      <strong>Setup needed:</strong> Firebase configuration is missing. 
+      Check <code className="bg-white px-2 py-1 rounded border border-yellow-200 font-mono text-xs">SETUP.md</code> for help.
     </div>
   );
 }

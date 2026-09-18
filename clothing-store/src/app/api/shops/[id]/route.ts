@@ -100,6 +100,9 @@ export async function PUT(
     }
     if (body.township !== undefined) updateData.township = body.township.trim();
     if (body.city !== undefined) updateData.city = body.city.trim();
+    if (body.openingHours !== undefined) {
+      updateData.openingHours = body.openingHours.trim() || undefined;
+    }
     if (body.status !== undefined) updateData.status = body.status;
 
     await ShopService.updateShop(id, updateData);

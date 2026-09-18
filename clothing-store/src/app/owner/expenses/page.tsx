@@ -4,6 +4,7 @@ import { toast } from "react-hot-toast";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Sidebar } from "@/components/ui/Sidebar";
@@ -13,6 +14,7 @@ import { ExpenseCategory, Expense } from "@/types/expense";
 import { Trash2 } from "lucide-react";
 
 function ExpensesContent() {
+  const permissions = usePermissions();
   const [activeMenuItem, setActiveMenuItem] = useState("expenses");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -392,15 +394,15 @@ function ExpensesContent() {
               {/* Header */}
               <div className="flex items-center gap-3 mb-8">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Expenses</h1>
-                  <p className="text-sm text-gray-500 mt-1">Track and manage your business expenses</p>
+                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">Expenses</h1>
+                  <p className="text-sm text-gray-600 mt-1">Track and manage your business expenses</p>
                 </div>
               </div>
 
               {/* Expense Form */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8">
                 <div className="flex items-center gap-2 mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">
+                  <h2 className="text-xl font-semibold text-gray-900">
                     Add New Expense
                   </h2>
                 </div>
@@ -408,7 +410,7 @@ function ExpensesContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Category Selection */}
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Category <span className="text-red-500">*</span>
                     </label>
                     <div className="flex gap-3">
@@ -416,7 +418,7 @@ function ExpensesContent() {
                         title="category"
                         value={selectedCategoryId}
                         onChange={(e) => setSelectedCategoryId(e.target.value)}
-                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all font-medium"
+                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
                       >
                         <option value="" className="text-gray-500">
                           Select Category
@@ -434,7 +436,7 @@ function ExpensesContent() {
                       <Button
                         onClick={() => setShowCategoryModal(true)}
                         variant="outline"
-                        className="px-4 py-3 rounded-xl font-bold"
+                        className="px-4 py-3 rounded-xl font-medium"
                       >
                         + Add
                       </Button>
@@ -443,7 +445,7 @@ function ExpensesContent() {
 
                   {/* Date */}
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Date <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -451,13 +453,13 @@ function ExpensesContent() {
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all font-medium"
+                      className="w-full px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
                     />
                   </div>
 
                   {/* Amount and Currency */}
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Amount <span className="text-red-500">*</span>
                     </label>
                     <div className="flex gap-3">
@@ -468,7 +470,7 @@ function ExpensesContent() {
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0.00"
-                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all font-medium"
+                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
                       />
                       <select
                         title="currency"
@@ -476,7 +478,7 @@ function ExpensesContent() {
                         onChange={(e) =>
                           setSelectedCurrency(e.target.value as "THB" | "MMK")
                         }
-                        className="px-4 py-3 border border-gray-300 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all font-medium"
+                        className="px-4 py-3 border border-gray-300 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
                       >
                         <option value="THB" className="text-gray-900">
                           THB
@@ -490,7 +492,7 @@ function ExpensesContent() {
 
                   {/* Note */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Note (Optional)
                     </label>
                     <textarea
@@ -498,13 +500,13 @@ function ExpensesContent() {
                       onChange={(e) => setNote(e.target.value)}
                       placeholder="Enter any additional notes..."
                       rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all font-medium resize-none"
+                      className="w-full px-4 py-3 border border-gray-300 text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all resize-none"
                     />
                   </div>
 
                   {/* Image Upload */}
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Expense Image (Optional)
                     </label>
                     <ImageUpload
@@ -520,7 +522,7 @@ function ExpensesContent() {
                   <Button
                     onClick={handleAddExpense}
                     disabled={loading}
-                    className="w-full md:w-auto px-6 py-3 rounded-xl font-bold text-base"
+                    className="w-full md:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium text-base shadow-md"
                   >
                     {loading ? "Adding..." : "Add Expense"}
                   </Button>
@@ -807,58 +809,64 @@ function ExpensesContent() {
 
                 {/* Pagination */}
                 {filteredExpenses.length > 0 && (
-                  <div className="mt-6 flex items-center justify-between flex-wrap gap-4">
-                    <div className="text-sm font-medium text-gray-700">
-                      Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                      {Math.min(
-                        currentPage * itemsPerPage,
-                        filteredExpenses.length,
-                      )}{" "}
-                      of {filteredExpenses.length} expenses
-                    </div>
-                    <div className="flex gap-3">
-                      <Button
+                  <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                    {/* Mobile Pagination */}
+                    <div className="flex-1 flex justify-between sm:hidden">
+                      <button
                         onClick={() => setCurrentPage(currentPage - 1)}
                         disabled={currentPage === 1}
-                        variant="outline"
-                        className="px-4 py-2 rounded-xl font-bold text-sm"
+                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                       >
                         Previous
-                      </Button>
-                      <div className="flex gap-2">
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                          .filter((page) => {
-                            return (
-                              page === 1 ||
-                              page === totalPages ||
-                              Math.abs(page - currentPage) <= 1
-                            );
-                          })
-                          .map((page, index, array) => (
-                            <div key={page} className="flex items-center gap-2">
-                              {index > 0 && array[index - 1] !== page - 1 && (
-                                <span className="px-2 text-gray-500">...</span>
-                              )}
-                              <Button
-                                onClick={() => setCurrentPage(page)}
-                                variant={
-                                  currentPage === page ? "primary" : "outline"
-                                }
-                                className="text-sm min-w-[2.5rem] rounded-xl font-bold"
-                              >
-                                {page}
-                              </Button>
-                            </div>
-                          ))}
-                      </div>
-                      <Button
+                      </button>
+                      <button
                         onClick={() => setCurrentPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        variant="outline"
-                        className="px-4 py-2 rounded-xl font-bold text-sm"
+                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                       >
                         Next
-                      </Button>
+                      </button>
+                    </div>
+
+                    {/* Desktop Pagination */}
+                    <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                          {Math.min(
+                            currentPage * itemsPerPage,
+                            filteredExpenses.length,
+                          )}{" "}
+                          of {filteredExpenses.length} expenses
+                        </p>
+                      </div>
+                      <div>
+                        <nav
+                          className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                          aria-label="Pagination"
+                        >
+                          <button
+                            title="Go to previous page"
+                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                            disabled={currentPage === 1}
+                            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          <button
+                            title="Go to next page"
+                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage === totalPages}
+                            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </nav>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -914,7 +922,7 @@ function ExpensesContent() {
                         className="mb-4 rounded-xl font-medium"
                       />
                       <div className="flex gap-3">
-                        <Button onClick={handleAddCategory} className="flex-1 rounded-xl font-bold py-3">
+                        <Button onClick={handleAddCategory} className="flex-1 rounded-xl font-bold py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md">
                           Add
                         </Button>
                         <Button
@@ -1113,7 +1121,7 @@ function ExpensesContent() {
                       <Button
                         onClick={handleUpdateExpense}
                         disabled={loading}
-                        className="flex-1 rounded-lg font-bold py-2 text-sm"
+                        className="flex-1 rounded-lg font-bold py-2 text-sm bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md"
                       >
                         {loading ? "Updating..." : "Update Expense"}
                       </Button>
@@ -1131,7 +1139,7 @@ function ExpensesContent() {
 
 export default function ExpensesPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <ExpensesContent />
     </ProtectedRoute>
   );

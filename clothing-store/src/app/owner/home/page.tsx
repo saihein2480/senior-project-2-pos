@@ -587,52 +587,80 @@ function OwnerHomeContent() {
 
   // Set up real-time inventory updates
   useEffect(() => {
-    setIsLoading(true);
+    console.log('Starting inventory load...');
+    const startTime = Date.now();
+    
+    // Try to load from cache first
+    const cachedData = sessionStorage.getItem('inventory_cache');
+    if (cachedData) {
+      try {
+        const parsed = JSON.parse(cachedData);
+        setClothingInventory(parsed);
+        setIsLoading(false);
+        console.log('Loaded from cache instantly');
+      } catch (e) {
+        console.error('Cache parse error:', e);
+      }
+    } else {
+      setIsLoading(true);
+    }
+    
     setError(null);
 
-    // Subscribe to real-time stock updates
-    const unsubscribe = InventoryRealtimeService.subscribeToAllStocks(
-      (stocks) => {
+    // Use one-time fetch instead of real-time subscription for better performance
+    const fetchStocks = async () => {
+      try {
+        const { getDocs, collection, query, orderBy, limit } = await import('firebase/firestore');
+        const { db } = await import('@/lib/firebase');
+        
+        if (!db) {
+          throw new Error('Firebase not initialized');
+        }
+
+        const q = query(
+          collection(db, 'stocks'),
+          orderBy('createdAt', 'desc'),
+          limit(20)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const stocks: any[] = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          stocks.push({
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+          });
+        });
+
+        const loadTime = Date.now() - startTime;
+        console.log(`Loaded ${stocks.length} stocks from Firebase in ${loadTime}ms`);
+        
         const transformedData = transformStockData(stocks);
         setClothingInventory(transformedData);
-        setIsLoading(false);
-      },
-    );
-
-    // Fallback: If Firebase is not configured, fetch from API
-    if (!unsubscribe) {
-      const fetchRecentStocks = async () => {
+        
+        // Cache the data
         try {
-          const response = await fetch("/api/stocks?recent=true");
-          if (!response.ok) {
-            throw new Error("Failed to fetch recent stocks");
-          }
-
-          const data = await response.json();
-          const transformedData = transformStockData(data.data);
-          setClothingInventory(transformedData);
-        } catch (err) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch recent stocks",
-          );
-          console.error("Error fetching recent stocks:", err);
-          setClothingInventory([]);
-        } finally {
-          setIsLoading(false);
+          sessionStorage.setItem('inventory_cache', JSON.stringify(transformedData));
+        } catch (e) {
+          console.warn('Failed to cache data:', e);
         }
-      };
-
-      fetchRecentStocks();
-    }
-
-    // Cleanup function
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading stocks:', error);
+        setError('Failed to load inventory');
+        setIsLoading(false);
       }
     };
+
+    fetchStocks();
+
+    // No cleanup needed for one-time fetch
+    return () => {};
   }, [transformStockData]);
 
   // Initialize color selection for each item when inventory loads
@@ -993,16 +1021,15 @@ function OwnerHomeContent() {
         />
 
         {/* Main Content */}
-        <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            {/* Clothing Inventory */}
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          {/* Clothing Inventory */}
+          <div className="bg-white shadow-lg rounded-2xl border border-pink-100">
+            <div className="px-4 py-5 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0">
                   <div className="flex items-center space-x-4">
-                    <h3 className="text-lg lg:text-base xl:text-lg leading-6 font-medium text-gray-900">
+                    <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                       Clothing Inventory
-                    </h3>
+                    </h1>
                     <div className="relative">
                       <input
                         type="text"
@@ -1037,7 +1064,7 @@ function OwnerHomeContent() {
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
                         {hasActiveFilters && (
-                          <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                          <span className="ml-2 px-1.5 py-0.5 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs rounded-full">
                             {
                               [
                                 selectedCategory !== "all",
@@ -1077,7 +1104,7 @@ function OwnerHomeContent() {
                                 setSelectedCategory(e.target.value);
                                 setCurrentPage(1);
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-cyan-400 focus:border-blue-500 text-gray-900"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-pink-400 focus:border-pink-500 text-gray-900"
                             >
                               <option value="all">All Categories</option>
                               {categories.map((cat) => (
@@ -1100,7 +1127,7 @@ function OwnerHomeContent() {
                                 setSelectedStockStatus(e.target.value);
                                 setCurrentPage(1);
                               }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-cyan-400 focus:border-blue-500 text-gray-900"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-pink-400 focus:border-pink-500 text-gray-900"
                             >
                               <option value="all">All Status</option>
                               <option value="in-stock">In Stock</option>
@@ -1114,7 +1141,7 @@ function OwnerHomeContent() {
                             <label className="block text-xs font-medium text-gray-700 mb-2">
                               Price Range (THB)
                             </label>
-                            <div className="flex items-center rounded-md border border-gray-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-cyan-400 focus-within:border-blue-500">
+                            <div className="flex items-center rounded-md border border-gray-300 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-pink-400 focus-within:border-pink-500">
                               <input
                                 type="number"
                                 placeholder="Min"
@@ -1151,7 +1178,7 @@ function OwnerHomeContent() {
                 </div>
 
                 <div className="mb-5">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-1 inline-flex max-w-full">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 inline-flex max-w-full">
                     <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap">
                       <button
                         type="button"
@@ -1159,10 +1186,10 @@ function OwnerHomeContent() {
                           setSelectedCategory("all");
                           setCurrentPage(1);
                         }}
-                        className={`px-4 py-2.5 text-sm rounded-lg font-semibold transition-all border-0 ${
+                        className={`px-4 py-2 text-sm rounded-lg font-medium transition-all ${
                           selectedCategory === "all"
-                            ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
-                            : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                            ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-sm"
+                            : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
                         All Products
@@ -1175,10 +1202,10 @@ function OwnerHomeContent() {
                             setSelectedCategory(cat);
                             setCurrentPage(1);
                           }}
-                          className={`px-4 py-2.5 text-sm rounded-lg font-semibold transition-all border-0 ${
+                          className={`px-4 py-2 text-sm rounded-lg font-medium transition-all ${
                             selectedCategory.toLowerCase() === cat.toLowerCase()
-                              ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white shadow-md hover:from-pink-500 hover:to-pink-400"
-                              : "bg-gray-100 text-gray-700 hover:bg-pink-50"
+                              ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-sm"
+                              : "text-gray-700 hover:bg-gray-50"
                           }`}
                         >
                           {cat}
@@ -1195,7 +1222,7 @@ function OwnerHomeContent() {
                     Array.from({ length: 12 }).map((_, index) => (
                       <div
                         key={index}
-                        className="bg-white border border-gray-200 rounded-lg overflow-hidden animate-pulse"
+                        className="bg-white border-2 border-pink-100 rounded-2xl overflow-hidden animate-pulse shadow-sm"
                       >
                         <div className="aspect-[4/5] bg-gray-200"></div>
                         <div className="p-3">
@@ -1215,7 +1242,7 @@ function OwnerHomeContent() {
                       <p className="text-gray-500 mb-4">{error}</p>
                       <Button
                         onClick={() => window.location.reload()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white"
                       >
                         Try Again
                       </Button>
@@ -1233,7 +1260,7 @@ function OwnerHomeContent() {
                           : "No recent stock additions found"}
                       </p>
                       <Link href="/owner/inventory/stocks/new-stock">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white">
                           Add New Stock
                         </Button>
                       </Link>
@@ -1248,16 +1275,16 @@ function OwnerHomeContent() {
                       return (
                         <div
                           key={`${item.id}-${selectedColors[item.id] || "no-color"}`}
-                          className={`bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-200 ${
+                          className={`bg-white border-2 border-pink-100 overflow-hidden shadow-md hover:shadow-xl hover:border-rose-300 transition-all duration-200 ${
                             isOutOfStock
                               ? "border-red-200 opacity-80"
                               : "border-gray-200"
                           }`}
                         >
-                          <div className="p-3 flex flex-col h-full">
-                            <div className="relative bg-gray-50 rounded-xl overflow-hidden aspect-[4/5] flex items-center justify-center">
+                          <div className="flex flex-col h-full">
+                            <div className="relative bg-gradient-to-br from-pink-50 to-rose-50 overflow-hidden aspect-[4/5] flex items-center justify-center">
                               {item.isNew && !isOutOfStock && (
-                                <span className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-md z-10 pointer-events-none">
+                                <span className="absolute top-2 left-2 bg-gradient-to-r from-rose-400 to-pink-400 text-white text-xs px-2 py-1 rounded-md z-10 pointer-events-none">
                                   New
                                 </span>
                               )}
@@ -1276,7 +1303,7 @@ function OwnerHomeContent() {
                                 alt={item.name}
                                 width={380}
                                 height={270}
-                                className={`w-full h-full object-contain ${
+                                className={`w-full h-full object-cover ${
                                   isOutOfStock ? "opacity-60" : ""
                                 }`}
                               />
@@ -1298,8 +1325,7 @@ function OwnerHomeContent() {
                             </div>
 
                             {/* Content area with dynamic height */}
-                            <div className="flex-1 flex flex-col">
-                              <div className="relative mt-3">
+                            <div className="flex-1 flex flex-col p-4 bg-white"><div className="relative">
                                 <div className="flex items-start justify-between gap-2">
                                   <h4
                                     className="font-semibold text-gray-900 text-sm leading-snug truncate"
@@ -1383,8 +1409,8 @@ function OwnerHomeContent() {
                                               }
                                               className={`relative w-6 h-6 rounded-full border-2 transition-all ${
                                                 isSelected
-                                                  ? "border-pink-500 ring-2 ring-pink-200 scale-110"
-                                                  : "border-gray-300 hover:border-gray-400 hover:scale-105"
+                                                  ? "ring-2 ring-offset-2 ring-rose-500 scale-110"
+                                                  : "border-gray-300 hover:ring-2 hover:ring-offset-1 hover:ring-pink-400 hover:scale-105"
                                               }`}
                                               style={{
                                                 backgroundColor:
@@ -1420,8 +1446,8 @@ function OwnerHomeContent() {
                                             }
                                             className={`relative w-6 h-6 rounded-full border-2 transition-all ${
                                               isSelected
-                                                ? "border-pink-500 ring-2 ring-pink-200 scale-110"
-                                                : "border-gray-300 hover:border-gray-400 hover:scale-105"
+                                                ? "ring-2 ring-offset-2 ring-rose-500 scale-110"
+                                                : "border-gray-300 hover:ring-2 hover:ring-offset-1 hover:ring-pink-400 hover:scale-105"
                                             }`}
                                             style={{
                                               backgroundColor: variant.colorCode,
@@ -1479,8 +1505,8 @@ function OwnerHomeContent() {
                                                 isOutOfStock
                                                   ? "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed line-through"
                                                   : isSelected
-                                                    ? "bg-gradient-to-r from-pink-400 to-pink-300 text-white border-pink-400 shadow-md"
-                                                    : "bg-white text-gray-700 border-gray-300 hover:border-pink-300 hover:bg-pink-50"
+                                                    ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-rose-500 shadow-md"
+                                                    : "bg-white text-gray-700 border-gray-300 hover:border-rose-400 hover:bg-gradient-to-r hover:from-rose-50 hover:to-pink-50"
                                               }`}
                                               title={`${sizeQty.size} - ${sizeQty.quantity} in stock`}
                                             >
@@ -1489,8 +1515,8 @@ function OwnerHomeContent() {
                                                 <span 
                                                   className={`absolute -top-2 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 min-w-[20px] text-center ${
                                                     isSelected
-                                                      ? "bg-white text-pink-600 border-pink-300 shadow-sm"
-                                                      : "bg-gradient-to-r from-pink-400 to-pink-300 text-white border-pink-400"
+                                                      ? "bg-white text-rose-600 border-rose-300 shadow-sm"
+                                                      : "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-rose-400"
                                                   }`}
                                                 >
                                                   {sizeQty.quantity}
@@ -1551,7 +1577,7 @@ function OwnerHomeContent() {
 
                 {/* Pagination (moved to bottom) */}
                 <div className="mt-8 flex items-center justify-center">
-                  <div className="flex items-center gap-2 bg-white rounded-xl shadow-sm border border-gray-200 p-2">
+                  <div className="flex items-center gap-2 bg-white rounded-2xl shadow-md border-2 border-pink-100 p-2">
                     <button
                       title="First page"
                       onClick={() => setCurrentPage(1)}
@@ -1688,7 +1714,6 @@ function OwnerHomeContent() {
                 </div>
               </div>
             </div>
-          </div>
         </main>
       </div>
     </div>
@@ -1702,3 +1727,12 @@ export default function OwnerHomePage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
+
+
+
+

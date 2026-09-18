@@ -580,6 +580,25 @@ export default function RefundRequestsPage() {
             lastUpdated: new Date().toISOString(),
           });
         }
+
+        // Create an owner-facing notification for the pending refund payment
+        try {
+          const { addDoc, collection: firestoreCollection, serverTimestamp } = await import("firebase/firestore");
+          await addDoc(firestoreCollection(db!, "notifications"), {
+            type: "refund_payment",
+            title: "Refund Payment Pending",
+            message: `Refund payment pending for order #${selectedRequest.transactionId}`,
+            link: "/owner/requests/pending-refunds",
+            metadata: {
+              transactionId: selectedRequest.id,
+              orderId: selectedRequest.transactionId,
+            },
+            read: false,
+            createdAt: serverTimestamp(),
+          });
+        } catch (notifError) {
+          console.error("Error creating owner notification for pending refund payment:", notifError);
+        }
         
         // Get fresh transaction data
         const { getDoc } = await import("firebase/firestore");
@@ -756,11 +775,11 @@ export default function RefundRequestsPage() {
                   <RotateCcw className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">
-                    Refund Requests
+                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                    Return Requests
                   </h1>
-                  <p className="text-xs text-gray-600">
-                    Review and process customer refund requests
+                  <p className="text-sm text-gray-600 mt-1">
+                    Review and process customer return requests
                   </p>
                 </div>
               </div>

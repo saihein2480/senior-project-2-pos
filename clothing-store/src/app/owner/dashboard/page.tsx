@@ -207,10 +207,10 @@ function OwnerDashboardContent() {
   }, []);
 
   useEffect(() => {
-    if (businessSettings?.currentBranch && filterBranch === "") {
+    if (businessSettings?.currentBranch) {
       setFilterBranch(businessSettings.currentBranch);
     }
-  }, [businessSettings, filterBranch]);
+  }, [businessSettings?.currentBranch]);
 
   // Initialize date filters
   useEffect(() => {
@@ -2012,7 +2012,7 @@ function OwnerDashboardContent() {
 
 export default function OwnerDashboardPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
       <OwnerDashboardContent />
     </ProtectedRoute>
   );

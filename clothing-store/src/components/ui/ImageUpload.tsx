@@ -135,7 +135,7 @@ export function ImageUpload({
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl flex items-center justify-center z-0">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md border-0">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md border-0">
                         <Upload className="h-3.5 w-3.5" />
                         Change
                       </div>
@@ -173,7 +173,7 @@ export function ImageUpload({
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
-                  <div className="bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm border-0">
+                  <div className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm border-0">
                     <Upload className="h-3.5 w-3.5" />
                     Select File
                   </div>

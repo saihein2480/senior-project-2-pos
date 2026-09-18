@@ -6,6 +6,12 @@ export interface Shop {
   secondaryPhone?: string;
   township: string;
   city: string;
+  /**
+   * Free-text opening hours for this branch, e.g. "Mon-Sat 9:00 AM - 8:00 PM,
+   * Sun 10:00 AM - 6:00 PM". Shown to customers and used by the storefront
+   * chatbot when it is asked about opening hours.
+   */
+  openingHours?: string;
   status: 'active' | 'inactive';
   createdAt: string;
   updatedAt: string;
@@ -19,6 +25,7 @@ export interface CreateShopRequest {
   secondaryPhone?: string;
   township: string;
   city: string;
+  openingHours?: string;
   status?: 'active' | 'inactive';
 }
 
@@ -29,6 +36,7 @@ export interface UpdateShopRequest {
   secondaryPhone?: string;
   township?: string;
   city?: string;
+  openingHours?: string;
   status?: 'active' | 'inactive';
 }
 

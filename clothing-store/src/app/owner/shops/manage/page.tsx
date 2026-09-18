@@ -7,6 +7,7 @@ import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
 import {
   Building2,
+  Clock,
   MapPin,
   Phone,
   Plus,
@@ -42,6 +43,7 @@ function ShopManagementContent() {
     secondaryPhone: "",
     township: "",
     city: "",
+    openingHours: "",
   });
 
   // API state
@@ -111,6 +113,7 @@ function ShopManagementContent() {
           secondaryPhone: "",
           township: "",
           city: "",
+          openingHours: "",
         });
         return true;
       } else {
@@ -274,6 +277,13 @@ function ShopManagementContent() {
         secondaryPhone: secondaryPhoneTrimmed,
       };
     }
+    const openingHoursTrimmed = formData.openingHours.trim();
+    if (openingHoursTrimmed) {
+      shopData = {
+        ...shopData,
+        openingHours: openingHoursTrimmed,
+      };
+    }
 
     await createShop(shopData);
   };
@@ -296,6 +306,7 @@ function ShopManagementContent() {
       secondaryPhone: shop.secondaryPhone || "",
       township: shop.township,
       city: shop.city,
+      openingHours: shop.openingHours || "",
     });
     setIsEditMode(true);
     setEditingShopId(shop.id);
@@ -315,6 +326,7 @@ function ShopManagementContent() {
       secondaryPhone: formData.secondaryPhone.trim() || undefined,
       township: formData.township.trim(),
       city: formData.city.trim(),
+      openingHours: formData.openingHours.trim() || undefined,
     };
 
     const success = await updateShop(editingShopId, shopData);
@@ -333,6 +345,7 @@ function ShopManagementContent() {
       secondaryPhone: "",
       township: "",
       city: "",
+      openingHours: "",
     });
     setFormErrors({});
     setError(null);
@@ -382,10 +395,10 @@ function ShopManagementContent() {
         <div className="border-b border-gray-100 px-6 md:px-8 lg:px-12 py-6">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                 Shop Management
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-600 mt-1">
                 Create, edit, and manage your shop locations
               </p>
             </div>
@@ -610,6 +623,38 @@ function ShopManagementContent() {
                   </div>
                 </div>
 
+                {/* Opening Hours */}
+                <div>
+                  <label
+                    htmlFor="shop-opening-hours"
+                    className="block text-sm font-semibold text-gray-700 mb-2"
+                  >
+                    Opening Hours
+                  </label>
+                  <div className="relative">
+                    <Clock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      id="shop-opening-hours"
+                      type="text"
+                      value={formData.openingHours}
+                      onChange={(e) =>
+                        handleInputChange("openingHours", e.target.value)
+                      }
+                      placeholder="e.g. Mon-Sat 9:00 AM - 8:00 PM, Sun 10:00 AM - 6:00 PM"
+                      aria-describedby="shop-opening-hours-help"
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-400 focus:border-transparent text-gray-900 bg-white transition-all"
+                    />
+                  </div>
+                  <p
+                    id="shop-opening-hours-help"
+                    className="mt-1 text-xs text-gray-500"
+                  >
+                    Shown to online customers and used by the storefront AI
+                    assistant. Leave blank if you would rather it not answer
+                    opening-hours questions.
+                  </p>
+                </div>
+
                 {/* Submit Button */}
                 <div className="flex justify-end pt-3">
                   <Button
@@ -684,6 +729,9 @@ function ShopManagementContent() {
                           Township/City
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          Opening Hours
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -723,6 +771,17 @@ function ShopManagementContent() {
                             <div className="text-xs text-gray-500 mt-1">
                               {shop.city}
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {shop.openingHours ? (
+                              <div className="text-sm text-gray-900 max-w-xs">
+                                {shop.openingHours}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 italic">
+                                Not set
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
@@ -837,7 +896,7 @@ function ShopManagementContent() {
 
 export default function ShopManagementPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="owner">
       <ShopManagementContent />
     </ProtectedRoute>
   );

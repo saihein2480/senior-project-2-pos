@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   Timestamp,
   getDoc,
+  deleteField,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import {
@@ -227,8 +228,19 @@ export class ShopService {
 
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
+
+      // Firestore rejects `undefined` values. The API routes set optional
+      // fields (secondaryPhone, openingHours) to undefined when the owner
+      // clears them, so translate those into an explicit field delete.
+      const payload = Object.fromEntries(
+        Object.entries(updates).map(([key, value]) => [
+          key,
+          value === undefined ? deleteField() : value,
+        ])
+      );
+
       await updateDoc(docRef, {
-        ...updates,
+        ...payload,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {

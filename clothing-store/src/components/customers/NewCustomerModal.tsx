@@ -238,7 +238,7 @@ export default function NewCustomerModal({
                       />
                       <label
                         htmlFor="customerImage"
-                        className="inline-flex items-center px-2 py-1 border-0 rounded-md text-xs text-white bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 shadow-sm transition-colors cursor-pointer"
+                        className="inline-flex items-center px-2 py-1 border-0 rounded-md text-xs text-white bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 shadow-sm transition-colors cursor-pointer"
                       >
                         <Upload className="h-3 w-3 mr-1" />
                         Select
@@ -412,7 +412,7 @@ export default function NewCustomerModal({
               <button
                 type="submit"
                 disabled={isSubmitting || isUploading}
-                className="flex items-center px-4 py-2 bg-gradient-to-r from-pink-400 to-pink-300 hover:from-pink-500 hover:to-pink-400 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shadow-md border-0"
+                className="flex items-center px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm shadow-md border-0"
               >
                 <User className="h-4 w-4 mr-1" />
                 {isUploading

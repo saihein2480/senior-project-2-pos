@@ -281,16 +281,16 @@ function StaffContent() {
             <div className="mb-8">
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
+                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                     Staff Management
                   </h1>
-                  <p className="text-gray-500 mt-2">
+                  <p className="text-sm text-gray-600 mt-1">
                     Manage staff accounts and permissions
                   </p>
                 </div>
                 <Button
                   onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium shadow-md"
+                  className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md"
                 >
                   <UserPlus className="h-4 w-4" />
                   Add Staff
@@ -412,7 +412,7 @@ function StaffContent() {
               {staff.filter(s => s.role === "staff").length > 0 && (
                 <div>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-pink-500 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center">
                       <span className="text-white font-bold text-sm">S</span>
                     </div>
                     <div>
@@ -425,7 +425,7 @@ function StaffContent() {
                       const roleInfo = getRoleInfo(member.role);
                       const rowKey = member.id || member.email || `staff-${idx}`;
                       const isActive = member.isActive !== false;
-                      const roleColor = "from-pink-400 to-pink-500";
+                      const roleColor = "from-rose-500 to-pink-500";
                       const roleBadgeColor = "bg-pink-100 text-pink-700";
 
                       return (
@@ -600,7 +600,7 @@ function StaffContent() {
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
                   {/* Modal Header - Default to pink since new staff are usually added as staff */}
-                  <div className="bg-gradient-to-r from-pink-400 to-pink-500 px-6 py-4 rounded-t-2xl">
+                  <div className="bg-gradient-to-r from-rose-500 to-pink-500 px-6 py-4 rounded-t-2xl">
                     <h3 className="text-lg font-bold text-white">
                       Add New Staff Member
                     </h3>
@@ -717,7 +717,7 @@ function StaffContent() {
                     <Button
                       onClick={handleAddStaff}
                       disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white"
+                      className="flex-1 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white"
                     >
                       {loading ? "Creating..." : "Create Account"}
                     </Button>
@@ -734,7 +734,7 @@ function StaffContent() {
                   <div className={`${
                     editingStaff.role === "manager"
                       ? "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700"
-                      : "bg-gradient-to-r from-pink-400 to-pink-500"
+                      : "bg-gradient-to-r from-rose-500 to-pink-500"
                   } px-6 py-4 rounded-t-2xl`}>
                     <h3 className="text-lg font-bold text-white">
                       Edit Staff Member
@@ -866,7 +866,7 @@ function StaffContent() {
                       className={`flex-1 text-white ${
                         editingStaff.role === "manager"
                           ? "bg-gradient-to-r from-fuchsia-600 to-fuchsia-700 hover:from-fuchsia-700 hover:to-fuchsia-800"
-                          : "bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700"
+                          : "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600"
                       }`}
                     >
                       {loading ? "Updating..." : "Update"}
@@ -884,7 +884,7 @@ function StaffContent() {
 
 export default function StaffPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="owner">
       <StaffContent />
     </ProtectedRoute>
   );

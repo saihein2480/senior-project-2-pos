@@ -92,6 +92,7 @@ export function Sidebar({
   const [pendingCancellationCount, setPendingCancellationCount] = useState<number>(0);
   const [pendingRefundCount, setPendingRefundCount] = useState<number>(0);
   const [pendingRefundPaymentsCount, setPendingRefundPaymentsCount] = useState<number>(0);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
 
   // Use settings context for business name and logo
   const { businessSettings, isLoading } = useSettings();
@@ -163,6 +164,51 @@ export function Sidebar({
     fetchPendingRequests();
   }, []);
 
+  // Listen to unread notifications count
+  useEffect(() => {
+    const fetchUnreadNotifications = async () => {
+      try {
+        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        
+        // The "notifications" collection also holds customer-facing
+        // notifications (with a userId field) for the storefront account.
+        // Those aren't owner-facing, so filter them out client-side.
+        const OWNER_NOTIFICATION_TYPES = new Set([
+          "online_order",
+          "cancellation_request",
+          "refund_request",
+          "refund_payment",
+          "low_stock",
+          "out_of_stock",
+        ]);
+
+        const notificationsRef = collection(db!, "notifications");
+        const q = query(
+          notificationsRef,
+          where("read", "==", false)
+        );
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          let count = 0;
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (!data.userId && OWNER_NOTIFICATION_TYPES.has(data.type)) {
+              count++;
+            }
+          });
+          setUnreadNotificationsCount(count);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error("Error fetching unread notifications:", error);
+      }
+    };
+    
+    fetchUnreadNotifications();
+  }, []);
+
   // Get user role from auth context
   const { user } = useAuth();
   
@@ -189,9 +235,10 @@ export function Sidebar({
       href: "/owner/dashboard",
       roles: ["owner", "manager"], // Only owner and manager
     },
+    
     {
       id: "sales",
-      label: t.sales,
+      label: "Walk-in Sales",
       icon: "TrendingUp",
       roles: ["owner", "manager", "staff"],
       children: [
@@ -209,13 +256,21 @@ export function Sidebar({
           href: "/owner/sales/reports",
           roles: ["owner", "manager"], // No staff
         },
-        {
-          id: "payments",
-          label: t.payments,
-          icon: "CreditCard",
-          href: "/owner/sales/payments",
-          roles: ["owner", "manager", "staff"],
-        },
+        // {
+        //   id: "payments",
+        //   label: t.payments,
+        //   icon: "CreditCard",
+        //   href: "/owner/sales/payments",
+        //   roles: ["owner", "manager", "staff"],
+        // },
+      ],
+    },
+    {
+      id: "requests",
+      label: "Online Sales",
+      icon: "ShoppingCart",
+      roles: ["owner", "manager"],
+      children: [
         {
           id: "online-orders",
           label: "Online Orders",
@@ -230,17 +285,9 @@ export function Sidebar({
           href: "/owner/sales/online-transactions",
           roles: ["owner", "manager"],
         },
-      ],
-    },
-    {
-      id: "requests",
-      label: "Customer Requests",
-      icon: "AlertCircle",
-      roles: ["owner", "manager"],
-      children: [
         {
           id: "cancellation-requests",
-          label: "Cancellation Requests",
+          label: "Order Cancellation Requests",
           icon: "XCircle",
           href: "/owner/requests/cancellations",
           roles: ["owner", "manager"],
@@ -254,14 +301,14 @@ export function Sidebar({
         },
         {
           id: "pending-refunds",
-          label: "Pending Refund Payments",
+          label: "Refund Payment",
           icon: "DollarSign",
           href: "/owner/requests/pending-refunds",
           roles: ["owner", "manager"],
         },
         {
           id: "refund-report",
-          label: "Refund Report",
+          label: "Return Report",
           icon: "FileText",
           href: "/owner/requests/refund-report",
           roles: ["owner", "manager"],
@@ -283,11 +330,26 @@ export function Sidebar({
       roles: ["owner", "manager", "staff"],
     },
     {
-      id: "membership",
-      label: "Membership",
+      id: "promotion-membership",
+      label: "Promotion & Membership",
       icon: "Gift",
-      href: "/owner/membership",
-      roles: ["owner", "manager", "staff"],
+      roles: ["owner", "manager"],
+      children: [
+        {
+          id: "membership",
+          label: "Membership",
+          icon: "Gift",
+          href: "/owner/membership",
+          roles: ["owner", "manager"],
+        },
+        {
+          id: "online-promotions",
+          label: "Online Promotions",
+          icon: "Tag",
+          href: "/owner/online-promotions",
+          roles: ["owner", "manager"],
+        },
+      ],
     },
     {
       id: "expenses",
@@ -296,35 +358,28 @@ export function Sidebar({
       href: "/owner/expenses",
       roles: ["owner", "manager"], // Only owner and manager
     },
-    {
-      id: "online-promotions",
-      label: "Online Promotions",
-      icon: "Tag",
-      href: "/owner/online-promotions",
-      roles: ["owner", "manager"],
-    },
-    {
-      id: "barcode",
-      label: t.barcode,
-      icon: "QrCode",
-      roles: ["owner", "manager"],
-      children: [
-        {
-          id: "label-print",
-          label: t.labelPrint,
-          icon: "Tag",
-          href: "/owner/barcode/label-print",
-          roles: ["owner", "manager"],
-        },
-        {
-          id: "print-settings",
-          label: t.printSettings,
-          icon: "Settings",
-          href: "/owner/barcode/print-settings",
-          roles: ["owner", "manager"],
-        },
-      ],
-    },
+    // {
+    //   id: "barcode",
+    //   label: t.barcode,
+    //   icon: "QrCode",
+    //   roles: ["owner", "manager"],
+    //   children: [
+    //     {
+    //       id: "label-print",
+    //       label: t.labelPrint,
+    //       icon: "Tag",
+    //       href: "/owner/barcode/label-print",
+    //       roles: ["owner", "manager"],
+    //     },
+    //     {
+    //       id: "print-settings",
+    //       label: t.printSettings,
+    //       icon: "Settings",
+    //       href: "/owner/barcode/print-settings",
+    //       roles: ["owner", "manager"],
+    //     },
+    //   ],
+    // },
     {
       id: "shops-branches",
       label: t.shopsBranches,
@@ -353,6 +408,13 @@ export function Sidebar({
       icon: "UserCheck",
       href: "/owner/staff",
       roles: ["owner"], // Only owner can manage staff
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: "AlertCircle",
+      href: "/owner/notifications",
+      roles: ["owner", "manager", "staff"], // All roles can access
     },
     {
       id: "settings",
@@ -526,6 +588,11 @@ export function Sidebar({
               {renderIcon(item.icon, iconClasses)}
               <span className="flex-1 text-left flex items-center justify-between min-w-0">
                 <span className="truncate">{item.label}</span>
+                {item.id === "notifications" && unreadNotificationsCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
+                    {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
+                  </span>
+                )}
                 {item.id === "online-orders" && unseenOrdersCount > 0 && (
                   <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
                     {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
@@ -580,7 +647,7 @@ export function Sidebar({
                   title="New online order"
                 ></span>
               )}
-              {item.id === "requests" && (pendingCancellationCount > 0 || pendingRefundCount > 0 || pendingRefundPaymentsCount > 0) && (
+              {item.id === "requests" && (pendingCancellationCount > 0 || pendingRefundCount > 0 || pendingRefundPaymentsCount > 0) && !isExpanded && (
                 <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
                   {(() => {
                     const total = pendingCancellationCount + pendingRefundCount + pendingRefundPaymentsCount;
@@ -692,3 +759,4 @@ export function Sidebar({
 
   return container;
 }
+
