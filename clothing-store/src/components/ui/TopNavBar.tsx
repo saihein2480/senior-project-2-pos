@@ -171,6 +171,8 @@ export function TopNavBar({
         console.log("Loading shops...");
         const shopsData = await ShopService.getAllShops();
         console.log("Shops loaded:", shopsData);
+        // Order comes from ShopService.getAllShops (createdAt ascending), so
+        // the first branch created stays at the top of the dropdown.
         setShops(shopsData || []);
       } catch (error) {
         console.error("Error loading shops:", error);
@@ -258,8 +260,11 @@ export function TopNavBar({
     fetchUnreadNotifications();
   }, []);
 
+  // The sticky bar sits at z-30: above in-page content such as product card
+  // badges (z-10/z-20), but below the mobile sidebar overlay (z-40) and drawer
+  // (z-50) so those can still cover it.
   return (
-    <header className="sticky top-0 z-10 bg-white shadow-md border-b border-gray-200">
+    <header className="sticky top-0 z-30 bg-white shadow-md border-b border-gray-200">
       <div className="px-2 sm:px-4">
         <div className="flex justify-between items-center h-16 px-2 sm:px-4">
           <div className="flex items-center">
@@ -348,9 +353,7 @@ export function TopNavBar({
                               <Store className="w-4 h-4" />
                               <span>{shop.name}</span>
                             </div>
-                            {isSelected && (
-                              <span className="text-cyan-600 text-lg">✓</span>
-                            )}
+                            
                           </button>
                         );
                       })}

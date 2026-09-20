@@ -908,29 +908,26 @@ function EditStockContent() {
         <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
 
         {/* Header */}
-        <div className="bg-white to-indigo-50 border-b border-blue-100 px-6 py-5">
+        <div className="bg-white border-b border-gray-200 px-3 md:px-4 lg:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center">
               <button
                 title="Go back to stock list"
                 onClick={() => router.back()}
-                className="p-2 hover:bg-white rounded-lg transition-colors"
+                className="mr-2 md:mr-4 p-2 hover:bg-gray-100 rounded-md touch-manipulation"
               >
                 <ArrowLeft className="h-5 w-5 md:h-6 md:w-6 text-gray-600" />
               </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Edit Stock Entry
-                </h1>
-                <p className="text-sm text-gray-500">Update product information and pricing</p>
-              </div>
+              <h1 className="text-lg md:text-xl lg:text-2xl font-semibold text-gray-900">
+                Edit Stock Entry
+              </h1>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <main className="flex-1">
-          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8">
             {/* Success Message */}
             {successMessage && (
               <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
@@ -938,189 +935,177 @@ function EditStockContent() {
               </div>
             )}
 
-            {/* Group Image & Product Information - Side by Side */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              {/* Group Image Section - Left */}
-              <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                <div className="px-6 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
-                    <h2 className="text-sm font-bold text-gray-900">
+            {/* Group Image and Info Section - Side by Side */}
+            <div className="bg-white rounded-lg shadow mb-4 md:mb-6">
+              <div className="px-4 md:px-6 py-3 md:py-4 border-b border-gray-200">
+                <h2 className="text-base md:text-lg font-medium text-gray-900">
+                  Group Details
+                </h2>
+              </div>
+              <div className="p-4 md:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left - Group Image */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Group Image
-                    </h2>
+                    </label>
+                    <ImageUpload
+                      value={groupImage}
+                      onChange={setGroupImage}
+                      folder="pos-clothing-store/groups"
+                      placeholder="Upload group image"
+                    />
                   </div>
-                </div>
-                <div className="p-5 flex items-center justify-center flex-1 min-h-[280px]">
-                  <ImageUpload
-                    value={groupImage}
-                    onChange={setGroupImage}
-                    folder="pos-clothing-store/groups"
-                    placeholder="Upload group image"
-                    className="max-w-sm"
-                  />
-                </div>
-              </div>
 
-              {/* Product Information Section - Right */}
-              <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
-                    <h2 className="text-sm font-bold text-gray-900">
-                      Product Information
-                    </h2>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Product Name
-                    </label>
-                    <input
-                      type="text"
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      placeholder="Enter product name"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Category
-                    </label>
-                    <div className="flex gap-2">
-                      <select
-                        title="Category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all"
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowCategoryModal(true)}
-                        className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-xl focus:ring-2 focus:ring-rose-500 font-medium transition-colors whitespace-nowrap"
-                      >
-                        + Add
-                      </button>
+                  {/* Right - Group Info (spans 2 columns) */}
+                  <div className="lg:col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Group Name
+                        </label>
+                        <input
+                          type="text"
+                          value={groupName}
+                          onChange={(e) => setGroupName(e.target.value)}
+                          placeholder="Enter group name"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Category
+                        </label>
+                        <div className="flex gap-2">
+                          <select
+                            title="category"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                          >
+                            <option value="">Select category</option>
+                            {categories.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowCategoryModal(true)}
+                            className="px-3 md:px-4 py-2 bg-gray-100 text-gray-700 text-sm md:text-base rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 whitespace-nowrap touch-manipulation"
+                          >
+                            + Add New
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Unit Price ({currencySymbol})
+                        </label>
+                        <input
+                          type="number"
+                          value={unitPrice}
+                          onChange={(e) => setUnitPrice(e.target.value)}
+                          placeholder="Enter unit price"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Original Price ({currencySymbol})
+                        </label>
+                        <input
+                          type="number"
+                          value={originalPrice}
+                          onChange={(e) => setOriginalPrice(e.target.value)}
+                          placeholder="Enter original price"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Release Date
+                        </label>
+                        <input
+                          title="Select release date"
+                          type="date"
+                          value={releaseDate}
+                          onChange={(e) => setReleaseDate(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Shops ({selectedShops.length} selected)
+                        </label>
+                        <div className="w-full px-3 py-2 border border-gray-300 rounded-md focus-within:ring-blue-500 focus-within:border-blue-500 bg-white min-h-[42px] max-h-40 overflow-y-auto">
+                          {isLoadingShops ? (
+                            <div className="text-gray-500 text-sm">
+                              Loading shops...
+                            </div>
+                          ) : shops && shops.length > 0 ? (
+                            <div className="space-y-2">
+                              {shops.map((shop) => (
+                                <label
+                                  key={shop.id}
+                                  className="flex items-center cursor-pointer hover:bg-gray-50 p-1 rounded"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedShops.includes(shop.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedShops((prev) => [
+                                          ...prev,
+                                          shop.id,
+                                        ]);
+                                      } else {
+                                        setSelectedShops((prev) =>
+                                          prev.filter((id) => id !== shop.id),
+                                        );
+                                      }
+                                    }}
+                                    className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-400 mr-2"
+                                  />
+                                  <span className="text-sm text-gray-900">
+                                    {shop.name}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-gray-500 text-sm">
+                              No shops available
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-6">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isColorless}
+                          onChange={(e) => setIsColorless(e.target.checked)}
+                          className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          Is colorless stock?
+                        </span>
+                      </label>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Unit Price ({currencySymbol})
-                    </label>
-                    <input
-                      type="number"
-                      value={unitPrice}
-                      onChange={(e) => setUnitPrice(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Original Price ({currencySymbol})
-                    </label>
-                    <input
-                      type="number"
-                      value={originalPrice}
-                      onChange={(e) => setOriginalPrice(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Release Date
-                    </label>
-                    <input
-                      title="Select release date"
-                      type="date"
-                      value={releaseDate}
-                      onChange={(e) => setReleaseDate(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Shops ({selectedShops.length} selected)
-                    </label>
-                    <div className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent bg-white min-h-[42px] max-h-40 overflow-y-auto transition-all">
-                      {isLoadingShops ? (
-                        <div className="text-gray-500 text-sm">
-                          Loading shops...
-                        </div>
-                      ) : shops && shops.length > 0 ? (
-                        <div className="space-y-1">
-                          {shops.map((shop) => (
-                            <label
-                              key={shop.id}
-                              className="flex items-center cursor-pointer hover:bg-blue-50 p-2 rounded-lg transition-colors"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedShops.includes(shop.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedShops((prev) => [
-                                      ...prev,
-                                      shop.id,
-                                    ]);
-                                  } else {
-                                    setSelectedShops((prev) =>
-                                      prev.filter((id) => id !== shop.id),
-                                    );
-                                  }
-                                }}
-                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-2"
-                              />
-                              <span className="text-sm text-gray-900">
-                                {shop.name}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-gray-500 text-sm">
-                          No shops available
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isColorless}
-                      onChange={(e) => setIsColorless(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
-                    />
-                    <span className="text-xs font-medium text-gray-700">
-                      Colorless/single variant
-                    </span>
-                  </label>
                 </div>
               </div>
-            </div>
             </div>
 
             {/* Wholesale Pricing Tiers Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-rose-500 to-pink-500 rounded-full"></div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Wholesale Pricing Tiers
-                  </h2>
-                </div>
+            <div className="bg-white rounded-lg shadow mb-6">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-lg font-medium text-gray-900">
+                  Wholesale Pricing Tiers
+                </h2>
                 <Button
                   onClick={addWholesaleTier}
                   className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md"
@@ -1131,27 +1116,22 @@ function EditStockContent() {
               </div>
               <div className="p-6">
                 {wholesaleTiers.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-3">
-                      <DollarSign className="w-6 h-6 text-green-600" />
-                    </div>
-                    <p className="text-gray-500 font-medium">No wholesale tiers</p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Add pricing tiers for bulk orders
+                  <div className="text-center py-8">
+                    <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-4 text-gray-500">No wholesale tiers</p>
+                    <p className="text-sm text-gray-400">
+                      Get started by adding your first wholesale pricing tier.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {wholesaleTiers.map((tier, idx) => (
+                  <div className="space-y-4">
+                    {wholesaleTiers.map((tier) => (
                       <div
                         key={tier.id}
-                        className="flex items-center gap-4 p-4 border border-gray-200 rounded-xl hover:border-green-200 hover:bg-green-50/30 transition-all"
+                        className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg"
                       >
-                        <div className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-lg min-w-fit">
-                          Tier {idx + 1}
-                        </div>
                         <div className="flex-1">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             Min Quantity
                           </label>
                           <input
@@ -1169,11 +1149,11 @@ function EditStockContent() {
                                   : parseInt(e.target.value, 10),
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white transition-all"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                           />
                         </div>
                         <div className="flex-1">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             Price ({currencySymbol})
                           </label>
                           <input
@@ -1189,13 +1169,13 @@ function EditStockContent() {
                                   : parseFloat(e.target.value),
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white transition-all"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                           />
                         </div>
                         <button
                           title="Remove wholesale tier"
                           onClick={() => removeWholesaleTier(tier.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-md"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1209,12 +1189,12 @@ function EditStockContent() {
             {/* Color Variants Section */}
             {!isColorless && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-rose-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-8 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full"></div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
+                <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-rose-50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-1.5 h-8 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full shrink-0"></div>
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-gray-900 truncate">
                           Color Variants
                         </h2>
                         <p className="text-xs text-gray-500 mt-0.5">
@@ -1222,6 +1202,17 @@ function EditStockContent() {
                         </p>
                       </div>
                     </div>
+                    {colorVariants.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={addColorVariant}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:from-rose-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add Variant</span>
+                        <span className="sm:hidden">Add</span>
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="p-6 bg-gray-50/50">
@@ -1277,10 +1268,13 @@ function EditStockContent() {
                           </div>
 
                           {/* Content */}
-                          <div className="p-5">
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                              {/* Image Upload - 3 columns */}
-                              <div className="md:col-span-3">
+                          <div className="p-4 sm:p-5">
+                            {/* Stacks below lg: the barcode row and quantity
+                                grid need real width, and a 12-column split at
+                                md squeezed them badly. */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                              {/* Image Upload */}
+                              <div className="lg:col-span-3 min-w-0">
                                 <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                   Variant Image
                                 </label>
@@ -1294,8 +1288,12 @@ function EditStockContent() {
                                 />
                               </div>
 
-                              {/* Color & Barcode - 4 columns */}
-                              <div className="md:col-span-4 space-y-4">
+                              {/* Colour code (left) + available sizes (right),
+                                  with stock quantities full width underneath */}
+                              <div className="lg:col-span-9 min-w-0 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Left column */}
+                                  <div className="min-w-0 space-y-4">
                                 {/* Color Code */}
                                 <div>
                                   <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -1313,9 +1311,9 @@ function EditStockContent() {
                                           e.target.value,
                                         )
                                       }
-                                      className="w-12 h-12 border-2 border-white rounded-lg cursor-pointer shadow-sm ring-2 ring-gray-200 hover:ring-pink-300 transition-all"
+                                      className="w-12 h-12 shrink-0 border-2 border-white rounded-lg cursor-pointer shadow-sm ring-2 ring-gray-200 hover:ring-pink-300 transition-all"
                                     />
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                       <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                                         Hex Value
                                       </div>
@@ -1358,7 +1356,7 @@ function EditStockContent() {
                                   )}
 
                                 {/* Barcode */}
-                                <div>
+                                {/* <div>
                                   <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                     EAN-13 Barcode
                                   </label>
@@ -1374,14 +1372,14 @@ function EditStockContent() {
                                         )
                                       }
                                       placeholder="Enter or scan barcode"
-                                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 bg-white text-sm transition-all font-mono"
+                                      className="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 bg-white text-sm transition-all font-mono"
                                     />
                                     <button
                                       type="button"
                                       onClick={() =>
                                         generateBarcode(variant.id)
                                       }
-                                      className="p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
+                                      className="shrink-0 p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
                                       title="Generate barcode automatically"
                                     >
                                       <BarChart3 className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -1389,52 +1387,51 @@ function EditStockContent() {
                                     <button
                                       type="button"
                                       onClick={() => scanBarcode(variant.id)}
-                                      className="p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
+                                      className="shrink-0 p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
                                       title="Scan existing barcode"
                                     >
                                       <ScanLine className="w-5 h-5 group-hover:scale-110 transition-transform" />
                                     </button>
                                   </div>
-                                </div>
-                              </div>
+                                </div> */}
+                                  </div>
 
-                              {/* Sizes & Quantities - 5 columns */}
-                              <div className="md:col-span-5 space-y-4">
-                                {/* Size Selection */}
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                                    Available Sizes
-                                  </label>
-                                  <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                    {availableSizes.map((size) => {
-                                      const isSelected =
-                                        variant.sizeQuantities.some(
-                                          (sq) => sq.size === size,
+                                  {/* Right column */}
+                                  <div className="min-w-0">
+                                    <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                      Available Sizes
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                      {availableSizes.map((size) => {
+                                        const isSelected =
+                                          variant.sizeQuantities.some(
+                                            (sq) => sq.size === size,
+                                          );
+                                        return (
+                                          <button
+                                            key={size}
+                                            type="button"
+                                            onClick={() => {
+                                              if (isSelected) {
+                                                removeSizeFromVariant(
+                                                  variant.id,
+                                                  size,
+                                                );
+                                              } else {
+                                                addSizeToVariant(variant.id, size);
+                                              }
+                                            }}
+                                            className={`px-3 py-1.5 border-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                              isSelected
+                                                ? "bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-md scale-105"
+                                                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:scale-105"
+                                            }`}
+                                          >
+                                            {size}
+                                          </button>
                                         );
-                                      return (
-                                        <button
-                                          key={size}
-                                          type="button"
-                                          onClick={() => {
-                                            if (isSelected) {
-                                              removeSizeFromVariant(
-                                                variant.id,
-                                                size,
-                                              );
-                                            } else {
-                                              addSizeToVariant(variant.id, size);
-                                            }
-                                          }}
-                                          className={`px-3 py-1.5 border-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                                            isSelected
-                                              ? "bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-md scale-105"
-                                              : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:scale-105"
-                                          }`}
-                                        >
-                                          {size}
-                                        </button>
-                                      );
-                                    })}
+                                      })}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -1444,7 +1441,7 @@ function EditStockContent() {
                                     <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                       Stock Quantities
                                     </label>
-                                    <div className="grid grid-cols-3 gap-2 p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg border border-pink-100">
+                                    <div className="grid grid-cols-6 gap-2 p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg border border-pink-100">
                                       {variant.sizeQuantities.map((sizeQty) => (
                                         <div
                                           key={sizeQty.size}
@@ -1491,6 +1488,7 @@ function EditStockContent() {
                                   </div>
                                 )}
                               </div>
+
                             </div>
                           </div>
                         </div>
@@ -1502,13 +1500,13 @@ function EditStockContent() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
                 <Button
                   variant="outline"
                   onClick={handleMultipleImageUpload}
                   disabled={isUploadingMultiple}
-                  className="flex items-center border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="flex items-center"
                 >
                   {isUploadingMultiple ? (
                     <>
@@ -1528,23 +1526,23 @@ function EditStockContent() {
                   <Button
                     variant="outline"
                     onClick={addColorVariant}
-                    className="flex items-center border-gray-300 text-gray-700 hover:bg-gray-50"
+                    className="flex items-center"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     New Variant
                   </Button>
                 )}
               </div>
-              <div className="flex flex-col items-end gap-3">
+              <div className="flex flex-col items-end space-y-2">
                 {error && (
-                  <div className="text-red-600 text-sm bg-red-50 px-4 py-3 rounded-lg border border-red-200 max-w-sm">
+                  <div className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded-md border border-red-200">
                     {error}
                   </div>
                 )}
                 <Button
                   onClick={handleUpdateStock}
                   disabled={isLoading}
-                  className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                  className="bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
@@ -1563,29 +1561,29 @@ function EditStockContent() {
 
       {/* Add Category Modal */}
       {showCategoryModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900">
               Manage Categories
             </h3>
 
             {/* Current Categories List */}
-            <div className="mb-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
                 Current Categories
               </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
                 {categories.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4 text-sm">
+                  <p className="text-gray-500 text-center py-2 text-sm">
                     No categories available
                   </p>
                 ) : (
                   categories.map((cat) => (
                     <div
                       key={cat}
-                      className="flex items-center justify-between p-3 bg-white rounded-lg hover:bg-blue-50 border border-gray-200 transition-all"
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100"
                     >
-                      <span className="text-gray-900 text-sm font-medium">{cat}</span>
+                      <span className="text-gray-900 text-sm">{cat}</span>
                       <button
                         onClick={async () => {
                           if (
@@ -1608,7 +1606,7 @@ function EditStockContent() {
                             }
                           }
                         }}
-                        className="px-2.5 py-1 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
                       >
                         Delete
                       </button>
@@ -1619,8 +1617,8 @@ function EditStockContent() {
             </div>
 
             {/* Add New Category Input */}
-            <div className="mb-6">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
                 Add New Category
               </h4>
               <input
@@ -1628,7 +1626,7 @@ function EditStockContent() {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white transition-all mb-3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     if (
@@ -1655,7 +1653,7 @@ function EditStockContent() {
               />
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={async () => {
                   if (
@@ -1676,7 +1674,7 @@ function EditStockContent() {
                     }
                   }
                 }}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors shadow-md border-0"
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white rounded-md hover:from-rose-600 hover:to-pink-600 disabled:opacity-50"
                 disabled={
                   !newCategoryName.trim() ||
                   categories.includes(newCategoryName.trim())
@@ -1689,7 +1687,7 @@ function EditStockContent() {
                   setNewCategoryName("");
                   setShowCategoryModal(false);
                 }}
-                className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium transition-colors"
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
                 Close
               </button>

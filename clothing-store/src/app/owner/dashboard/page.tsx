@@ -15,7 +15,6 @@ import {
   User,
   TrendingUp,
   TrendingDown,
-  DollarSign,
   Users,
   RefreshCw,
   Calendar,
@@ -23,6 +22,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Tag,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -30,8 +30,7 @@ import {
   Area,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
+  ComposedChart,
   Cell,
   LineChart,
   Line,
@@ -112,10 +111,13 @@ interface DailyRevenue {
   orders: number;
 }
 
-interface PaymentMethodChart {
-  name: string;
-  value: number;
-  percentage: number;
+interface PromotionRevenuePoint {
+  date: string;
+  promotionDiscount: number;
+  revenue: number;
+  discountedOrders: number;
+  totalOrders: number;
+  discountRate: number;
 }
 
 interface OrderStatusChart {
@@ -186,9 +188,12 @@ function OwnerDashboardContent() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [dailyRevenueData, setDailyRevenueData] = useState<DailyRevenue[]>([]);
-  const [paymentMethodChartData, setPaymentMethodChartData] = useState<
-    PaymentMethodChart[]
+  const [promotionRevenueData, setPromotionRevenueData] = useState<
+    PromotionRevenuePoint[]
   >([]);
+  const [promotionCorrelation, setPromotionCorrelation] = useState<
+    number | null
+  >(null);
   const [orderStatusChartData, setOrderStatusChartData] = useState<
     OrderStatusChart[]
   >([]);
@@ -312,34 +317,136 @@ function OwnerDashboardContent() {
       });
   };
 
-  // Calculate payment method chart data
-  const calculatePaymentMethodChart = (
-    methods: RevenueByMethod,
-    totalRevenue: number,
-  ): PaymentMethodChart[] => {
-    return [
+  // Total promotional savings given away on a single transaction.
+  // Includes item-level promotions (group/variant/wholesale), the cart-level
+  // discount and any loyalty coupon applied at the till.
+  const getTransactionPromotionDiscount = (
+    transaction: Transaction,
+  ): number => {
+    const breakdown = transaction.discountBreakdown;
+
+    const itemLevelSavings = breakdown
+      ? (breakdown.wholesaleSavings || 0) +
+        (breakdown.groupPercentSavings || 0) +
+        (breakdown.groupFixedTotal || 0) +
+        (breakdown.variantPercentSavings || 0) +
+        (breakdown.variantFixedTotal || 0)
+      : 0;
+
+    const cartDiscount =
+      breakdown?.cartDiscount !== undefined
+        ? breakdown.cartDiscount
+        : transaction.discount || 0;
+
+    const couponDiscount = transaction.couponDiscount || 0;
+
+    return Math.max(0, itemLevelSavings + cartDiscount + couponDiscount);
+  };
+
+  // Calculate promotion vs revenue relationship data (daily buckets)
+  const calculatePromotionRevenue = (
+    transactions: Transaction[],
+    startDate: Date,
+    endDate: Date,
+  ): PromotionRevenuePoint[] => {
+    const dailyData = new Map<
+      string,
       {
-        name: "Cash",
-        value: methods.cash,
-        percentage: totalRevenue > 0 ? (methods.cash / totalRevenue) * 100 : 0,
-      },
-      {
-        name: "Scan",
-        value: methods.scan,
-        percentage: totalRevenue > 0 ? (methods.scan / totalRevenue) * 100 : 0,
-      },
-      {
-        name: "Wallet",
-        value: methods.wallet,
-        percentage:
-          totalRevenue > 0 ? (methods.wallet / totalRevenue) * 100 : 0,
-      },
-      {
-        name: "COD",
-        value: methods.cod,
-        percentage: totalRevenue > 0 ? (methods.cod / totalRevenue) * 100 : 0,
-      },
-    ].filter((item) => item.value > 0);
+        promotionDiscount: number;
+        revenue: number;
+        discountedOrders: number;
+        totalOrders: number;
+      }
+    >();
+
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateKey = currentDate.toISOString().split("T")[0];
+      dailyData.set(dateKey, {
+        promotionDiscount: 0,
+        revenue: 0,
+        discountedOrders: 0,
+        totalOrders: 0,
+      });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    transactions.forEach((transaction) => {
+      if (
+        transaction.status !== "completed" &&
+        transaction.status !== "partially_refunded" &&
+        transaction.status !== "refunded"
+      ) {
+        return;
+      }
+
+      const dateKey = new Date(transaction.timestamp)
+        .toISOString()
+        .split("T")[0];
+      const existing = dailyData.get(dateKey);
+      if (!existing) return;
+
+      const totalRefunded =
+        transaction.refunds?.reduce(
+          (sum, refund) => sum + refund.totalAmount,
+          0,
+        ) || 0;
+      const netAmount = Math.max(0, transaction.total - totalRefunded);
+      const promotionDiscount = getTransactionPromotionDiscount(transaction);
+
+      existing.revenue += netAmount;
+      existing.promotionDiscount += promotionDiscount;
+      existing.totalOrders += 1;
+      if (promotionDiscount > 0) existing.discountedOrders += 1;
+    });
+
+    return Array.from(dailyData.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, data]) => {
+        const gross = data.revenue + data.promotionDiscount;
+        return {
+          date: new Date(date).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          }),
+          promotionDiscount: data.promotionDiscount,
+          revenue: data.revenue,
+          discountedOrders: data.discountedOrders,
+          totalOrders: data.totalOrders,
+          discountRate: gross > 0 ? (data.promotionDiscount / gross) * 100 : 0,
+        };
+      });
+  };
+
+  // Pearson correlation between daily promotion spend and daily revenue
+  const calculatePromotionCorrelation = (
+    points: PromotionRevenuePoint[],
+  ): number | null => {
+    const active = points.filter(
+      (point) => point.totalOrders > 0 || point.promotionDiscount > 0,
+    );
+    if (active.length < 3) return null;
+
+    const n = active.length;
+    const meanX =
+      active.reduce((sum, point) => sum + point.promotionDiscount, 0) / n;
+    const meanY = active.reduce((sum, point) => sum + point.revenue, 0) / n;
+
+    let covariance = 0;
+    let varianceX = 0;
+    let varianceY = 0;
+
+    active.forEach((point) => {
+      const dx = point.promotionDiscount - meanX;
+      const dy = point.revenue - meanY;
+      covariance += dx * dy;
+      varianceX += dx * dx;
+      varianceY += dy * dy;
+    });
+
+    if (varianceX === 0 || varianceY === 0) return null;
+
+    return covariance / Math.sqrt(varianceX * varianceY);
   };
 
   // Calculate order status chart data
@@ -521,9 +628,10 @@ function OwnerDashboardContent() {
         rangeStartDate,
         rangeEndDate,
       );
-      const paymentChart = calculatePaymentMethodChart(
-        paymentMethods,
-        dashboardStats.totalRevenue,
+      const promotionRevenue = calculatePromotionRevenue(
+        filteredTransactions,
+        rangeStartDate,
+        rangeEndDate,
       );
       const statusChart = calculateOrderStatusChart(dashboardStats);
 
@@ -532,7 +640,8 @@ function OwnerDashboardContent() {
       setTopProducts(products);
       setRecentActivity(activities);
       setDailyRevenueData(dailyRevenue);
-      setPaymentMethodChartData(paymentChart);
+      setPromotionRevenueData(promotionRevenue);
+      setPromotionCorrelation(calculatePromotionCorrelation(promotionRevenue));
       setOrderStatusChartData(statusChart);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -550,6 +659,11 @@ function OwnerDashboardContent() {
     await loadDashboardData();
     setRefreshing(false);
   };
+
+  // Only show the promotion chart when there is at least one promoted sale
+  const hasPromotionData = promotionRevenueData.some(
+    (point) => point.promotionDiscount > 0,
+  );
 
   // Calculate dashboard statistics
   const calculateStats = (
@@ -1737,55 +1851,101 @@ function OwnerDashboardContent() {
                     )}
                   </div>
 
-                  {/* Payment Method Distribution Pie Chart */}
+                  {/* Promotion & Revenue Relationship Chart */}
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.paymentMethodDistribution}
-                    </h2>
-                    {paymentMethodChartData.length > 0 ? (
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {t.promotionRevenueRelationship}
+                      </h2>
+                      {promotionCorrelation !== null && (
+                        <span
+                          className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                            promotionCorrelation > 0.3
+                              ? "bg-emerald-50 text-emerald-700"
+                              : promotionCorrelation < -0.3
+                                ? "bg-red-50 text-red-700"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          r = {promotionCorrelation.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    {hasPromotionData ? (
                       <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                          <Pie
-                            data={
-                              paymentMethodChartData as unknown as Array<
-                                Record<string, string | number>
-                              >
-                            }
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            outerRadius={100}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label
-                          >
-                            {paymentMethodChartData.map((entry, index) => {
-                              const COLORS = [
-                                "#3b82f6",
-                                "#10b981",
-                                "#f59e0b",
-                                "#8b5cf6",
-                              ];
-                              return (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={COLORS[index % COLORS.length]}
-                                />
-                              );
-                            })}
-                          </Pie>
+                        <ComposedChart data={promotionRevenueData}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#e5e7eb"
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 12 }}
+                            stroke="#6b7280"
+                          />
+                          <YAxis
+                            yAxisId="left"
+                            tick={{ fontSize: 12 }}
+                            stroke="#6b7280"
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fontSize: 12 }}
+                            stroke="#f59e0b"
+                            tickFormatter={(value: number) => `${value}%`}
+                          />
                           <Tooltip
-                            formatter={(value: number | undefined) =>
-                              value !== undefined ? formatPrice(value) : "N/A"
-                            }
+                            contentStyle={{
+                              backgroundColor: "#fff",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "8px",
+                            }}
+                            formatter={(
+                              value: number | undefined,
+                              name?: string,
+                            ) => {
+                              if (value === undefined) return "N/A";
+                              if (name === t.discountRate) {
+                                return [`${value.toFixed(1)}%`, name];
+                              }
+                              return [formatPrice(value), name ?? ""];
+                            }}
                           />
                           <Legend />
-                        </PieChart>
+                          <Bar
+                            yAxisId="left"
+                            dataKey="promotionDiscount"
+                            fill="#8b5cf6"
+                            name={t.promotionDiscount}
+                            barSize={18}
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Line
+                            yAxisId="left"
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                            dot={false}
+                            name={t.totalSales}
+                          />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="discountRate"
+                            stroke="#f59e0b"
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name={t.discountRate}
+                          />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="text-center py-16">
-                        <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noPaymentData}</p>
+                        <Tag className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500">{t.noPromotionData}</p>
                       </div>
                     )}
                   </div>

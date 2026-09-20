@@ -1068,12 +1068,12 @@ function NewStockContent() {
             {/* Color Variants Section */}
             {!isColorless && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-rose-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-1.5 h-8 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full"></div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
+                <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-rose-50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-1.5 h-8 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full shrink-0"></div>
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-gray-900 truncate">
                           Color Variants
                         </h2>
                         <p className="text-xs text-gray-500 mt-0.5">
@@ -1081,6 +1081,17 @@ function NewStockContent() {
                         </p>
                       </div>
                     </div>
+                    {colorVariants.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={addColorVariant}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:from-rose-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add Variant</span>
+                        <span className="sm:hidden">Add</span>
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="p-6 bg-gray-50/50">
@@ -1109,18 +1120,18 @@ function NewStockContent() {
                           className="bg-white rounded-xl border border-gray-200 hover:border-pink-300 hover:shadow-md transition-all overflow-hidden"
                         >
                           {/* Header */}
-                          <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                          <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div 
-                                className="w-8 h-8 rounded-lg border-2 border-white shadow-md ring-2 ring-gray-200" 
+                                className="w-8 h-8 shrink-0 rounded-lg border-2 border-white shadow-md ring-2 ring-gray-200" 
                                 style={{ backgroundColor: variant.colorCode }}
                               ></div>
-                              <div>
+                              <div className="min-w-0">
                                 <h3 className="text-sm font-semibold text-gray-900">
                                   Color #{idx + 1}
                                 </h3>
                                 {variant.color && (
-                                  <p className="text-xs text-gray-500 font-medium">
+                                  <p className="text-xs text-gray-500 font-medium truncate">
                                     {variant.color}
                                   </p>
                                 )}
@@ -1129,17 +1140,20 @@ function NewStockContent() {
                             <button
                               aria-label="Remove color variant"
                               onClick={() => removeColorVariant(variant.id)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors group"
+                              className="shrink-0 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors group"
                             >
                               <X className="h-4 w-4 group-hover:scale-110 transition-transform" />
                             </button>
                           </div>
 
                           {/* Content */}
-                          <div className="p-5">
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                              {/* Image Upload - 3 columns */}
-                              <div className="md:col-span-3">
+                          <div className="p-4 sm:p-5">
+                            {/* Stacks below lg: the barcode row and the
+                                quantity grid need real width, and a 12-column
+                                split at md squeezed them to ~110px. */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                              {/* Image Upload */}
+                              <div className="lg:col-span-3 min-w-0">
                                 <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                   Variant Image
                                 </label>
@@ -1153,8 +1167,12 @@ function NewStockContent() {
                                 />
                               </div>
 
-                              {/* Color & Barcode - 4 columns */}
-                              <div className="md:col-span-4 space-y-4">
+                              {/* Colour code (left) + available sizes (right),
+                                  with stock quantities full width underneath */}
+                              <div className="lg:col-span-9 min-w-0 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Left column */}
+                                  <div className="min-w-0 space-y-4">
                                 {/* Color Code */}
                                 <div>
                                   <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -1172,9 +1190,9 @@ function NewStockContent() {
                                           e.target.value,
                                         )
                                       }
-                                      className="w-12 h-12 border-2 border-white rounded-lg cursor-pointer shadow-sm ring-2 ring-gray-200 hover:ring-pink-300 transition-all"
+                                      className="w-12 h-12 shrink-0 border-2 border-white rounded-lg cursor-pointer shadow-sm ring-2 ring-gray-200 hover:ring-pink-300 transition-all"
                                     />
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                       <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                                         Hex Value
                                       </div>
@@ -1217,7 +1235,7 @@ function NewStockContent() {
                                   )}
 
                                 {/* Barcode */}
-                                <div>
+                                {/* <div>
                                   <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                     EAN-13 Barcode
                                   </label>
@@ -1233,14 +1251,14 @@ function NewStockContent() {
                                         )
                                       }
                                       placeholder="Enter or scan barcode"
-                                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 bg-white text-sm transition-all font-mono"
+                                      className="flex-1 min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 bg-white text-sm transition-all font-mono"
                                     />
                                     <button
                                       type="button"
                                       onClick={() =>
                                         generateBarcode(variant.id)
                                       }
-                                      className="p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
+                                      className="shrink-0 p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
                                       title="Generate barcode automatically"
                                     >
                                       <BarChart3 className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -1248,52 +1266,51 @@ function NewStockContent() {
                                     <button
                                       type="button"
                                       onClick={() => scanBarcode(variant.id)}
-                                      className="p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
+                                      className="shrink-0 p-2.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:ring-2 focus:ring-pink-500 transition-all group"
                                       title="Scan existing barcode"
                                     >
                                       <ScanLine className="w-5 h-5 group-hover:scale-110 transition-transform" />
                                     </button>
                                   </div>
-                                </div>
-                              </div>
+                                </div> */}
+                                  </div>
 
-                              {/* Sizes & Quantities - 5 columns */}
-                              <div className="md:col-span-5 space-y-4">
-                                {/* Size Selection */}
-                                <div>
-                                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                                    Available Sizes
-                                  </label>
-                                  <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                    {availableSizes.map((size) => {
-                                      const isSelected =
-                                        variant.sizeQuantities.some(
-                                          (sq) => sq.size === size,
+                                  {/* Right column */}
+                                  <div className="min-w-0">
+                                    <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                      Available Sizes
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                      {availableSizes.map((size) => {
+                                        const isSelected =
+                                          variant.sizeQuantities.some(
+                                            (sq) => sq.size === size,
+                                          );
+                                        return (
+                                          <button
+                                            key={size}
+                                            type="button"
+                                            onClick={() => {
+                                              if (isSelected) {
+                                                removeSizeFromVariant(
+                                                  variant.id,
+                                                  size,
+                                                );
+                                              } else {
+                                                addSizeToVariant(variant.id, size);
+                                              }
+                                            }}
+                                            className={`px-3 py-1.5 border-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                                              isSelected
+                                                ? "bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-md scale-105"
+                                                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:scale-105"
+                                            }`}
+                                          >
+                                            {size}
+                                          </button>
                                         );
-                                      return (
-                                        <button
-                                          key={size}
-                                          type="button"
-                                          onClick={() => {
-                                            if (isSelected) {
-                                              removeSizeFromVariant(
-                                                variant.id,
-                                                size,
-                                              );
-                                            } else {
-                                              addSizeToVariant(variant.id, size);
-                                            }
-                                          }}
-                                          className={`px-3 py-1.5 border-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                                            isSelected
-                                              ? "bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-md scale-105"
-                                              : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:scale-105"
-                                          }`}
-                                        >
-                                          {size}
-                                        </button>
-                                      );
-                                    })}
+                                      })}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -1303,7 +1320,7 @@ function NewStockContent() {
                                     <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                       Stock Quantities
                                     </label>
-                                    <div className="grid grid-cols-3 gap-2 p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg border border-pink-100">
+                                    <div className="grid grid-cols-6 gap-2 p-3 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg border border-pink-100">
                                       {variant.sizeQuantities.map((sizeQty) => (
                                         <div
                                           key={sizeQty.size}
@@ -1350,6 +1367,7 @@ function NewStockContent() {
                                   </div>
                                 )}
                               </div>
+
                             </div>
                           </div>
                         </div>

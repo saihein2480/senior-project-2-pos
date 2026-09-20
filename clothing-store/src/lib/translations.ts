@@ -273,7 +273,9 @@ export interface Translations {
   wallet: string;
   cod: string;
   totalSaleProfitTrend: string;
-  paymentMethodDistribution: string;
+  promotionRevenueRelationship: string;
+  promotionDiscount: string;
+  discountRate: string;
   orderStatusDistribution: string;
   dailyOrdersTrend: string;
   topSellingProducts: string;
@@ -282,7 +284,7 @@ export interface Translations {
   orders: string;
   dailyOrders: string;
   noRevenueData: string;
-  noPaymentData: string;
+  noPromotionData: string;
   noOrderData: string;
   noSalesData: string;
   noRecentActivity: string;
@@ -770,7 +772,9 @@ export const translations: Record<Language, Translations> = {
     wallet: "Wallet",
     cod: "COD",
     totalSaleProfitTrend: "Total Sale & Profit Trend",
-    paymentMethodDistribution: "Payment Method Distribution",
+    promotionRevenueRelationship: "Promotion & Revenue Relationship",
+    promotionDiscount: "Promotion Discount",
+    discountRate: "Discount Rate",
     orderStatusDistribution: "Order Status Distribution",
     dailyOrdersTrend: "Daily Orders Trend",
     recentActivity: "Recent Activity",
@@ -778,7 +782,7 @@ export const translations: Record<Language, Translations> = {
     orders: "orders",
     dailyOrders: "Daily Orders",
     noRevenueData: "No revenue data available",
-    noPaymentData: "No payment data available",
+    noPromotionData: "No promotion data available",
     noOrderData: "No order data available",
     noSalesData: "No sales data available",
     noRecentActivity: "No recent activity",
@@ -1265,7 +1269,9 @@ export const translations: Record<Language, Translations> = {
     wallet: "ပိုက်ဆံအိတ်",
     cod: "ပေးပို့သောအခါငွေပေးရန်",
     totalSaleProfitTrend: "စုစုပေါင်းရောင်းချမှုနှင့်အမြတ်ခြေရာ",
-    paymentMethodDistribution: "ငွေပေးချေနည်းဖြန့်ဝေမှု",
+    promotionRevenueRelationship: "ပရိုမိုးရှင်းနှင့် ဝင်ငွေ ဆက်နွှယ်မှု",
+    promotionDiscount: "ပရိုမိုးရှင်းလျှော့ငွေ",
+    discountRate: "လျှော့ငွေနှုန်း",
     orderStatusDistribution: "မှာယူမှုအခြေအနေဖြန့်ဝေမှု",
     dailyOrdersTrend: "နေ့စဉ်မှာယူမှုခြေရာ",
     recentActivity: "မကြာသေးသောလုပ်ဆောင်ချက်များ",
@@ -1273,7 +1279,7 @@ export const translations: Record<Language, Translations> = {
     orders: "မှာယူမှုများ",
     dailyOrders: "နေ့စဉ်မှာယူမှုများ",
     noRevenueData: "ဝင်ငွေဒေတာမရှိပါ",
-    noPaymentData: "ငွေပေးချေဒေတာမရှိပါ",
+    noPromotionData: "ပရိုမိုးရှင်းဒေတာမရှိပါ",
     noOrderData: "မှာယူမှုဒေတာမရှိပါ",
     noSalesData: "ရောင်းချမှုဒေတာမရှိပါ",
     noRecentActivity: "မကြာသေးသောလုပ်ဆောင်ချက်မရှိပါ",

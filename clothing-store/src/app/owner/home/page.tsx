@@ -18,6 +18,10 @@ import { StockService } from "@/services/stockService";
 import { InventoryRealtimeService } from "@/services/inventoryRealtimeService";
 import { CategoryService } from "@/services/categoryService";
 
+// Bump this suffix whenever the shape or completeness of the cached inventory
+// changes, so stale session caches are ignored instead of being trusted.
+const INVENTORY_CACHE_KEY = "inventory_cache_v2";
+
 interface ClothingInventoryItem {
   id: string;
   name: string;
@@ -590,8 +594,10 @@ function OwnerHomeContent() {
     console.log('Starting inventory load...');
     const startTime = Date.now();
     
-    // Try to load from cache first
-    const cachedData = sessionStorage.getItem('inventory_cache');
+    // Try to load from cache first. The key is versioned so that an older
+    // cache (which held only the first 20 products) is discarded rather than
+    // being served back as if it were the full catalogue.
+    const cachedData = sessionStorage.getItem(INVENTORY_CACHE_KEY);
     if (cachedData) {
       try {
         const parsed = JSON.parse(cachedData);
@@ -610,17 +616,19 @@ function OwnerHomeContent() {
     // Use one-time fetch instead of real-time subscription for better performance
     const fetchStocks = async () => {
       try {
-        const { getDocs, collection, query, orderBy, limit } = await import('firebase/firestore');
+        const { getDocs, collection, query, orderBy } = await import('firebase/firestore');
         const { db } = await import('@/lib/firebase');
         
         if (!db) {
           throw new Error('Firebase not initialized');
         }
 
+        // Fetch the whole catalogue: the branch / category / stock filters below
+        // all run client-side, so truncating this query would silently hide
+        // products from the selected branch.
         const q = query(
           collection(db, 'stocks'),
-          orderBy('createdAt', 'desc'),
-          limit(20)
+          orderBy('createdAt', 'desc')
         );
 
         const querySnapshot = await getDocs(q);
@@ -644,7 +652,7 @@ function OwnerHomeContent() {
         
         // Cache the data
         try {
-          sessionStorage.setItem('inventory_cache', JSON.stringify(transformedData));
+          sessionStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify(transformedData));
         } catch (e) {
           console.warn('Failed to cache data:', e);
         }

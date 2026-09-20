@@ -73,9 +73,12 @@ export class ShopService {
     }
 
     try {
+      // Ascending: branch pickers should read oldest-first so the branch the
+      // business started with stays at the top of the list and the order stays
+      // stable as new branches are added.
       const q = query(
         collection(db, COLLECTION_NAME),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "asc")
       );
       const querySnapshot = await getDocs(q);
 
