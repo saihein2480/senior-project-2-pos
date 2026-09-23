@@ -19,7 +19,10 @@ export function OwnerLogin() {
 
   useEffect(() => {
     if (user && user.role === "owner") {
-      router.push("/owner/home");
+      // Dashboard, not Home: it matches what submitting the form does, and an
+      // owner who has hidden the walk-in POS in Settings no longer has Home in
+      // their menu.
+      router.push("/owner/dashboard");
     }
   }, [user, router]);
 

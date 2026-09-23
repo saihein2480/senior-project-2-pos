@@ -4,6 +4,7 @@ import { toast } from "react-hot-toast";
 import { useState, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +37,7 @@ import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
 
 function InventoryStocksContent() {
   const router = useRouter();
+  const permissions = usePermissions();
   const { businessSettings } = useSettings();
   const [activeItem, setActiveItem] = useState("stocks");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -341,6 +343,12 @@ function InventoryStocksContent() {
 
   // Export to CSV
   const exportToCSV = () => {
+    // Doc: "Export Data" - Owner + Manager only.
+    if (!permissions.canExportStockData) {
+      toast.error("You do not have permission to export stock data.");
+      return;
+    }
+
     // Prepare CSV headers
     const headers = [
       "Group ID",
@@ -419,7 +427,12 @@ function InventoryStocksContent() {
 
   // Handle delete confirmation
   const handleDeleteGroup = (group: StockGroupDisplay) => {
-    console.log("Delete button clicked for group:", group);
+    // Doc: "Delete Products" - Owner only.
+    if (!permissions.canDeleteProducts) {
+      toast.error("Only the owner can delete products.");
+      return;
+    }
+
     setDeletingGroup(group);
     setShowDeleteModal(true);
     setDeleteError(null);
@@ -503,6 +516,12 @@ function InventoryStocksContent() {
   // Bulk delete selected stocks
   const handleBulkDelete = async () => {
     if (selectedStocks.length === 0) return;
+
+    // Doc: "Delete Products" - Owner only.
+    if (!permissions.canDeleteProducts) {
+      toast.error("Only the owner can delete products.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to permanently delete ${selectedStocks.length} stock item(s)?\n\nThis action cannot be undone.`,
@@ -794,23 +813,29 @@ function InventoryStocksContent() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex items-center gap-2 whitespace-nowrap"
-                    onClick={exportToCSV}
-                  >
-                    <Download className="h-4 w-4" />
-                    Export
-                  </Button>
-                  <Button
-                    className="flex items-center gap-2 whitespace-nowrap bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md border-0"
-                    onClick={() =>
-                      router.push("/owner/inventory/stocks/new-stock")
-                    }
-                  >
-                    <Plus className="h-4 w-4" />
-                    New Stock
-                  </Button>
+                  {/* Doc: "Export Data" - Owner + Manager only. */}
+                  {permissions.canExportStockData && (
+                    <Button
+                      variant="outline"
+                      className="flex items-center gap-2 whitespace-nowrap"
+                      onClick={exportToCSV}
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                    </Button>
+                  )}
+                  {/* Doc: "Add New Products" - Owner + Manager only. */}
+                  {permissions.canAddProducts && (
+                    <Button
+                      className="flex items-center gap-2 whitespace-nowrap bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md border-0"
+                      onClick={() =>
+                        router.push("/owner/inventory/stocks/new-stock")
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Stock
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -827,23 +852,26 @@ function InventoryStocksContent() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleBulkDelete}
-                    disabled={isProcessingBulkDelete}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                  >
-                    {isProcessingBulkDelete ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-4 w-4" />
-                        Delete Selected
-                      </>
-                    )}
-                  </button>
+                  {/* Doc: "Delete Products" - Owner only. */}
+                  {permissions.canDeleteProducts && (
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={isProcessingBulkDelete}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 transition-colors text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      {isProcessingBulkDelete ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-4 w-4" />
+                          Delete Selected
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedStocks([])}
                     className="px-4 py-2.5 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-semibold rounded-lg shadow-sm"
@@ -902,18 +930,22 @@ function InventoryStocksContent() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
                       <tr>
-                        <th scope="col" className="py-4 pl-4 pr-3 w-12 sm:pl-6">
-                          <input
-                            type="checkbox"
-                            checked={
-                              currentGroups.length > 0 &&
-                              selectedStocks.length === currentGroups.length
-                            }
-                            onChange={toggleSelectAll}
-                            className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
-                            aria-label="Select all stocks"
-                          />
-                        </th>
+                        {/* Selection exists only to drive bulk delete, which the
+                            doc restricts to Owner. */}
+                        {permissions.canDeleteProducts && (
+                          <th scope="col" className="py-4 pl-4 pr-3 w-12 sm:pl-6">
+                            <input
+                              type="checkbox"
+                              checked={
+                                currentGroups.length > 0 &&
+                                selectedStocks.length === currentGroups.length
+                              }
+                              onChange={toggleSelectAll}
+                              className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
+                              aria-label="Select all stocks"
+                            />
+                          </th>
+                        )}
                         <th
                           scope="col"
                           className="py-4 pl-4 pr-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide sm:pl-6"
@@ -968,18 +1000,20 @@ function InventoryStocksContent() {
                       {currentGroups.map((group) => (
                         <Fragment key={group.groupId}>
                           <tr className="hover:bg-pink-50/50 transition-colors duration-150">
-                            {/* Checkbox Column */}
-                            <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
-                              <input
-                                type="checkbox"
-                                checked={selectedStocks.includes(group.groupId)}
-                                onChange={() =>
-                                  toggleSelectStock(group.groupId)
-                                }
-                                className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
-                                aria-label={`Select ${group.groupName}`}
-                              />
-                            </td>
+                            {/* Checkbox Column - Owner only, see header. */}
+                            {permissions.canDeleteProducts && (
+                              <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStocks.includes(group.groupId)}
+                                  onChange={() =>
+                                    toggleSelectStock(group.groupId)
+                                  }
+                                  className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
+                                  aria-label={`Select ${group.groupName}`}
+                                />
+                              </td>
+                            )}
                             {/* Product Column */}
                             <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
                               <div className="flex items-center gap-3">
@@ -1066,20 +1100,26 @@ function InventoryStocksContent() {
                             {/* Actions Column */}
                             <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                               <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => handleEditGroup(group)}
-                                  className="p-2 text-cyan-600 hover:text-blue-900 hover:bg-cyan-50 rounded-lg transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteGroup(group)}
-                                  className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                {/* Doc: "Edit Product Details" - Owner + Manager. */}
+                                {permissions.canEditProducts && (
+                                  <button
+                                    onClick={() => handleEditGroup(group)}
+                                    className="p-2 text-cyan-600 hover:text-blue-900 hover:bg-cyan-50 rounded-lg transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {/* Doc: "Delete Products" - Owner only. */}
+                                {permissions.canDeleteProducts && (
+                                  <button
+                                    onClick={() => handleDeleteGroup(group)}
+                                    className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={() =>
                                     toggleGroupExpansion(group.groupId)
@@ -1104,7 +1144,12 @@ function InventoryStocksContent() {
                           {/* Expandable Variants Row */}
                           {expandedGroups.has(group.groupId) && (
                             <tr className="bg-gradient-to-b from-pink-50/30 to-transparent">
-                              <td colSpan={9} className="px-4 py-6 sm:px-6">
+                              {/* One fewer column when the selection checkbox
+                                  is hidden for non-owners. */}
+                              <td
+                                colSpan={permissions.canDeleteProducts ? 9 : 8}
+                                className="px-4 py-6 sm:px-6"
+                              >
                                 <div className="space-y-4">
                                   {/* Color Variants */}
                                   <div>

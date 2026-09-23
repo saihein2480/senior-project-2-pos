@@ -41,6 +41,20 @@ export interface Transaction {
   couponId?: string;
   couponCode?: string;
   couponDiscount?: number;
+  /**
+   * Storefront equivalents of `couponDiscount` / `couponCode`.
+   *
+   * The web checkout (`api/transactions/create-cod`) and the MMPay webhook
+   * write the coupon value as `couponDiscountTHB` and echo the code as
+   * `appliedCouponCode`. Declaring them here means loyalty reporting can see
+   * online redemptions instead of only counting till ones.
+   *
+   * Careful: on the QR path `discount` and `couponDiscountTHB` carry the same
+   * amount, so they must never be summed. See `getCouponCost` in
+   * src/lib/analytics/retailAnalytics.ts.
+   */
+  couponDiscountTHB?: number;
+  appliedCouponCode?: string;
   amountPaid: number;
   change: number;
   paymentMethod: "cash" | "scan" | "wallet" | "cod";
@@ -74,6 +88,27 @@ export interface Transaction {
   exchangeRate?: number;
   sellingTotal?: number;
   refunds?: Refund[];
+  /**
+   * Refund owed because the whole order was cancelled, as written by
+   * `cancelOrderWithRefund` / `confirmCancellationRefund` below.
+   *
+   * This was always persisted but never declared, which forced every reader
+   * (refund report, cancellations page, pending refunds) to cast the
+   * transaction to `any` just to reach it.
+   */
+  cancellationRefund?: {
+    amount: number;
+    status: "pending" | "completed" | "failed";
+    method?: "cash" | "original_payment" | "bank_transfer" | "pending";
+    requestedAt?: Timestamp;
+    requestedBy?: string;
+    reason?: string;
+    confirmedAt?: Timestamp;
+    confirmedBy?: string;
+    processedBy?: string;
+    notes?: string;
+    proofUrl?: string;
+  };
   cancelledAt?: Timestamp;
   cancelReason?: string;
   cancelledBy?: string;
@@ -88,7 +123,32 @@ export interface Transaction {
   deliveryStatusUpdatedAt?: Timestamp;
   deliveryStatusUpdatedBy?: string;
   orderSource?: "pos" | "web_storefront";
+  /**
+   * Older storefront markers. `orderSource` is the intended discriminator, but
+   * the MMPAY webhook and COD route also write `source: "online"` and
+   * `paymentProvider: "MMPAY"`, and plenty of existing documents carry only
+   * those. `onlineOrderService` already filters on them; declaring them here
+   * means readers no longer have to cast to `any` to check the channel.
+   */
+  source?: string;
+  paymentProvider?: string;
   customerUid?: string;
+  /**
+   * Who rang up the sale.
+   *
+   * Recorded at checkout from the authenticated session. Without this, sales
+   * carry no operator attribution at all, which makes sales-per-staff,
+   * discount-authorisation rates and refund rates per operator impossible to
+   * report — the three analytics most retail businesses rely on for loss
+   * prevention.
+   *
+   * Absent on storefront orders (the customer serves themselves) and on any
+   * sale recorded before attribution was introduced; analytics buckets those
+   * separately rather than dropping them.
+   */
+  soldByUid?: string;
+  soldByName?: string;
+  soldByRole?: "owner" | "manager" | "staff" | "customer";
 }
 
 export interface RefundItem {
@@ -1173,6 +1233,13 @@ class TransactionService {
       const transactionRef = doc(db, this.collectionName, transactionId);
       await updateDoc(transactionRef, {
         status: "cancelled",
+        // `orderStatus` has to be written here as well, exactly like
+        // `cancelTransaction` does for COD. The storefront's purchases table
+        // reads `orderStatus` first, so leaving it on its old value (usually
+        // "pending") made an approved cancellation still read as Pending —
+        // and step 2 then overwrites `status` with "refunded", so the
+        // fallback could never recover the cancelled state either.
+        orderStatus: "cancelled",
         cancelledAt: Timestamp.now(),
         cancelReason: reason,
         cancelledBy: cancelledBy,
@@ -1184,6 +1251,20 @@ class TransactionService {
           requestedBy: cancelledBy,
         },
       });
+
+      // Mirror the cancellation onto the online order so any reader that goes
+      // through `onlineOrders` (rather than the transaction) agrees.
+      if (transaction.onlineOrderId) {
+        try {
+          await updateDoc(doc(db, "onlineOrders", transaction.onlineOrderId), {
+            status: "cancelled",
+            orderStatus: "cancelled",
+            lastUpdated: new Date().toISOString(),
+          });
+        } catch (mirrorError) {
+          console.error("Error mirroring cancellation to onlineOrders:", mirrorError);
+        }
+      }
 
       // Create an owner-facing notification for the pending refund payment
       try {

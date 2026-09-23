@@ -3,6 +3,7 @@
 import { toast } from "react-hot-toast";
 import { useState, useEffect, useCallback } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Alert";
@@ -26,6 +27,7 @@ interface StaffUser extends User {
 }
 
 function StaffContent() {
+  const permissions = usePermissions();
   const [activeMenuItem, setActiveMenuItem] = useState("staff");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -82,6 +84,12 @@ function StaffContent() {
   };
 
   const handleAddStaff = async () => {
+    // Doc: "Add New Staff" / "Add New Manager" - Owner only.
+    if (!permissions.canAddStaff) {
+      toast.error("Only the owner can create staff accounts.");
+      return;
+    }
+
     if (!formData.email || !formData.password || !formData.displayName) {
       toast.error("Please fill in all required fields");
       return;
@@ -187,6 +195,12 @@ function StaffContent() {
   };
 
   const handleDeleteStaff = async (id: string) => {
+    // Doc: "Delete/Remove Staff" - Owner only.
+    if (!permissions.canDeleteStaff) {
+      toast.error("Only the owner can remove staff accounts.");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this staff account?")) return;
 
     try {

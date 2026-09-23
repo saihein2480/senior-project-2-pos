@@ -106,6 +106,12 @@ function ExpensesContent() {
   // Removed Spending Menu add handler
 
   const handleAddExpense = async () => {
+    // Doc: "Add New Expense" - Owner + Manager.
+    if (!permissions.canAddExpenses) {
+      toast.error("You do not have permission to add expenses.");
+      return;
+    }
+
     if (!selectedCategoryId || !amount || !date) {
       toast.error("Please fill in all required fields");
       return;
@@ -148,6 +154,12 @@ function ExpensesContent() {
   };
 
   const handleDeleteCategory = async (id: string) => {
+    // Doc: "Manage Categories" - Owner + Manager.
+    if (!permissions.canManageExpenseCategories) {
+      toast.error("You do not have permission to manage expense categories.");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this category?")) return;
 
     try {
@@ -171,6 +183,12 @@ function ExpensesContent() {
   // Removed Spending Menu delete handler
 
   const handleDeleteExpense = async (id: string) => {
+    // Doc: "Delete Expense" - Owner only.
+    if (!permissions.canDeleteExpenses) {
+      toast.error("Only the owner can delete expenses.");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this expense?")) {
       return;
     }
@@ -214,6 +232,12 @@ function ExpensesContent() {
   // Bulk delete selected expenses
   const handleBulkDelete = async () => {
     if (selectedExpenses.length === 0) return;
+
+    // Doc: "Bulk Delete" - Owner only.
+    if (!permissions.canBulkDeleteExpenses) {
+      toast.error("Only the owner can bulk delete expenses.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to permanently delete ${selectedExpenses.length} expense(s)?\n\nThis action cannot be undone.`,
@@ -261,6 +285,12 @@ function ExpensesContent() {
   };
 
   const handleEditExpense = (expense: Expense) => {
+    // Doc: "Edit Expense" - Owner + Manager.
+    if (!permissions.canEditExpenses) {
+      toast.error("You do not have permission to edit expenses.");
+      return;
+    }
+
     setEditingExpense(expense);
     setShowEditModal(true);
   };
@@ -645,8 +675,9 @@ function ExpensesContent() {
                   </div>
                 )}
 
-                {/* Bulk Actions Bar */}
-                {selectedExpenses.length > 0 && (
+                {/* Bulk Actions Bar. Doc: "Bulk Delete" - Owner only. */}
+                {permissions.canBulkDeleteExpenses &&
+                  selectedExpenses.length > 0 && (
                   <div className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl p-5 flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center space-x-3">
                       <span className="text-sm font-bold text-gray-800 uppercase tracking-wide">
@@ -679,25 +710,29 @@ function ExpensesContent() {
                       </button>
                     </div>
                   </div>
-                )}
+                  )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100">
-                        <th className="px-6 py-4 w-12">
-                          <input
-                            type="checkbox"
-                            checked={
-                              paginatedExpenses.length > 0 &&
-                              selectedExpenses.length ===
-                                paginatedExpenses.length
-                            }
-                            onChange={toggleSelectAll}
-                            className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
-                            aria-label="Select all expenses"
-                          />
-                        </th>
+                        {/* Selection only drives bulk delete, which the doc
+                            restricts to Owner. */}
+                        {permissions.canBulkDeleteExpenses && (
+                          <th className="px-6 py-4 w-12">
+                            <input
+                              type="checkbox"
+                              checked={
+                                paginatedExpenses.length > 0 &&
+                                selectedExpenses.length ===
+                                  paginatedExpenses.length
+                              }
+                              onChange={toggleSelectAll}
+                              className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
+                              aria-label="Select all expenses"
+                            />
+                          </th>
+                        )}
                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                           Image
                         </th>
@@ -722,7 +757,7 @@ function ExpensesContent() {
                       {filteredExpenses.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={permissions.canBulkDeleteExpenses ? 7 : 6}
                             className="px-6 py-16 text-center"
                           >
                             <div className="text-gray-300 text-lg font-semibold mb-2">
@@ -738,15 +773,17 @@ function ExpensesContent() {
                             key={expense.id}
                             className="hover:bg-gray-50 transition-colors"
                           >
-                            <td className="px-6 py-4">
-                              <input
-                                type="checkbox"
-                                checked={selectedExpenses.includes(expense.id)}
-                                onChange={() => toggleSelectExpense(expense.id)}
-                                className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
-                                aria-label={`Select expense ${expense.id}`}
-                              />
-                            </td>
+                            {permissions.canBulkDeleteExpenses && (
+                              <td className="px-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedExpenses.includes(expense.id)}
+                                  onChange={() => toggleSelectExpense(expense.id)}
+                                  className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
+                                  aria-label={`Select expense ${expense.id}`}
+                                />
+                              </td>
+                            )}
                             <td className="px-6 py-4 text-sm">
                               {expense.imageUrl ? (
                                 <a
@@ -784,20 +821,30 @@ function ExpensesContent() {
                             </td>
                             <td className="px-6 py-4 text-sm">
                               <div className="flex gap-3">
-                                <button
-                                  onClick={() => handleEditExpense(expense)}
-                                  className="text-pink-600 hover:text-pink-700 font-bold transition-colors"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleDeleteExpense(expense.id)
-                                  }
-                                  className="text-red-600 hover:text-red-800 font-bold transition-colors"
-                                >
-                                  Delete
-                                </button>
+                                {/* Doc: "Edit Expense" - Owner + Manager. */}
+                                {permissions.canEditExpenses && (
+                                  <button
+                                    onClick={() => handleEditExpense(expense)}
+                                    className="text-pink-600 hover:text-pink-700 font-bold transition-colors"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                {/* Doc: "Delete Expense" - Owner only. */}
+                                {permissions.canDeleteExpenses && (
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteExpense(expense.id)
+                                    }
+                                    className="text-red-600 hover:text-red-800 font-bold transition-colors"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                                {!permissions.canEditExpenses &&
+                                  !permissions.canDeleteExpenses && (
+                                    <span className="text-gray-400">-</span>
+                                  )}
                               </div>
                             </td>
                           </tr>
@@ -894,12 +941,15 @@ function ExpensesContent() {
                             <span className="text-gray-900 font-bold">
                               {cat.name}
                             </span>
-                            <button
-                              onClick={() => handleDeleteCategory(cat.id)}
-                              className="text-red-600 hover:text-red-800 text-sm font-bold px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                            >
-                              Delete
-                            </button>
+                            {/* Doc: "Manage Categories" - Owner + Manager. */}
+                            {permissions.canManageExpenseCategories && (
+                              <button
+                                onClick={() => handleDeleteCategory(cat.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-bold px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         ))}
                         {categories.length === 0 && (

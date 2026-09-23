@@ -498,7 +498,7 @@ function OrderDetailsModal({
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
           <button
             onClick={onClose}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+            className="w-full py-2.5 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-md font-medium shadow-md transition-all"
           >
             Close
           </button>
@@ -595,7 +595,7 @@ function OrderTableRow({
           type="checkbox"
           checked={isSelected}
           onChange={(e) => onSelect(row.id, e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
+          className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-400"
           aria-label={`Select order ${row.orderId || row.id}`}
         />
       </td>
@@ -1686,7 +1686,7 @@ function OnlineOrdersContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search order ID or customer..."
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                 </div>
 
@@ -1710,7 +1710,7 @@ function OnlineOrdersContent() {
                           | "partially_returned",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Order Status</option>
                     <option value="pending">Pending</option>
@@ -1741,7 +1741,7 @@ function OnlineOrdersContent() {
                           | "pending_refund",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Status</option>
                     <option value="paid">Paid</option>
@@ -1766,7 +1766,7 @@ function OnlineOrdersContent() {
                         e.target.value as "all" | "cod" | "scan"
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Methods</option>
                     <option value="cod">💵 Cash on Delivery</option>
@@ -1792,7 +1792,7 @@ function OnlineOrdersContent() {
                           | "custom",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="today">Today</option>
                     <option value="7d">Last 7 days</option>
@@ -1810,13 +1810,13 @@ function OnlineOrdersContent() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                 </div>
               )}
@@ -1850,7 +1850,7 @@ function OnlineOrdersContent() {
                     type="button"
                     onClick={applyBulkStatusUpdate}
                     disabled={selectedCount === 0 || isBulkUpdating}
-                    className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-2 text-sm font-medium text-white shadow-md transition-all hover:from-rose-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isBulkUpdating ? "Updating..." : "Update Order Status"}
                   </button>
@@ -1889,7 +1889,7 @@ function OnlineOrdersContent() {
 
             <div className="mt-6 overflow-x-auto overflow-y-visible rounded-lg border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-600 border-b border-gray-200">
+                <thead className="bg-gradient-to-r from-pink-50 to-pink-100 text-left text-gray-700 border-b border-gray-100">
                   <tr>
                     <th className="px-4 py-3 font-medium">
                       <input
@@ -1905,7 +1905,7 @@ function OnlineOrdersContent() {
                         onChange={(e) =>
                           toggleCurrentRowsSelection(e.target.checked)
                         }
-                        className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
+                        className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-400"
                         aria-label="Select all rows on current page"
                       />
                     </th>

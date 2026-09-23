@@ -2,28 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import {
-  Gift,
-  Search,
-  User,
-  TrendingUp,
-  Award,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  AlertCircle,
-  History,
-  Tag,
-} from "lucide-react";
+import { Gift, Search, User, TrendingUp, AlertCircle, Tag } from "lucide-react";
 import { Customer } from "@/types/customer";
 import { LoyaltyService } from "@/services/loyaltyService";
 import { resolveCouponPackages } from "@/services/settingsService";
 import { useCurrency } from "@/contexts/CurrencyContext";
+
+// Programme-level analytics (membership profitability, loyalty cost vs member
+// revenue, points liability and breakage) now live on the owner dashboard at
+// /owner/dashboard, next to the rest of the retail analytics. This page is for
+// managing individual members and their rewards.
 
 interface AvailablePackage {
   id: string;
@@ -48,6 +41,7 @@ interface LoyaltySummary {
 }
 
 function MembershipPageContent() {
+  const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -138,6 +132,12 @@ function MembershipPageContent() {
   const handleRedeemForCustomer = async (packageId: string) => {
     if (!selectedCustomer) return;
 
+    // Doc: "Redeem Coupons (Admin)" - Owner + Manager only.
+    if (!permissions.canRedeemCouponsAdmin) {
+      setRedeemError("You do not have permission to redeem coupons.");
+      return;
+    }
+
     setRedeemingPackageId(packageId);
     setRedeemError(null);
 
@@ -187,7 +187,7 @@ function MembershipPageContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -221,68 +221,63 @@ function MembershipPageContent() {
           <div className="max-w-7xl mx-auto">
             {/* Header */}
             <div className="mb-8">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg">
-                  <Gift className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-                    Membership & Loyalty
-                  </h1>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Manage customer loyalty points, rewards, and membership benefits
-                  </p>
-                </div>
-              </div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+                Membership & Loyalty
+              </h1>
+              <p className="mt-2 text-sm text-gray-500">
+                Manage customer loyalty points, rewards, and membership benefits
+              </p>
             </div>
 
             {/* Loyalty Program Status */}
             {loyaltySettings && (
-              <div className={`mb-6 rounded-2xl border-2 p-4 ${
-                loyaltySettings.enabled 
-                  ? 'bg-green-50 border-green-200' 
-                  : 'bg-gray-50 border-gray-200'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {loyaltySettings.enabled ? (
-                      <CheckCircle className="h-6 w-6 text-green-600" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-gray-400" />
-                    )}
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        Loyalty Program Status: {loyaltySettings.enabled ? 'Active' : 'Inactive'}
-                      </h3>
-                      {loyaltySettings.enabled && (
-                        <p className="text-sm text-gray-600">
-                          Earn {loyaltySettings.pointsPerPurchase} point per purchase ≥ {formatPrice(loyaltySettings.minimumSpendAmount)}
-                          {couponTiers.length > 0 && (
-                            <>
-                              {" • "}
-                              {couponTiers
-                                .map(
-                                  (tier) =>
-                                    `${tier.pointsRequired} pts = ${
-                                      tier.discountType === "percentage"
-                                        ? `${tier.discountValue}%`
-                                        : formatPrice(tier.discountValue)
-                                    } off`,
-                                )
-                                .join(" • ")}
-                            </>
-                          )}
-                        </p>
+              <div className="mb-6 bg-white rounded-2xl shadow-sm border border-rose-100 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        Loyalty Program
+                      </span>
+                      {loyaltySettings.enabled ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                          Inactive
+                        </span>
                       )}
                     </div>
+                    {loyaltySettings.enabled && (
+                      <p className="text-sm text-gray-600 mt-2">
+                        Earn {loyaltySettings.pointsPerPurchase} point per purchase ≥ {formatPrice(loyaltySettings.minimumSpendAmount)}
+                        {couponTiers.length > 0 && (
+                          <>
+                            {" • "}
+                            {couponTiers
+                              .map(
+                                (tier) =>
+                                  `${tier.pointsRequired} pts = ${
+                                    tier.discountType === "percentage"
+                                      ? `${tier.discountValue}%`
+                                      : formatPrice(tier.discountValue)
+                                  } off`,
+                              )
+                              .join(" • ")}
+                          </>
+                        )}
+                      </p>
+                    )}
                   </div>
-                  <Button
-                    variant="outline"
+                  <button
+                    type="button"
                     onClick={() => window.location.href = '/owner/settings'}
-                    className="text-sm"
+                    className="shrink-0 rounded-full border-2 border-rose-200 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-all hover:border-rose-300 hover:bg-rose-50"
                   >
                     Configure
-                  </Button>
+                  </button>
                 </div>
               </div>
             )}
@@ -290,24 +285,26 @@ function MembershipPageContent() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Customer List */}
               <div className="lg:col-span-1">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100 px-6 py-4">
-                    <h2 className="text-lg font-bold text-gray-900">Loyalty Members</h2>
+                <div className="bg-white rounded-2xl shadow-sm border border-rose-100 overflow-hidden">
+                  <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-6 py-4">
+                    <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+                      Loyalty Members
+                    </h2>
                     <p className="text-sm text-gray-600 mt-1">
                       {customers.length} member{customers.length !== 1 ? 's' : ''}
                     </p>
                   </div>
 
                   {/* Search */}
-                  <div className="p-4 border-b border-gray-100">
+                  <div className="p-4 border-b border-rose-100">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                       <Input
                         type="text"
                         placeholder="Search members..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        className="pl-10 rounded-full"
                       />
                     </div>
                   </div>
@@ -316,25 +313,27 @@ function MembershipPageContent() {
                   <div className="overflow-y-auto max-h-[600px]">
                     {isLoadingCustomers ? (
                       <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                        <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-rose-200 border-t-rose-500" />
                       </div>
                     ) : filteredCustomers.length === 0 ? (
-                      <div className="text-center py-12">
-                        <Gift className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">No loyalty members yet</p>
-                        <p className="text-sm text-gray-400 mt-1">
+                      <div className="text-center py-12 px-6">
+                        <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-50 to-pink-50">
+                          <Gift className="h-7 w-7 text-rose-400" />
+                        </span>
+                        <p className="font-semibold text-gray-900">No loyalty members yet</p>
+                        <p className="text-sm text-gray-500 mt-1">
                           Activate membership from the Customers page, or wait for
                           customers to join from the storefront
                         </p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-gray-100">
+                      <div className="divide-y divide-rose-100/70">
                         {filteredCustomers.map((customer) => (
                           <button
                             key={customer.uid}
                             onClick={() => handleSelectCustomer(customer)}
-                            className={`w-full text-left px-6 py-4 hover:bg-purple-50 transition-colors ${
-                              selectedCustomer?.uid === customer.uid ? 'bg-purple-50 border-l-4 border-purple-500' : ''
+                            className={`w-full text-left px-6 py-4 transition-colors hover:bg-rose-50/60 ${
+                              selectedCustomer?.uid === customer.uid ? 'bg-rose-50/80 border-l-4 border-rose-500' : ''
                             }`}
                           >
                             <div className="flex items-center gap-3">
@@ -343,10 +342,10 @@ function MembershipPageContent() {
                                   <img
                                     src={customer.customerImage}
                                     alt={customer.displayName || customer.email}
-                                    className="h-10 w-10 rounded-full object-cover"
+                                    className="h-10 w-10 rounded-full object-cover ring-2 ring-rose-100"
                                   />
                                 ) : (
-                                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+                                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center shadow-sm shadow-rose-500/30">
                                     <User className="h-5 w-5 text-white" />
                                   </div>
                                 )}
@@ -357,15 +356,15 @@ function MembershipPageContent() {
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">{customer.email}</p>
                               </div>
-                              <div className="flex flex-col items-end">
-                                <div className="flex items-center gap-1 text-purple-600">
-                                  <Gift className="h-4 w-4" />
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-rose-50 to-pink-50 px-2.5 py-1 text-rose-600">
+                                  <Gift className="h-3.5 w-3.5" />
                                   <span className="text-sm font-bold">
                                     {customer.loyaltyPoints || 0}
                                   </span>
-                                </div>
+                                </span>
                                 {customer.activeCouponsCount && customer.activeCouponsCount > 0 && (
-                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full mt-1">
+                                  <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
                                     {customer.activeCouponsCount} coupon{customer.activeCouponsCount !== 1 ? 's' : ''}
                                   </span>
                                 )}
@@ -382,10 +381,12 @@ function MembershipPageContent() {
               {/* Customer Loyalty Details */}
               <div className="lg:col-span-2">
                 {!selectedCustomer ? (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12">
+                  <div className="bg-white rounded-2xl shadow-sm border border-rose-100 p-12">
                     <div className="text-center">
-                      <Gift className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-rose-50 to-pink-50">
+                        <Gift className="h-8 w-8 text-rose-400" />
+                      </span>
+                      <h3 className="text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500 mb-2">
                         Select a Member
                       </h3>
                       <p className="text-gray-500">
@@ -394,40 +395,42 @@ function MembershipPageContent() {
                     </div>
                   </div>
                 ) : isLoading ? (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                      <span className="ml-3 text-gray-600">Loading loyalty data...</span>
-                    </div>
+                  <div className="bg-white rounded-2xl shadow-sm border border-rose-100 p-12 text-center">
+                    <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-[3px] border-rose-200 border-t-rose-500" />
+                    <p className="text-sm font-medium text-gray-500 mt-4">
+                      Loading loyalty data...
+                    </p>
                   </div>
                 ) : error ? (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12">
+                  <div className="bg-white rounded-2xl shadow-sm border border-rose-100 p-12">
                     <div className="text-center">
-                      <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+                      <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+                        <AlertCircle className="h-7 w-7 text-red-500" />
+                      </span>
                       <p className="text-red-600">{error}</p>
                     </div>
                   </div>
                 ) : loyaltySummary ? (
                   <div className="space-y-6">
                     {/* Customer Header */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-rose-100 p-6">
                       <div className="flex items-center gap-4">
                         {selectedCustomer.customerImage ? (
                           <img
                             src={selectedCustomer.customerImage}
                             alt={selectedCustomer.displayName || selectedCustomer.email}
-                            className="h-16 w-16 rounded-full object-cover border-4 border-purple-100"
+                            className="h-16 w-16 rounded-full object-cover ring-4 ring-rose-100"
                           />
                         ) : (
-                          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center border-4 border-purple-100">
+                          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center ring-4 ring-rose-100 shadow-md shadow-rose-500/25">
                             <User className="h-8 w-8 text-white" />
                           </div>
                         )}
-                        <div className="flex-1">
-                          <h2 className="text-xl font-bold text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
                             {selectedCustomer.displayName || "No Name"}
                           </h2>
-                          <p className="text-gray-600">{selectedCustomer.email}</p>
+                          <p className="text-sm text-gray-600 mt-1 truncate">{selectedCustomer.email}</p>
                           {selectedCustomer.phone && (
                             <p className="text-sm text-gray-500">{selectedCustomer.phone}</p>
                           )}
@@ -438,30 +441,42 @@ function MembershipPageContent() {
                     {/* Points Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Total balance */}
-                      <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-white shadow-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium opacity-90">Total Points</span>
-                          <Gift className="h-5 w-5 opacity-90" />
+                      <div className="bg-white rounded-2xl shadow-sm p-5 border border-rose-100 transition-shadow hover:shadow-md">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-50 to-pink-50">
+                            <Gift className="h-5 w-5 text-rose-500" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                              Total Points
+                            </p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {loyaltySummary.currentPoints}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-4xl font-bold">{loyaltySummary.currentPoints}</p>
-                        <p className="text-sm opacity-75 mt-2">
+                        <p className="text-xs text-gray-500 mt-3">
                           {loyaltySummary.totalPointsEarned} earned lifetime
                         </p>
                       </div>
 
                       {/* Points not already promised to a coupon */}
-                      <div className="bg-white rounded-2xl p-6 border border-purple-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-600">
-                            Points for Redeem
+                      <div className="bg-white rounded-2xl shadow-sm p-5 border border-rose-100 transition-shadow hover:shadow-md">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-50 to-pink-50">
+                            <TrendingUp className="h-5 w-5 text-rose-500" />
                           </span>
-                          <TrendingUp className="h-5 w-5 text-purple-500" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                              Points for Redeem
+                            </p>
+                            <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+                              {loyaltySummary.availablePoints ??
+                                loyaltySummary.currentPoints}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-4xl font-bold text-purple-700">
-                          {loyaltySummary.availablePoints ??
-                            loyaltySummary.currentPoints}
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                        <p className="text-xs text-gray-500 mt-3">
                           {loyaltySummary.reservedPoints > 0
                             ? `${loyaltySummary.reservedPoints} reserved by active coupon${loyaltySummary.reservedPoints === 1 ? "" : "s"}`
                             : `${loyaltySummary.pointsUntilNextCoupon} more for the next reward`}
@@ -469,26 +484,37 @@ function MembershipPageContent() {
                       </div>
 
                       {/* Active Coupons */}
-                      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-600">Active Coupons</span>
-                          <Tag className="h-5 w-5 text-green-500" />
+                      <div className="bg-white rounded-2xl shadow-sm p-5 border border-rose-100 transition-shadow hover:shadow-md">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-rose-50 to-pink-50">
+                            <Tag className="h-5 w-5 text-rose-500" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                              Active Coupons
+                            </p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {loyaltySummary.activeCoupons.length}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-4xl font-bold text-gray-900">{loyaltySummary.activeCoupons.length}</p>
-                        <p className="text-sm text-gray-500 mt-2">Ready to use</p>
+                        <p className="text-xs text-gray-500 mt-3">Ready to use</p>
                       </div>
                     </div>
 
-                    {/* Available Rewards - owner can redeem on the customer's behalf */}
-                    {(loyaltySummary.couponPackages?.length ?? 0) > 0 && (
-                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="bg-purple-50 border-b border-purple-100 px-6 py-4">
-                          <h3 className="text-lg font-bold text-gray-900">
+                    {/* Available Rewards - redeem on the customer's behalf.
+                        Doc: "Redeem Coupons (Admin)" / "Issue Coupons" -
+                        Owner + Manager only. */}
+                    {permissions.canRedeemCouponsAdmin &&
+                      (loyaltySummary.couponPackages?.length ?? 0) > 0 && (
+                      <div className="bg-white rounded-2xl shadow-sm border border-rose-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-6 py-4">
+                          <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
                             Available Rewards
                           </h3>
                           <p className="text-sm text-gray-600 mt-1">
                             Redeem on behalf of this customer using their{" "}
-                            <span className="font-semibold text-purple-700">
+                            <span className="font-semibold text-rose-600">
                               {loyaltySummary.availablePoints ??
                                 loyaltySummary.currentPoints}{" "}
                               redeemable point
@@ -511,9 +537,9 @@ function MembershipPageContent() {
                           {loyaltySummary.couponPackages.map((pkg) => (
                             <div
                               key={pkg.id}
-                              className={`rounded-xl border p-4 ${
+                              className={`rounded-2xl border p-4 flex flex-col transition-shadow ${
                                 pkg.affordable
-                                  ? "border-purple-300 bg-purple-50"
+                                  ? "border-rose-200 bg-rose-50/60 shadow-sm hover:shadow-md"
                                   : "border-gray-200 bg-gray-50"
                               }`}
                             >
@@ -524,7 +550,7 @@ function MembershipPageContent() {
                                 <span
                                   className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
                                     pkg.affordable
-                                      ? "bg-purple-500 text-white"
+                                      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white"
                                       : "bg-gray-200 text-gray-700"
                                   }`}
                                 >
@@ -532,7 +558,7 @@ function MembershipPageContent() {
                                 </span>
                               </div>
 
-                              <p className="text-lg font-semibold text-purple-700">
+                              <p className="text-lg font-semibold text-rose-600">
                                 {pkg.discountType === "percentage"
                                   ? `${pkg.discountValue}% off`
                                   : `${formatPrice(pkg.discountValue)} off`}
@@ -541,12 +567,12 @@ function MembershipPageContent() {
                                 Valid {pkg.validityDays} days once redeemed
                               </p>
 
-                              <div className="mt-3 pt-3 border-t border-purple-200/60">
+                              <div className="mt-3 pt-3 border-t border-rose-200/60">
                                 {pkg.affordable ? (
                                   <Button
                                     onClick={() => handleRedeemForCustomer(pkg.id)}
                                     disabled={redeemingPackageId === pkg.id}
-                                    className="w-full justify-center"
+                                    className="w-full justify-center rounded-full font-semibold hover:shadow-lg"
                                   >
                                     {redeemingPackageId === pkg.id
                                       ? "Redeeming..."
@@ -567,25 +593,29 @@ function MembershipPageContent() {
 
                     {/* Active Coupons */}
                     {loyaltySummary.activeCoupons.length > 0 && (
-                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="bg-green-50 border-b border-green-100 px-6 py-4">
-                          <h3 className="text-lg font-bold text-gray-900">Active Coupons</h3>
+                      <div className="bg-white rounded-2xl shadow-sm border border-rose-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-6 py-4">
+                          <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+                            Active Coupons
+                          </h3>
                         </div>
-                        <div className="p-6 space-y-3">
+                        <div className="p-6 grid md:grid-cols-2 gap-4">
                           {loyaltySummary.activeCoupons.map((coupon) => (
                             <div
                               key={coupon.id}
-                              className="border-2 border-dashed border-green-300 rounded-xl p-4 bg-green-50"
+                              className="border-2 border-dashed border-rose-300 rounded-2xl p-4 bg-rose-50/60 transition-all hover:bg-rose-50"
                             >
-                              <div className="flex items-center justify-between">
-                                <div>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
                                   {coupon.packageName && (
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
                                       {coupon.packageName}
                                     </p>
                                   )}
-                                  <p className="text-lg font-bold text-gray-900">{coupon.code}</p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className="text-xl font-mono font-bold tracking-wider text-gray-900">
+                                    {coupon.code}
+                                  </p>
+                                  <p className="text-sm font-semibold text-rose-600 mt-1">
                                     {coupon.discountType === 'percentage' 
                                       ? `${coupon.discountValue}% off` 
                                       : `${formatPrice(coupon.discountValue)} off`}
@@ -597,8 +627,10 @@ function MembershipPageContent() {
                                     </p>
                                   )}
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-500">Expires</p>
+                                <div className="text-right shrink-0">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                    Expires
+                                  </p>
                                   <p className="text-sm font-semibold text-gray-900">
                                     {formatDate(coupon.expiresAt)}
                                   </p>
@@ -612,32 +644,31 @@ function MembershipPageContent() {
 
                     {/* Points History */}
                     {loyaltySummary.pointsHistory.length > 0 && (
-                      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="bg-blue-50 border-b border-blue-100 px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <History className="h-5 w-5 text-blue-600" />
-                            <h3 className="text-lg font-bold text-gray-900">Points History</h3>
-                          </div>
+                      <div className="bg-white rounded-2xl shadow-sm border border-rose-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-6 py-4">
+                          <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+                            Points History
+                          </h3>
                         </div>
                         <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                          <table className="min-w-full divide-y divide-rose-100">
+                            <thead className="bg-rose-50/40">
                               <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Date</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Points</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Amount</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Source</th>
-                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase">Description</th>
+                                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Date</th>
+                                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Points</th>
+                                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Amount</th>
+                                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Source</th>
+                                <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Description</th>
                               </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-rose-100/70">
                               {loyaltySummary.pointsHistory.map((history) => (
-                                <tr key={history.id} className="hover:bg-gray-50">
+                                <tr key={history.id} className="transition-colors hover:bg-rose-50/50">
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {formatDate(history.earnedAt)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-bold bg-purple-100 text-purple-800">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-bold bg-gradient-to-r from-rose-500 to-pink-500 text-white">
                                       +{history.pointsEarned}
                                     </span>
                                   </td>
@@ -645,10 +676,10 @@ function MembershipPageContent() {
                                     {formatPrice(history.transactionAmount)}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                                       history.source === 'online' 
-                                        ? 'bg-cyan-100 text-cyan-800' 
-                                        : 'bg-blue-100 text-blue-800'
+                                        ? 'bg-rose-50 text-rose-600' 
+                                        : 'bg-gray-100 text-gray-600'
                                     }`}>
                                       {history.source.toUpperCase()}
                                     </span>

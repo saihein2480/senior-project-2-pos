@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { StockService } from "@/services/stockService";
@@ -11,14 +12,21 @@ import {
   PromotionDiscountType,
   PromotionScope,
 } from "@/services/onlinePromotionService";
+import {
+  CustomerNotificationService,
+  summariseBroadcast,
+} from "@/services/customerNotificationService";
 
 type StockLite = {
   id: string;
   groupName: string;
-  colorVariants?: Array<{ id?: string; color?: string }>;
+  /** Used as the artwork on the customer announcement. */
+  groupImage?: string;
+  colorVariants?: Array<{ id?: string; color?: string; image?: string }>;
 };
 
 function OnlinePromotionsContent() {
+  const permissions = usePermissions();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,6 +46,15 @@ function OnlinePromotionsContent() {
   const [maxDiscountTHB, setMaxDiscountTHB] = useState<number>(0);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  /**
+   * Whether creating the promotion also emails and Telegram-messages every
+   * opted-in customer. On by default — a promotion nobody hears about is not
+   * much of a promotion — but the owner can mute it for a correction or a
+   * quietly-staged offer.
+   */
+  const [notifyCustomers, setNotifyCustomers] = useState(true);
+  const [announcing, setAnnouncing] = useState(false);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === productId),
@@ -61,6 +78,7 @@ function OnlinePromotionsContent() {
         stockRows.map((row) => ({
           id: row.id,
           groupName: row.groupName,
+          groupImage: row.groupImage,
           colorVariants: row.colorVariants,
         })),
       );
@@ -88,6 +106,12 @@ function OnlinePromotionsContent() {
   };
 
   const createPromotion = async () => {
+    // Doc: "Create Promotions" - Owner + Manager only.
+    if (!permissions.canCreatePromotions) {
+      window.alert("You do not have permission to create promotions.");
+      return;
+    }
+
     if (!name.trim() || !productId || discountValue <= 0) {
       window.alert("Please fill required fields.");
       return;
@@ -105,17 +129,21 @@ function OnlinePromotionsContent() {
         (v) => v.id === variantId,
       );
 
+      const promotionName = name.trim();
+      const promotionDescription = description.trim();
+      const variantName =
+        scope === "variant"
+          ? targetVariant?.color || targetVariant?.id || ""
+          : "";
+
       await onlinePromotionService.createPromotion({
-        name: name.trim(),
-        description: description.trim(),
+        name: promotionName,
+        description: promotionDescription,
         scope,
         productId,
         productName: targetProduct?.groupName || "",
         variantId: scope === "variant" ? variantId : "",
-        variantName:
-          scope === "variant"
-            ? targetVariant?.color || targetVariant?.id || ""
-            : "",
+        variantName,
         discountType,
         discountValue,
         maxDiscountTHB,
@@ -123,6 +151,38 @@ function OnlinePromotionsContent() {
         endDate,
         isActive: true,
       });
+
+      // The promotion is saved at this point. Announcing is a separate,
+      // best-effort step: a mail or Telegram failure is reported but never
+      // presented as a failure to create the promotion.
+      if (notifyCustomers) {
+        setAnnouncing(true);
+        try {
+          const outcome = await CustomerNotificationService.announcePromotion({
+            name: promotionName,
+            description: promotionDescription,
+            discountType,
+            discountValue,
+            productName: targetProduct?.groupName || "",
+            variantName,
+            startDate,
+            endDate,
+            maxDiscountTHB,
+            image: targetVariant?.image || targetProduct?.groupImage,
+            productPath: productId ? `/product/${productId}` : undefined,
+          });
+
+          window.alert(
+            outcome.ok && outcome.data
+              ? `Promotion created. ${summariseBroadcast(outcome.data)}`
+              : `Promotion created, but customers were not notified: ${
+                  outcome.error || "unknown error"
+                }`,
+          );
+        } finally {
+          setAnnouncing(false);
+        }
+      }
 
       await loadData();
       resetForm();
@@ -136,6 +196,12 @@ function OnlinePromotionsContent() {
   };
 
   const togglePromotion = async (row: OnlinePromotion) => {
+    // Doc: "Edit Promotions" - Owner + Manager only.
+    if (!permissions.canEditPromotions) {
+      window.alert("You do not have permission to edit promotions.");
+      return;
+    }
+
     try {
       await onlinePromotionService.togglePromotion(row.id, !row.isActive);
       await loadData();
@@ -147,6 +213,12 @@ function OnlinePromotionsContent() {
   };
 
   const deletePromotion = async (id: string) => {
+    // Doc: "Delete Promotions" - Owner + Manager only.
+    if (!permissions.canDeletePromotions) {
+      window.alert("You do not have permission to delete promotions.");
+      return;
+    }
+
     if (!window.confirm("Delete this promotion?")) return;
 
     try {
@@ -315,14 +387,38 @@ function OnlinePromotionsContent() {
                 rows={2}
               />
 
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label
+                  htmlFor="notifyCustomers"
+                  className="flex items-start gap-2 text-sm text-gray-700"
+                >
+                  <input
+                    id="notifyCustomers"
+                    type="checkbox"
+                    checked={notifyCustomers}
+                    onChange={(e) => setNotifyCustomers(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+                  />
+                  <span>
+                    Announce to customers
+                    <span className="block text-xs text-gray-500">
+                      Sends an email, and a Telegram message to customers who
+                      linked the bot. Customers who muted promotions are skipped.
+                    </span>
+                  </span>
+                </label>
+
                 <button
                   type="button"
                   onClick={createPromotion}
                   disabled={saving}
-                  className="rounded-md bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  className="rounded-md bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 shrink-0"
                 >
-                  {saving ? "Saving..." : "Create Promotion"}
+                  {announcing
+                    ? "Announcing..."
+                    : saving
+                      ? "Saving..."
+                      : "Create Promotion"}
                 </button>
               </div>
             </section>

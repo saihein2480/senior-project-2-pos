@@ -258,6 +258,11 @@ export async function POST(request: NextRequest) {
       currencyRate:
         typeof body.currencyRate === "number" ? body.currencyRate : 0,
       currentBranch: body.currentBranch || "Main Branch",
+      // Owner-only workspace preference; hides Home + cart for the owner.
+      hidePosForOwner:
+        typeof body.hidePosForOwner === "boolean"
+          ? body.hidePosForOwner
+          : false,
       storeInfo: sanitizeStoreInfo(body.storeInfo),
       loyaltySettings: body.loyaltySettings ? {
         enabled: typeof body.loyaltySettings.enabled === "boolean" ? body.loyaltySettings.enabled : false,

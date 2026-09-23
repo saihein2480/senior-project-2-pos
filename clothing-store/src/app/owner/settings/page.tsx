@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "react-hot-toast";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
@@ -9,10 +9,15 @@ import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { ShopService } from "@/services/shopService";
+import {
+  CustomerNotificationService,
+  summariseBroadcast,
+} from "@/services/customerNotificationService";
 import {
   Building2,
   Receipt,
@@ -20,6 +25,7 @@ import {
   DollarSign,
   Store,
   Gift,
+  LayoutDashboard,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -92,14 +98,29 @@ interface BusinessSettings {
   enableSoundEffects: boolean;
   currencyRate: number;
   currentBranch?: string;
+  /** Owner-only: hides the Home menu entry and the top-bar cart together. */
+  hidePosForOwner?: boolean;
   loyaltySettings?: LoyaltySettings;
   storeInfo?: StoreInfoSettings;
 }
 
 function OwnerSettingsContent() {
   const { user } = useAuth();
+  const permissions = usePermissions();
   const { refreshCurrencySettings } = useCurrency();
   const { refreshSettings } = useSettings();
+
+  /**
+   * Settings is the one page all three roles can open, but they see different
+   * things. Per the documented matrix:
+   *   - Branch Selection ....... all roles
+   *   - Tax Rate / Currency .... Owner + Manager edit, Staff view only
+   *   - Business Information ... Owner + Manager
+   *   - Receipt / Invoice ...... Owner + Manager
+   *   - Loyalty Program ........ Owner + Manager
+   * A role that can edit nothing but its branch gets the reduced view.
+   */
+  const isBranchOnlyView = !permissions.canEditBusinessSettings;
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -110,6 +131,24 @@ function OwnerSettingsContent() {
 
   // Helper: true if there are no shops
   const noShops = shops.length === 0;
+
+  /**
+   * Coupon package ids customers have already been told about.
+   *
+   * Settings save as one whole document, so there is no "package created"
+   * event to hook. Instead we remember which tiers were stored when the page
+   * loaded (and after each save) and treat anything with a new id as newly
+   * published — ids are minted client-side as `pkg_<timestamp>_<random>`, so a
+   * fresh tier never collides with an existing one.
+   *
+   * `null` means we have not loaded settings yet, which suppresses the
+   * announcement: without a baseline every existing tier would look new.
+   */
+  const announcedPackageIdsRef = useRef<string[] | null>(null);
+
+  /** Whether saving new reward tiers also announces them to customers. */
+  const [notifyNewCouponPackages, setNotifyNewCouponPackages] = useState(true);
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
 
   // Main state for all settings
   const [settings, setSettings] = useState<BusinessSettings>({
@@ -129,6 +168,7 @@ function OwnerSettingsContent() {
     enableSoundEffects: false,
     currencyRate: 0,
     currentBranch: "No Branch",
+    hidePosForOwner: false,
     loyaltySettings: {
       enabled: false,
       minimumSpendAmount: 500,
@@ -154,6 +194,11 @@ function OwnerSettingsContent() {
 
         if (result.success && result.data) {
           setSettings((prev) => ({ ...prev, ...result.data }));
+
+          // Baseline for the "new reward tier" diff on save.
+          announcedPackageIdsRef.current = (
+            result.data.loyaltySettings?.couponPackages || []
+          ).map((pkg: CouponPackage) => pkg.id);
 
           // For all users, load user-specific branch from localStorage
           if (user) {
@@ -360,6 +405,77 @@ function OwnerSettingsContent() {
     setCouponPackages(couponPackages.filter((pkg) => pkg.id !== id));
   };
 
+  /**
+   * Email and Telegram every opted-in customer about reward tiers that are new
+   * since the last save.
+   *
+   * Called with the settings the server actually stored, so the diff reflects
+   * what survived `sanitizeCouponPackages` rather than what was typed.
+   *
+   * Two deliberate choices:
+   *  - While the loyalty program is switched off the baseline is left alone, so
+   *    tiers staged in advance are announced on the save that turns the program
+   *    on rather than never.
+   *  - Once an announcement has been attempted the ids are recorded as known
+   *    even if delivery failed. Re-blasting a partially delivered announcement
+   *    on the next unrelated save would be worse than reporting the failure and
+   *    letting the owner decide.
+   */
+  const announceNewCouponPackages = async (saved: BusinessSettings) => {
+    const baseline = announcedPackageIdsRef.current;
+    const savedPackages = saved.loyaltySettings?.couponPackages || [];
+
+    // No baseline yet means settings never loaded cleanly; without it every
+    // existing tier would look new.
+    if (baseline === null) {
+      announcedPackageIdsRef.current = savedPackages.map((pkg) => pkg.id);
+      return;
+    }
+
+    if (!saved.loyaltySettings?.enabled) return;
+
+    const known = new Set(baseline);
+    const newlyPublished = savedPackages.filter(
+      (pkg) => pkg.enabled && !known.has(pkg.id),
+    );
+
+    if (newlyPublished.length === 0) return;
+
+    newlyPublished.forEach((pkg) => known.add(pkg.id));
+    announcedPackageIdsRef.current = Array.from(known);
+
+    if (!notifyNewCouponPackages) return;
+
+    setIsAnnouncing(true);
+    try {
+      const outcome = await CustomerNotificationService.announceCouponPackages(
+        newlyPublished.map((pkg) => ({
+          name: pkg.name,
+          pointsRequired: pkg.pointsRequired,
+          discountType: pkg.discountType,
+          discountValue: pkg.discountValue,
+          validityDays: pkg.validityDays,
+        })),
+        {
+          pointsPerPurchase: saved.loyaltySettings?.pointsPerPurchase,
+          minimumSpendAmount: saved.loyaltySettings?.minimumSpendAmount,
+        },
+      );
+
+      if (outcome.ok && outcome.data) {
+        toast.success(summariseBroadcast(outcome.data));
+      } else {
+        toast.error(
+          `New reward packages saved, but customers were not notified: ${
+            outcome.error || "unknown error"
+          }`,
+        );
+      }
+    } finally {
+      setIsAnnouncing(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setIsLoading(true);
     setError("");
@@ -372,7 +488,7 @@ function OwnerSettingsContent() {
       }
 
       // Staff: only save branch (already done above)
-      if (user?.role === "staff") {
+      if (isBranchOnlyView) {
         // Refresh settings context to reflect the new branch
         await refreshSettings();
         toast.success("Branch saved successfully!");
@@ -396,6 +512,11 @@ function OwnerSettingsContent() {
           // Refresh settings context to reflect the new settings (including tax rate)
           await refreshSettings();
           toast.success("Settings saved successfully!");
+
+          // Settings are persisted at this point. Announcing any brand-new
+          // reward tiers is a separate, best-effort step so a mail or Telegram
+          // problem never looks like the save failed.
+          await announceNewCouponPackages(result.data);
         } else {
           setError(result.error || "Failed to save settings");
           toast.error(
@@ -448,7 +569,7 @@ function OwnerSettingsContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -490,9 +611,9 @@ function OwnerSettingsContent() {
 
             {/* Loading State */}
             {isLoadingData && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
                   <span className="ml-2 text-gray-600">
                     Loading settings...
                   </span>
@@ -502,7 +623,7 @@ function OwnerSettingsContent() {
 
             {/* Error State */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg
@@ -527,11 +648,11 @@ function OwnerSettingsContent() {
             {/* Settings Content */}
             {!isLoadingData && (
               <div className="space-y-8">
-                {/* Staff-only: Show only Current Branch selector */}
-                {user?.role === "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Branch-only view: Current Branch selector (all roles). */}
+                {isBranchOnlyView && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Store className="h-5 w-5 text-cyan-600 mr-2" />
+                      <Store className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Your Branch
                       </h2>
@@ -549,7 +670,7 @@ function OwnerSettingsContent() {
                             onChange={(e) =>
                               handleInputChange("currentBranch", e.target.value)
                             }
-                            className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent appearance-none bg-white text-gray-900"
                           >
                             {(settings.currentBranch === "No Branch" ||
                               noShops) && (
@@ -585,22 +706,22 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Staff: Show Tax Rate (Read-only) */}
-                {user?.role === "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Tax Rate, read-only. Doc: Staff = View Only. */}
+                {!permissions.canEditTaxRate && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Receipt className="h-5 w-5 text-cyan-600 mr-2" />
+                      <Receipt className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Tax Rate
                       </h2>
                     </div>
                     <div className="space-y-4">
-                      <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-xl p-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-gray-900">
                             Current Tax Rate
                           </span>
-                          <span className="text-lg font-bold text-cyan-600">
+                          <span className="text-lg font-bold text-rose-600">
                             {settings.taxRate}%
                           </span>
                         </div>
@@ -612,23 +733,23 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Staff: Show Currency Rate (Read-only) */}
-                {user?.role === "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Currency Rate, read-only. Doc: Staff = View Only. */}
+                {!permissions.canEditCurrencySettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <DollarSign className="h-5 w-5 text-cyan-600 mr-2" />
+                      <DollarSign className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Currency Rate
                       </h2>
                     </div>
                     <div className="space-y-4">
-                      <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-900">
                             {getCurrencyRateDisplay().from} →{" "}
                             {getCurrencyRateDisplay().to}
                           </span>
-                          <span className="text-lg font-bold text-cyan-600">
+                          <span className="text-lg font-bold text-rose-600">
                             {settings.currencyRate}
                           </span>
                         </div>
@@ -647,11 +768,11 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Owner/Manager: Show full Business Information Section */}
-                {user?.role !== "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Doc: "Business Information" - Owner + Manager. */}
+                {permissions.canEditBusinessSettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Building2 className="h-5 w-5 text-cyan-600 mr-2" />
+                      <Building2 className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Business Information
                       </h2>
@@ -706,7 +827,7 @@ function OwnerSettingsContent() {
                                   e.target.value,
                                 )
                               }
-                              className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent appearance-none bg-white text-gray-900"
                             >
                               {currencies.map((currency) => (
                                 <option
@@ -766,7 +887,7 @@ function OwnerSettingsContent() {
                                     e.target.value,
                                   )
                                 }
-                                className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 appearance-none bg-white text-gray-900"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent appearance-none bg-white text-gray-900"
                               >
                                 {/* Show 'No Branch' if selected, or if there are no shops */}
                                 {(settings.currentBranch === "No Branch" ||
@@ -823,11 +944,11 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Invoice & Receipt Settings - Owner/Manager only */}
-                {user?.role !== "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Doc: "Receipt Settings" + "Invoice Customization" - Owner + Manager. */}
+                {permissions.canEditInvoiceSettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Receipt className="h-5 w-5 text-cyan-600 mr-2" />
+                      <Receipt className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Invoice & Receipt Settings
                       </h2>
@@ -881,7 +1002,7 @@ function OwnerSettingsContent() {
                             )
                           }
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:border-gray-500 text-gray-900"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent text-gray-900"
                           placeholder="Enter footer message for invoices"
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -923,7 +1044,7 @@ function OwnerSettingsContent() {
                               e.target.value as ReceiptPaperSize,
                             )
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-gray-900"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent text-gray-900"
                         >
                           <option value="44mm">44mm (1.73&quot;)</option>
                           <option value="57mm">57mm (2.24&quot;)</option>
@@ -951,9 +1072,9 @@ function OwnerSettingsContent() {
 
                 {/* User Interface Preferences - Owner/Manager only */}
                 {/* {user?.role !== "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <User className="h-5 w-5 text-cyan-600 mr-2" />
+                      <User className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         User Interface Preferences
                       </h2>
@@ -993,11 +1114,11 @@ function OwnerSettingsContent() {
                   </div>
                 )} */}
 
-                {/* Currency Rate - Owner/Manager only */}
-                {user?.role !== "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* Doc: "Currency Settings" - Owner + Manager. */}
+                {permissions.canEditCurrencySettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <DollarSign className="h-5 w-5 text-cyan-600 mr-2" />
+                      <DollarSign className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Currency Rate
                       </h2>
@@ -1039,8 +1160,8 @@ function OwnerSettingsContent() {
                       </div>
 
                       {settings.currencyRate > 0 && (
-                        <div className="bg-cyan-50 border border-blue-200 rounded-lg p-3">
-                          <p className="text-sm text-blue-800">
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3">
+                          <p className="text-sm text-rose-800">
                             <span className="font-medium">Exchange Rate:</span>{" "}
                             1 {getCurrencyRateDisplay().fromSymbol} ={" "}
                             {settings.currencyRate}{" "}
@@ -1052,11 +1173,60 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Loyalty Program Settings - Owner/Manager only */}
-                {user?.role !== "staff" && (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* My Workspace - Owner only. Not shown to Manager or Staff,
+                    and it never changes what they see. */}
+                {permissions.canConfigureOwnerLayout && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-2">
+                      <LayoutDashboard className="h-5 w-5 text-rose-500 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        My Workspace
+                      </h2>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-6">
+                      Applies to your owner account only. Managers and staff are
+                      not affected.
+                    </p>
+
+                    <div className="flex items-start justify-between gap-6">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900">
+                          Hide the walk-in POS
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Removes <span className="font-medium">Home</span> from
+                          the side menu and the{" "}
+                          <span className="font-medium">cart</span> from the top
+                          bar. They are one switch because the cart is only
+                          reachable from Home - turning off just one would leave
+                          a dead end.
+                        </p>
+                        <p className="text-xs text-gray-400 mt-2">
+                          Turn this on if you manage the shop and never ring up
+                          sales yourself.
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 pt-1">
+                        <Toggle
+                          checked={settings.hidePosForOwner ?? false}
+                          onChange={(checked) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              hidePosForOwner: checked,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Doc: "Loyalty Program" - Owner + Manager. */}
+                {permissions.canManageLoyaltyProgram && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
-                      <Gift className="h-5 w-5 text-purple-600 mr-2" />
+                      <Gift className="h-5 w-5 text-rose-500 mr-2" />
                       <h2 className="text-lg font-semibold text-gray-900">
                         Loyalty Program Settings
                       </h2>
@@ -1085,8 +1255,8 @@ function OwnerSettingsContent() {
                       {settings.loyaltySettings?.enabled && (
                         <>
                           {/* Points Earning Configuration */}
-                          <div className="bg-purple-50 rounded-lg p-4 space-y-4">
-                            <h3 className="text-sm font-semibold text-purple-900">
+                          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 space-y-4">
+                            <h3 className="text-sm font-semibold text-rose-900">
                               Points Earning Rules
                             </h3>
                             
@@ -1136,12 +1306,12 @@ function OwnerSettingsContent() {
                               </div>
                             </div>
 
-                            <div className="bg-white rounded p-3 border border-purple-200">
+                            <div className="bg-white rounded-lg p-3 border border-rose-200">
                               <p className="text-sm text-gray-700">
                                 <span className="font-medium">Example:</span> Customer spends{" "}
                                 {settings.defaultCurrency === "THB" ? "฿" : "Ks"}
                                 {settings.loyaltySettings?.minimumSpendAmount || 500} or more →
-                                Earns <span className="font-semibold text-purple-600">
+                                Earns <span className="font-semibold text-rose-600">
                                   {settings.loyaltySettings?.pointsPerPurchase || 1} point(s)
                                 </span>
                               </p>
@@ -1149,13 +1319,13 @@ function OwnerSettingsContent() {
                           </div>
 
                           {/* Coupon Packages */}
-                          <div className="bg-green-50 rounded-lg p-4 space-y-4">
+                          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 space-y-4">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <h3 className="text-sm font-semibold text-green-900">
+                                <h3 className="text-sm font-semibold text-rose-900">
                                   Coupon Packages
                                 </h3>
-                                <p className="text-xs text-green-800 mt-1">
+                                <p className="text-xs text-rose-800 mt-1">
                                   Define one or more reward tiers. When a customer
                                   reaches a tier they receive that coupon, and using
                                   it deducts that tier&apos;s points.
@@ -1172,9 +1342,32 @@ function OwnerSettingsContent() {
                               </Button>
                             </div>
 
+                            <label
+                              htmlFor="notifyNewCouponPackages"
+                              className="flex items-start gap-2 bg-white rounded-xl border border-rose-100 p-3"
+                            >
+                              <input
+                                id="notifyNewCouponPackages"
+                                type="checkbox"
+                                checked={notifyNewCouponPackages}
+                                onChange={(e) =>
+                                  setNotifyNewCouponPackages(e.target.checked)
+                                }
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
+                              />
+                              <span className="text-sm text-gray-800">
+                                Announce new packages to customers
+                                <span className="block text-xs text-gray-500 mt-0.5">
+                                  When you save, any newly added active package is
+                                  emailed to customers and sent to those who linked
+                                  the Telegram bot. Existing packages are not resent.
+                                </span>
+                              </span>
+                            </label>
+
                             {couponPackages.length === 0 ? (
-                              <div className="bg-white rounded border border-dashed border-green-300 p-6 text-center">
-                                <Gift className="h-8 w-8 text-green-300 mx-auto mb-2" />
+                              <div className="bg-white rounded-xl border border-dashed border-rose-200 p-6 text-center">
+                                <Gift className="h-8 w-8 text-rose-200 mx-auto mb-2" />
                                 <p className="text-sm text-gray-600">
                                   No coupon packages yet. Add one so customers can
                                   earn rewards.
@@ -1189,14 +1382,14 @@ function OwnerSettingsContent() {
                                   return (
                                     <div
                                       key={pkg.id}
-                                      className={`rounded-lg border bg-white p-4 space-y-3 ${
+                                      className={`rounded-xl border bg-white p-4 space-y-3 ${
                                         pkg.enabled
-                                          ? "border-green-200"
+                                          ? "border-rose-200"
                                           : "border-gray-200 opacity-70"
                                       }`}
                                     >
                                       <div className="flex items-center justify-between gap-3">
-                                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                                        <span className="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
                                           Tier {index + 1}
                                         </span>
                                         <div className="flex items-center gap-3">
@@ -1211,7 +1404,7 @@ function OwnerSettingsContent() {
                                                   e.target.checked,
                                                 )
                                               }
-                                              className="h-4 w-4 rounded border-gray-300 text-green-600"
+                                              className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-400"
                                               aria-label={`Enable ${pkg.name}`}
                                             />
                                             Active
@@ -1290,7 +1483,7 @@ function OwnerSettingsContent() {
                                                   | "fixed",
                                               )
                                             }
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500 text-gray-900"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent text-gray-900"
                                           >
                                             <option value="percentage">
                                               Percentage (%)
@@ -1346,21 +1539,21 @@ function OwnerSettingsContent() {
                                         </div>
                                       </div>
 
-                                      <div className="rounded bg-green-50 px-3 py-2 border border-green-200">
+                                      <div className="rounded-lg bg-rose-50 px-3 py-2 border border-rose-100">
                                         <p className="text-sm text-gray-700">
                                           At{" "}
-                                          <span className="font-semibold text-green-700">
+                                          <span className="font-semibold text-rose-600">
                                             {pkg.pointsRequired || 0} points
                                           </span>{" "}
                                           → customer earns{" "}
-                                          <span className="font-semibold text-green-700">
+                                          <span className="font-semibold text-rose-600">
                                             {pkg.discountType === "percentage"
                                               ? `${pkg.discountValue || 0}% off`
                                               : `${currencySymbol}${pkg.discountValue || 0} off`}
                                           </span>
                                           , valid {pkg.validityDays || 30} days.
                                           Using it deducts{" "}
-                                          <span className="font-semibold text-green-700">
+                                          <span className="font-semibold text-rose-600">
                                             {pkg.pointsRequired || 0} points
                                           </span>
                                           .
@@ -1374,7 +1567,7 @@ function OwnerSettingsContent() {
 
                             {couponPackages.filter((pkg) => pkg.enabled).length >
                               1 && (
-                              <div className="rounded bg-white p-3 border border-green-200">
+                              <div className="rounded-lg bg-white p-3 border border-rose-200">
                                 <p className="text-xs text-gray-700">
                                   With several active tiers, a customer receives the
                                   highest tier they reach. Points keep accumulating,
@@ -1385,11 +1578,11 @@ function OwnerSettingsContent() {
                           </div>
 
                           {/* Program Summary */}
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <h3 className="text-sm font-semibold text-blue-900 mb-3">
+                          <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-200 rounded-xl p-4">
+                            <h3 className="text-sm font-semibold text-rose-900 mb-3">
                               📊 Program Summary
                             </h3>
-                            <div className="space-y-2 text-sm text-blue-800">
+                            <div className="space-y-2 text-sm text-rose-800">
                               <p>
                                 ✓ Customers earn{" "}
                                 <span className="font-semibold">
@@ -1450,7 +1643,7 @@ function OwnerSettingsContent() {
                 )}
 
                 {/* Deployment Link Section */}
-                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                {/* <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-center mb-4">
                     <h2 className="text-lg font-semibold text-gray-900">
                       Customer Website Deployment
@@ -1489,7 +1682,7 @@ function OwnerSettingsContent() {
 
                 {/* Action Buttons - Save button for staff (branch only), full reset/save for owner/manager */}
                 <div className="flex justify-end space-x-4 pt-6">
-                  {user?.role !== "staff" && (
+                  {permissions.canEditBusinessSettings && (
                     <Button
                       variant="outline"
                       onClick={handleReset}
@@ -1500,10 +1693,14 @@ function OwnerSettingsContent() {
                   )}
                   <Button
                     onClick={handleSaveSettings}
-                    loading={isLoading}
-                    disabled={isLoading || isLoadingData}
+                    loading={isLoading || isAnnouncing}
+                    disabled={isLoading || isAnnouncing || isLoadingData}
                   >
-                    {user?.role === "staff" ? "Save Branch" : "Save Settings"}
+                    {isAnnouncing
+                      ? "Notifying customers..."
+                      : isBranchOnlyView
+                        ? "Save Branch"
+                        : "Save Settings"}
                   </Button>
                 </div>
               </div>

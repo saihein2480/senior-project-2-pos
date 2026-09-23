@@ -1,0 +1,262 @@
+rules_version = '2';
+
+// =============================================================================
+// Firestore Security Rules - Clothing Store POS + Web Storefront
+// =============================================================================
+//
+// WHY THIS FILE MATTERS
+// Roles live in users/{uid}.role and every guard in the POS app is client-side
+// React. A determined user can bypass React. These rules are the only place
+// where a role restriction cannot be bypassed, so they are the real
+// implementation of documents/ROLE_BASED_ACCESS_CONTROL.md.
+//
+// !! DRAFT - REVIEW AND TEST BEFORE DEPLOYING !!
+// Two apps share this database:
+//   - pos-clothing-store/clothing-store  (staff-facing POS)
+//   - pos-clothing-store-web             (customer storefront)
+// Deploying rules that are too strict will break the storefront for real
+// customers. Test in the Firebase Console "Rules Playground" or the local
+// emulator first:
+//     firebase emulators:start --only firestore
+//     firebase deploy --only firestore:rules      <- only once verified
+//
+// The collection list below was taken from the code in both apps. If you add a
+// collection, add a rule for it: the final catch-all denies anything unlisted.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Reads the caller's role from their own user document.
+    // Note: each call is a document read and counts toward quota.
+    function role() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isOwner()      { return role() == 'owner'; }
+    function isManagement() { return role() in ['owner', 'manager']; }
+    function isPosUser()    { return role() in ['owner', 'manager', 'staff']; }
+    function isCustomer()   { return role() == 'customer'; }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---------------------------------------------------------------------
+    // users - where role is stored, so this is the most sensitive collection
+    // ---------------------------------------------------------------------
+    match /users/{uid} {
+      // A user may read their own record; owners may read all (Staff Management).
+      allow get: if isSelf(uid) || isOwner();
+      allow list: if isOwner();
+
+      // Self-service sign-up creates a customer record only. A client must
+      // never be able to mint an elevated role.
+      allow create: if isSelf(uid)
+                    && request.resource.data.role == 'customer';
+
+      // A user may update their own profile but NOT their own role.
+      // Doc: "Change Staff Role" - Owner only.
+      allow update: if (isSelf(uid)
+                        && request.resource.data.role == resource.data.role)
+                    || isOwner();
+
+      // Doc: "Delete/Remove Staff" - Owner only.
+      allow delete: if isOwner();
+    }
+
+    // ---------------------------------------------------------------------
+    // Product catalogue - public read so the storefront works when logged out
+    // ---------------------------------------------------------------------
+    match /stocks/{doc} {
+      allow read: if true;
+      // Doc: Add/Edit products - Owner + Manager. Delete Products - Owner only.
+      allow create, update: if isManagement();
+      allow delete: if isOwner();
+    }
+
+    match /products/{doc} {
+      allow read: if true;
+      allow create, update: if isManagement();
+      allow delete: if isOwner();
+    }
+
+    match /online_promotions/{doc} {
+      allow read: if true;
+      // Doc: Create / Edit / Delete Promotions - Owner + Manager.
+      allow write: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Transactions
+    // ---------------------------------------------------------------------
+    match /transactions/{doc} {
+      // POS users see everything (Doc: "View Transactions" - all roles).
+      // A customer may only read their own orders.
+      allow get: if isPosUser()
+                 || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow list: if isPosUser();
+
+      // Doc: "Process Sales (POS)" - all roles. Customers create web orders.
+      allow create: if isPosUser()
+                    || (isSignedIn()
+                        && request.resource.data.customerId == request.auth.uid);
+
+      // Refund / Cancel / Update Delivery Status - Owner + Manager.
+      // A customer may update only their own order, and only to raise a
+      // cancellation or return request.
+      allow update: if isManagement()
+                    || (isSignedIn()
+                        && resource.data.customerId == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasOnly(['cancellationRequest', 'refundRequest', 'updatedAt']));
+
+      // Doc: "Delete Transactions" / "Bulk Delete" - Owner only.
+      allow delete: if isOwner();
+    }
+
+    match /onlineOrders/{doc} {
+      allow get: if isManagement()
+                 || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow list: if isManagement();
+      allow create: if isSignedIn();
+      // Doc: "Process Orders" / "Update Order Status" - Owner + Manager.
+      allow update: if isManagement();
+      allow delete: if isOwner();
+    }
+
+    match /refunds/{doc} {
+      // Doc: "Manage Return Requests" / "View Refund Reports" - Owner + Manager.
+      allow read: if isManagement()
+                  || (isSignedIn() && resource.data.customerId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isManagement();
+      allow delete: if isOwner();
+    }
+
+    // ---------------------------------------------------------------------
+    // Customers - contains PII, so never world-readable
+    // ---------------------------------------------------------------------
+    match /customers/{customerId} {
+      // Doc: "View Customer List" - all POS roles. Customers read only self.
+      allow get: if isPosUser() || isSelf(customerId);
+      allow list: if isPosUser();
+
+      // Doc: "Add New Customers" / "Edit Customer Info" - all POS roles.
+      allow create, update: if isPosUser() || isSelf(customerId);
+
+      // Doc: "Delete Customers" - Owner only.
+      allow delete: if isOwner();
+    }
+
+    // ---------------------------------------------------------------------
+    // Financial data - no customer access at all
+    // ---------------------------------------------------------------------
+    match /expenses/{doc} {
+      // Doc: "View Expenses" - Owner + Manager (Staff = No Access).
+      allow read: if isManagement();
+      allow create, update: if isManagement();
+      // Doc: "Delete Expense" / "Bulk Delete" - Owner only.
+      allow delete: if isOwner();
+    }
+
+    match /expenseCategories/{doc} {
+      // Doc: "Manage Categories" - Owner + Manager.
+      allow read: if isManagement();
+      allow write: if isManagement();
+    }
+
+    match /spendingMenus/{doc} {
+      allow read: if isManagement();
+      allow write: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Shops / branches
+    // ---------------------------------------------------------------------
+    match /shops/{doc} {
+      // Every POS role needs the branch list for the branch selector, and the
+      // storefront shows pickup locations.
+      allow read: if true;
+      // Doc: Add / Edit / Delete Shop - Owner only.
+      allow write: if isOwner();
+    }
+
+    // ---------------------------------------------------------------------
+    // Settings - readable by the POS (tax, currency, receipt template)
+    // ---------------------------------------------------------------------
+    match /settings/{doc} {
+      allow read: if true;  // tax + currency are needed to price the storefront
+      // Doc: "Business Information" / "Tax Rate" / "Currency" - Owner + Manager.
+      allow write: if isManagement();
+    }
+
+    match /business_settings/{doc} {
+      allow read: if true;
+      allow write: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Notifications
+    // ---------------------------------------------------------------------
+    match /notifications/{doc} {
+      // Staff-facing notifications have no userId; customer ones are addressed.
+      allow get: if isPosUser()
+                 || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isPosUser()
+                  || (isSignedIn() && request.query.limit <= 100);
+      allow create: if isSignedIn();
+      allow update: if isPosUser()
+                    || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Loyalty / membership
+    // ---------------------------------------------------------------------
+    match /loyalty/{doc=**} {
+      // Doc: "View Loyalty Points" - all POS roles; customers see their own.
+      allow read: if isPosUser() || isSignedIn();
+      // Doc: "Adjust Loyalty Points" / "Issue Coupons" - Owner + Manager.
+      allow write: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Internal plumbing - server only (firebase-admin bypasses these rules)
+    // ---------------------------------------------------------------------
+    match /counters/{doc} {
+      allow read: if isPosUser();
+      allow write: if isPosUser();  // receipt/member number allocation
+    }
+
+    match /emailVerificationCodes/{doc} {
+      // Codes must never be readable by a client; only the Admin SDK touches them.
+      allow read, write: if false;
+    }
+
+    match /shopperSignals/{doc} {
+      allow read: if isManagement();
+      allow create: if isSignedIn();
+      allow update, delete: if isManagement();
+    }
+
+    // ---------------------------------------------------------------------
+    // Default deny. Anything not listed above is inaccessible from a client.
+    // Add an explicit rule when you add a collection.
+    // ---------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -289,6 +289,94 @@ export interface Translations {
   noSalesData: string;
   noRecentActivity: string;
 
+  // Retail analytics
+  sellThroughBySize: string;
+  sellThroughBySizeHint: string;
+  sellThroughBySizeFootnote: string;
+  sellThroughRate: string;
+  unitsSold: string;
+  unitsRemaining: string;
+  fastestSize: string;
+  noSizeData: string;
+  netMarginTrend: string;
+  netMarginTrendHint: string;
+  netMarginTrendFootnote: string;
+  netMarginRate: string;
+  grossProfit: string;
+  operatingExpenses: string;
+  netResult: string;
+  noMarginData: string;
+  inventoryAging: string;
+  inventoryAgingHint: string;
+  inventoryAgingFootnote: string;
+  daysOnSale: string;
+  capitalTied: string;
+  deadStockCapital: string;
+  stockHealthNew: string;
+  stockHealthHealthy: string;
+  stockHealthSlow: string;
+  stockHealthDead: string;
+  lines: string;
+  noInventoryData: string;
+  returnRateBySize: string;
+  returnRateBySizeHint: string;
+  returnRateBySizeFootnote: string;
+  returnRate: string;
+  averageReturnRate: string;
+  refundValue: string;
+  average: string;
+  noReturnData: string;
+  staffPerformance: string;
+  staffPerformanceHint: string;
+  staffPerformanceFootnote: string;
+  averageBasket: string;
+  discountGiven: string;
+  refundRate: string;
+  unattributedSales: string;
+  unattributedNotice: string;
+  noStaffAttribution: string;
+  salesChannelSplit: string;
+  salesChannelSplitHint: string;
+  salesChannelSplitFootnote: string;
+  inStoreSales: string;
+  onlineSales: string;
+  onlineShare: string;
+
+  // Membership / loyalty economics
+  membershipProfitability: string;
+  membershipProfitabilityHint: string;
+  membershipProfitabilityFootnote: string;
+  members: string;
+  nonMembers: string;
+  ordersPerCustomer: string;
+  loyaltyCost: string;
+  netProfitAfterLoyalty: string;
+  grossMarginRate: string;
+  basketUplift: string;
+  walkInExcludedNotice: string;
+  noMembershipData: string;
+  loyaltyCostTrend: string;
+  loyaltyCostTrendHint: string;
+  loyaltyCostTrendFootnote: string;
+  loyaltyCostRate: string;
+  memberRevenue: string;
+  noLoyaltyActivity: string;
+  loyaltyLiability: string;
+  loyaltyLiabilityHint: string;
+  loyaltyLiabilityFootnote: string;
+  pointsOutstanding: string;
+  pointsEarnedLifetime: string;
+  estimatedLiability: string;
+  rewardsRedeemable: string;
+  estimated: string;
+  redemptionRate: string;
+  breakageRate: string;
+  coupons: string;
+  couponsIssued: string;
+  couponsUsed: string;
+  couponsActive: string;
+  couponsExpired: string;
+
   // Transactions
   totalTransactions: string;
   allStatus: string;
@@ -787,6 +875,115 @@ export const translations: Record<Language, Translations> = {
     noSalesData: "No sales data available",
     noRecentActivity: "No recent activity",
 
+    // Retail analytics
+    sellThroughBySize: "Sell-Through by Size",
+    sellThroughBySizeHint:
+      "How much of each size has actually sold. Sets the size curve for your next purchase order.",
+    sellThroughBySizeFootnote:
+      "Sell-through = units sold ÷ (units sold + units on hand). Received quantities are not stored separately, so on-hand stock is used as the denominator. Sizes above 85% may indicate lost sales from stocking out.",
+    sellThroughRate: "Sell-Through Rate",
+    unitsSold: "Units Sold",
+    unitsRemaining: "Units On Hand",
+    fastestSize: "Fastest",
+    noSizeData: "No size data available",
+    netMarginTrend: "Net Margin: Profit vs Expenses",
+    netMarginTrendHint:
+      "Gross profit against operating expenses. What is actually left over after running costs.",
+    netMarginTrendFootnote:
+      "Gross profit uses the price the customer paid, net of refunds. MMK expenses are converted to THB at your configured rate. Net margin is net result ÷ net revenue.",
+    netMarginRate: "Net Margin %",
+    grossProfit: "Gross Profit",
+    operatingExpenses: "Expenses",
+    netResult: "Net",
+    noMarginData: "No profit or expense data in this period",
+    inventoryAging: "Inventory Aging & Dead Stock",
+    inventoryAgingHint:
+      "Days on sale against sell-through, sized by cash tied up. Bottom-right is the markdown list.",
+    inventoryAgingFootnote:
+      "Bubble size is unsold units × cost price. Age runs from release date, falling back to creation date. Dead = 90+ days on sale with under 25% sold; slow = under 25% sold; new = under 30 days.",
+    daysOnSale: "Days On Sale",
+    capitalTied: "Capital Tied Up",
+    deadStockCapital: "Dead stock",
+    stockHealthNew: "New",
+    stockHealthHealthy: "Healthy",
+    stockHealthSlow: "Slow",
+    stockHealthDead: "Dead",
+    lines: "lines",
+    noInventoryData: "No inventory data available",
+    returnRateBySize: "Return Rate by Size",
+    returnRateBySizeHint:
+      "Returns concentrated in one size point at a fit problem. Returns spread evenly point at quality.",
+    returnRateBySizeFootnote:
+      "Return rate = units refunded ÷ gross units sold in that size. The dashed line is this shop's own average; bars in red exceed it by 50% or more.",
+    returnRate: "Return Rate",
+    averageReturnRate: "Average",
+    refundValue: "Refund Value",
+    average: "Average",
+    noReturnData: "No returns in this period",
+    staffPerformance: "Sales by Staff",
+    staffPerformanceHint:
+      "Revenue per operator with the discount rate they authorised. Read the two together.",
+    staffPerformanceFootnote:
+      "Discount rate is promotional value ÷ gross sales. A high rate on high revenue can be good selling; the same rate on low revenue is worth a conversation. Refund rate is the share of that operator's orders with a refund against them.",
+    averageBasket: "Avg Basket",
+    discountGiven: "Discount Given",
+    refundRate: "Refund Rate",
+    unattributedSales: "unattributed",
+    unattributedNotice:
+      "{count} sale(s) carry no cashier attribution. Sales recorded before attribution was added cannot be assigned retroactively; newly completed sales will appear against the operator who rang them up.",
+    noStaffAttribution:
+      "No attributed sales yet. Completed sales will appear here once staff ring them up.",
+    salesChannelSplit: "Sales Channel: Store vs Online",
+    salesChannelSplitHint:
+      "Where revenue comes from over time. The dashed line is the storefront's share.",
+    salesChannelSplitFootnote:
+      "Online covers orders marked as web storefront, including COD and QR payments. Both apps write to the same database, so no reconciliation is needed.",
+    inStoreSales: "In-Store",
+    onlineSales: "Online",
+    onlineShare: "Online Share",
+
+    // Membership / loyalty economics
+    membershipProfitability: "Membership Profitability",
+    membershipProfitabilityHint:
+      "What the member cohort is worth per order, and whether it still leads after the discounts handed to them.",
+    membershipProfitabilityFootnote:
+      "This is a comparison, not proof of cause: frequent shoppers are the ones who join loyalty programmes, so members would out-spend non-members even if the programme changed nothing. A sale counts as a member sale only if it happened on or after that customer's join date. Non-member margin has no loyalty cost to deduct, so its gross and net are the same.",
+    members: "Members",
+    nonMembers: "Non-Members",
+    ordersPerCustomer: "Orders / Customer",
+    loyaltyCost: "Loyalty Cost",
+    netProfitAfterLoyalty: "Net Profit After Loyalty",
+    grossMarginRate: "Gross Margin %",
+    basketUplift: "Basket uplift",
+    walkInExcludedNotice:
+      "{count} sale(s) worth {value} had no customer attached and could not be classified as member or non-member. They are excluded from both columns rather than assumed to be non-member.",
+    noMembershipData: "No customer-attributed sales in this period",
+    loyaltyCostTrend: "Loyalty Cost vs Member Revenue",
+    loyaltyCostTrendHint:
+      "What the programme gives away against the member revenue it buys. The dashed line is the cost rate.",
+    loyaltyCostTrendFootnote:
+      "Cost is coupon value actually redeemed, from both the till and the storefront. Loyalty programmes are normally run at a low single-digit percentage of revenue; a rate sitting above the marked level means the reward tiers are priced too generously for a clothing margin.",
+    loyaltyCostRate: "Cost Rate",
+    memberRevenue: "Member Revenue",
+    noLoyaltyActivity: "No loyalty activity yet",
+    loyaltyLiability: "Points Liability & Breakage",
+    loyaltyLiabilityHint:
+      "Unredeemed points are a promised discount you have not paid yet. Expired coupons are rewards nobody wanted.",
+    loyaltyLiabilityFootnote:
+      "Liability values the outstanding balance at the cheapest enabled reward tier — the most conservative assumption a customer could make. Percentage-based rewards have no fixed value until applied to a basket, so those are estimated from the average basket. Coupon status is recalculated from the expiry date rather than trusted, because expiry is only processed per customer on demand.",
+    pointsOutstanding: "Points Outstanding",
+    pointsEarnedLifetime: "Points Earned (Lifetime)",
+    estimatedLiability: "Estimated Liability",
+    rewardsRedeemable: "rewards redeemable",
+    estimated: "estimated",
+    redemptionRate: "Redemption Rate",
+    breakageRate: "Breakage",
+    coupons: "coupons",
+    couponsIssued: "Issued",
+    couponsUsed: "Used",
+    couponsActive: "Active",
+    couponsExpired: "Expired",
+
     // Transactions
     totalTransactions: "Total Transactions",
     allStatus: "All Status",
@@ -1283,6 +1480,115 @@ export const translations: Record<Language, Translations> = {
     noOrderData: "မှာယူမှုဒေတာမရှိပါ",
     noSalesData: "ရောင်းချမှုဒေတာမရှိပါ",
     noRecentActivity: "မကြာသေးသောလုပ်ဆောင်ချက်မရှိပါ",
+
+    // Retail analytics
+    sellThroughBySize: "ဆိုက်အလိုက် ရောင်းအားနှုန်း",
+    sellThroughBySizeHint:
+      "ဆိုက်တစ်ခုစီ အမှန်တကယ် ရောင်းထွက်မှု။ နောက်တစ်ကြိမ် မှာယူမည့် ဆိုက်အချိုးကို ဆုံးဖြတ်ပေးသည်။",
+    sellThroughBySizeFootnote:
+      "ရောင်းအားနှုန်း = ရောင်းရသော အရေအတွက် ÷ (ရောင်းရသော + လက်ကျန်)။ လက်ခံရရှိသော အရေအတွက်ကို သီးသန့်မသိမ်းဆည်းသဖြင့် လက်ကျန်ကို အခြေခံသည်။ ၈၅% အထက်ဆိုက်များသည် ကုန်ပြတ်၍ အရောင်းလက်လွတ်နိုင်သည်။",
+    sellThroughRate: "ရောင်းအားနှုန်း",
+    unitsSold: "ရောင်းရသော အရေအတွက်",
+    unitsRemaining: "လက်ကျန်",
+    fastestSize: "အမြန်ဆုံး",
+    noSizeData: "ဆိုက်ဒေတာမရှိပါ",
+    netMarginTrend: "အသားတင်အမြတ်: အမြတ်နှင့် အသုံးစရိတ်",
+    netMarginTrendHint:
+      "စုစုပေါင်းအမြတ်နှင့် လုပ်ငန်းအသုံးစရိတ် နှိုင်းယှဉ်မှု။ စရိတ်ကျခံပြီးနောက် ကျန်ရှိသောပမာဏ။",
+    netMarginTrendFootnote:
+      "စုစုပေါင်းအမြတ်ကို ဖောက်သည်ပေးချေသည့်နှုန်းဖြင့် တွက်ချက်ပြီး ပြန်အမ်းငွေများ ခုနှိမ်ထားသည်။ MMK အသုံးစရိတ်များကို သတ်မှတ်နှုန်းဖြင့် THB သို့ ပြောင်းသည်။",
+    netMarginRate: "အသားတင်အမြတ် %",
+    grossProfit: "စုစုပေါင်းအမြတ်",
+    operatingExpenses: "အသုံးစရိတ်",
+    netResult: "အသားတင်",
+    noMarginData: "ဤကာလအတွင်း အမြတ်သို့မဟုတ် အသုံးစရိတ်ဒေတာမရှိပါ",
+    inventoryAging: "ကုန်ပစ္စည်းသက်တမ်းနှင့် ရောင်းမရကုန်",
+    inventoryAgingHint:
+      "ရောင်းချသည့်ရက်နှင့် ရောင်းအားနှုန်း နှိုင်းယှဉ်မှု၊ ပမာဏသည် ထိုင်နေသောရင်းနှီးမြှုပ်နှံမှု။ အောက်ယာဘက်သည် လျှော့ရောင်းသင့်သည့်စာရင်း။",
+    inventoryAgingFootnote:
+      "အဝိုင်းအရွယ်အစားသည် လက်ကျန် × အရင်းနှုန်း။ သက်တမ်းကို ထုတ်ရောင်းသည့်ရက်မှ တွက်သည်။ ရောင်းမရ = ရက် ၉၀ အထက်နှင့် ၂၅% အောက်ရောင်းရ၊ နှေး = ၂၅% အောက်၊ အသစ် = ရက် ၃၀ အောက်။",
+    daysOnSale: "ရောင်းချသည့်ရက်",
+    capitalTied: "ထိုင်နေသောရင်းနှီးမြှုပ်နှံမှု",
+    deadStockCapital: "ရောင်းမရကုန်",
+    stockHealthNew: "အသစ်",
+    stockHealthHealthy: "ကောင်းမွန်",
+    stockHealthSlow: "နှေးကွေး",
+    stockHealthDead: "ရောင်းမရ",
+    lines: "အမျိုးအစား",
+    noInventoryData: "ကုန်ပစ္စည်းဒေတာမရှိပါ",
+    returnRateBySize: "ဆိုက်အလိုက် ပြန်ပို့မှုနှုန်း",
+    returnRateBySizeHint:
+      "ဆိုက်တစ်ခုတည်းတွင် ပြန်ပို့မှုစုစည်းနေပါက ဆိုက်တိုင်းတာမှုပြဿနာ။ ဆိုက်အားလုံးတွင် ညီညာနေပါက အရည်အသွေးပြဿနာ။",
+    returnRateBySizeFootnote:
+      "ပြန်ပို့မှုနှုန်း = ပြန်အမ်းအရေအတွက် ÷ ထိုဆိုက်၏ စုစုပေါင်းရောင်းရအရေအတွက်။ အစက်မျဉ်းသည် ဆိုင်၏ ပျမ်းမျှနှုန်း၊ အနီရောင်တန်းများသည် ၅၀% ကျော်လွန်နေသည်။",
+    returnRate: "ပြန်ပို့မှုနှုန်း",
+    averageReturnRate: "ပျမ်းမျှ",
+    refundValue: "ပြန်အမ်းငွေပမာဏ",
+    average: "ပျမ်းမျှ",
+    noReturnData: "ဤကာလအတွင်း ပြန်ပို့မှုမရှိပါ",
+    staffPerformance: "ဝန်ထမ်းအလိုက် အရောင်း",
+    staffPerformanceHint:
+      "ဝန်ထမ်းတစ်ဦးချင်း ဝင်ငွေနှင့် သူတို့ခွင့်ပြုသော လျှော့ငွေနှုန်း။ နှစ်ခုတွဲဖတ်ပါ။",
+    staffPerformanceFootnote:
+      "လျှော့ငွေနှုန်း = ပရိုမိုးရှင်းပမာဏ ÷ စုစုပေါင်းအရောင်း။ ဝင်ငွေမြင့်စဉ် နှုန်းမြင့်ခြင်းသည် ရောင်းအားကောင်းမှုဖြစ်နိုင်သည်။ ဝင်ငွေနိမ့်စဉ် နှုန်းမြင့်ပါက စစ်ဆေးသင့်သည်။",
+    averageBasket: "ပျမ်းမျှတစ်ခေါက်",
+    discountGiven: "ပေးသောလျှော့ငွေ",
+    refundRate: "ပြန်အမ်းနှုန်း",
+    unattributedSales: "မသတ်မှတ်ရသေး",
+    unattributedNotice:
+      "အရောင်း {count} ခုတွင် ရောင်းချသူ မှတ်တမ်းမရှိပါ။ ဤစနစ်မတိုင်မီ မှတ်တမ်းတင်ထားသော အရောင်းများကို ပြန်သတ်မှတ်၍မရပါ။ အသစ်ပြီးစီးသော အရောင်းများသည် ရောင်းချသူအလိုက် ပေါ်လာမည်။",
+    noStaffAttribution:
+      "မှတ်တမ်းတင်ထားသော အရောင်းမရှိသေးပါ။ ဝန်ထမ်းများ အရောင်းပြုလုပ်ပြီးပါက ဤနေရာတွင် ပေါ်လာမည်။",
+    salesChannelSplit: "အရောင်းလမ်းကြောင်း: ဆိုင်နှင့် အွန်လိုင်း",
+    salesChannelSplitHint:
+      "ဝင်ငွေ မည်သည့်လမ်းကြောင်းမှ လာသည်။ အစက်မျဉ်းသည် အွန်လိုင်းအချိုး။",
+    salesChannelSplitFootnote:
+      "အွန်လိုင်းတွင် COD နှင့် QR ပေးချေမှုအပါအဝင် ဝဘ်ဆိုင်မှ မှာယူမှုများ ပါဝင်သည်။ အက်ပ်နှစ်ခုသည် ဒေတာဘေ့စ် တူညီသဖြင့် ပြန်လည်ချိန်ညှိရန် မလိုပါ။",
+    inStoreSales: "ဆိုင်တွင်း",
+    onlineSales: "အွန်လိုင်း",
+    onlineShare: "အွန်လိုင်းအချိုး",
+
+    // Membership / loyalty economics
+    membershipProfitability: "အသင်းဝင် အမြတ်အစွန်း",
+    membershipProfitabilityHint:
+      "အသင်းဝင်များ တစ်ခေါက်လျှင် မည်မှုတန်သည်၊ လျှော့ငွေပေးပြီးနောက် ဆက်လက်သာလွန်နေသလား။",
+    membershipProfitabilityFootnote:
+      "ဤအချက်သည် နှိုင်းယှဉ်မှုသာဖြစ်ပြီး အကြောင်းရင်းကို သက်သေမပြပါ။ မကြာခဏဝယ်သူများသာ အသင်းဝင်လေ့ရှိသဖြင့် အစီအစဉ်မရှိလည်း အသင်းဝင်များ ပိုအသုံးစွဲမည်။ ဝယ်ယူမှုသည် ထိုဖောက်သည်၏ အသင်းဝင်ရက်နောက်ပိုင်းဖြစ်မှသာ အသင်းဝင်အရောင်းအဖြစ် သတ်မှတ်သည်။ အသင်းမဝင်သူများတွင် လျှော့ငွေစရိတ်မရှိသဖြင့် စုစုပေါင်းနှင့် အသားတင် တူညီသည်။",
+    members: "အသင်းဝင်များ",
+    nonMembers: "အသင်းမဝင်သူများ",
+    ordersPerCustomer: "ဖောက်သည်တစ်ဦးလျှင် မှာယူမှု",
+    loyaltyCost: "အသင်းဝင်စရိတ်",
+    netProfitAfterLoyalty: "အသင်းဝင်စရိတ်ပြီးနောက် အသားတင်အမြတ်",
+    grossMarginRate: "စုစုပေါင်းအမြတ် %",
+    basketUplift: "ဝယ်ယူမှုတိုးတက်မှု",
+    walkInExcludedNotice:
+      "ဖောက်သည်မသတ်မှတ်ရသော အရောင်း {count} ခု ({value}) ကို အသင်းဝင်/အသင်းမဝင် ခွဲခြား၍မရပါ။ အသင်းမဝင်အဖြစ် မှတ်မယူဘဲ နှစ်ဖက်မှ ချန်လှပ်ထားသည်။",
+    noMembershipData: "ဤကာလအတွင်း ဖောက်သည်သတ်မှတ်ထားသော အရောင်းမရှိပါ",
+    loyaltyCostTrend: "အသင်းဝင်စရိတ်နှင့် အသင်းဝင်ဝင်ငွေ",
+    loyaltyCostTrendHint:
+      "အစီအစဉ်မှ ပေးလိုက်သောပမာဏနှင့် ရရှိသော အသင်းဝင်ဝင်ငွေ။ အစက်မျဉ်းသည် စရိတ်နှုန်း။",
+    loyaltyCostTrendFootnote:
+      "စရိတ်သည် ဆိုင်တွင်းနှင့် အွန်လိုင်းမှ အမှန်တကယ်အသုံးပြုသော ကူပွန်ပမာဏဖြစ်သည်။ အသင်းဝင်အစီအစဉ်များကို ပုံမှန်အားဖြင့် ဝင်ငွေ၏ ရာခိုင်နှုန်းအနည်းငယ်ဖြင့် လည်ပတ်သည်။ သတ်မှတ်မျဉ်းအထက်ဆိုပါက ဆုလာဘ်အဆင့်များ ရက်ရောလွန်းနေသည်။",
+    loyaltyCostRate: "စရိတ်နှုန်း",
+    memberRevenue: "အသင်းဝင်ဝင်ငွေ",
+    noLoyaltyActivity: "အသင်းဝင်လုပ်ဆောင်ချက် မရှိသေးပါ",
+    loyaltyLiability: "အမှတ်ပေးရန်တာဝန်နှင့် အသုံးမပြုမှု",
+    loyaltyLiabilityHint:
+      "အသုံးမပြုသေးသော အမှတ်များသည် ပေးရန်ကတိပြုထားသော လျှော့ငွေဖြစ်သည်။ သက်တမ်းကုန်ကူပွန်များသည် မည်သူမျှမလိုလားသော ဆုလာဘ်များ။",
+    loyaltyLiabilityFootnote:
+      "တာဝန်ပမာဏကို အနည်းဆုံးအဆင့် ဆုလာဘ်နှုန်းဖြင့် တွက်ချက်သည် — ဖောက်သည်ရွေးနိုင်သည့် အသက်သာဆုံးအခြေအနေ။ ရာခိုင်နှုန်းဆုလာဘ်များသည် ဝယ်ယူမှုနှင့် တွဲမှသာ တန်ဖိုးရှိသဖြင့် ပျမ်းမျှဝယ်ယူမှုမှ ခန့်မှန်းသည်။ သက်တမ်းကုန်စစ်ဆေးမှုကို တစ်ဦးချင်းသာ လုပ်ဆောင်သဖြင့် ကူပွန်အခြေအနေကို သက်တမ်းရက်မှ ပြန်တွက်သည်။",
+    pointsOutstanding: "လက်ကျန်အမှတ်",
+    pointsEarnedLifetime: "စုစုပေါင်းရရှိအမှတ်",
+    estimatedLiability: "ခန့်မှန်းတာဝန်ပမာဏ",
+    rewardsRedeemable: "ဆုလာဘ် လဲလှယ်နိုင်",
+    estimated: "ခန့်မှန်း",
+    redemptionRate: "လဲလှယ်မှုနှုန်း",
+    breakageRate: "အသုံးမပြုမှု",
+    coupons: "ကူပွန်",
+    couponsIssued: "ထုတ်ပေးပြီး",
+    couponsUsed: "အသုံးပြုပြီး",
+    couponsActive: "အသုံးပြုနိုင်",
+    couponsExpired: "သက်တမ်းကုန်",
 
     // Transactions
     totalTransactions: "စုစုပေါင်းငွေလွှဲပြောင်းမှုများ",

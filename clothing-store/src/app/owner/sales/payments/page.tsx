@@ -3,6 +3,7 @@
 import { toast } from "react-hot-toast";
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -44,6 +45,7 @@ interface PaymentStats {
 }
 
 function PaymentsPageContent() {
+  const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const { t } = useLanguage();
@@ -184,6 +186,12 @@ function PaymentsPageContent() {
   };
 
   const exportToCSV = () => {
+    // Doc: "Export Payment Data" - Owner + Manager only.
+    if (!permissions.canExportPaymentData) {
+      toast.error("You do not have permission to export payment data.");
+      return;
+    }
+
     if (filteredTransactions.length === 0) {
       toast.error("No data to export");
       return;
@@ -993,13 +1001,16 @@ function PaymentsPageContent() {
                     <option value="custom">{t.customRange}</option>
                   </select>
 
-                  <button
-                    onClick={exportToCSV}
-                    className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm rounded-lg ml-auto"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    {t.exportCsv}
-                  </button>
+                  {/* Doc: "Export Payment Data" - Owner + Manager only. */}
+                  {permissions.canExportPaymentData && (
+                    <button
+                      onClick={exportToCSV}
+                      className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm rounded-lg ml-auto"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {t.exportCsv}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

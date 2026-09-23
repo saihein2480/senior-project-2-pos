@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +29,7 @@ import {
 } from "@/types/shop";
 
 function ShopManagementContent() {
+  const permissions = usePermissions();
   const [activeMenuItem, setActiveMenuItem] = useState("manage-shops");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -258,6 +260,12 @@ function ShopManagementContent() {
   };
 
   const handleAddShop = async () => {
+    // Doc: "Add New Shop" - Owner only.
+    if (!permissions.canManageShops) {
+      setError("Only the owner can add shops.");
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -289,6 +297,12 @@ function ShopManagementContent() {
   };
 
   const handleDeleteShop = async (id: string) => {
+    // Doc: "Delete Shop" - Owner only.
+    if (!permissions.canManageShops) {
+      setError("Only the owner can delete shops.");
+      return;
+    }
+
     if (window.confirm("Are you sure you want to delete this shop?")) {
       await deleteShop(id);
     }

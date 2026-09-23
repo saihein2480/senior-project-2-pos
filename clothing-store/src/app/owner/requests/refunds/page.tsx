@@ -20,9 +20,12 @@ import {
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 
-export default function RefundRequestsPage() {
+function RefundRequestsContent() {
   const { user } = useAuth();
+  const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const [requests, setRequests] = useState<Transaction[]>([]);
@@ -101,7 +104,13 @@ export default function RefundRequestsPage() {
 
   const handleApproveReturn = async (transaction: Transaction) => {
     if (!transaction.id) return;
-    
+
+    // Doc: "Manage Return Requests" - Owner + Manager only.
+    if (!permissions.canManageReturnRequests) {
+      toast.error("You do not have permission to approve return requests.");
+      return;
+    }
+
     setProcessing(transaction.id);
     
     try {
@@ -264,7 +273,13 @@ export default function RefundRequestsPage() {
 
   const handleConfirmRefundPayment = async () => {
     if (!selectedRefundForConfirmation) return;
-    
+
+    // Doc: "Issue Refund Payments" - Owner + Manager only.
+    if (!permissions.canApprovePayments) {
+      toast.error("You do not have permission to issue refund payments.");
+      return;
+    }
+
     setIsConfirmingPayment(true);
     
     try {
@@ -680,7 +695,13 @@ export default function RefundRequestsPage() {
 
   const handleReject = async (transaction: Transaction) => {
     if (!transaction.id) return;
-    
+
+    // Doc: "Manage Return Requests" - Owner + Manager only.
+    if (!permissions.canManageReturnRequests) {
+      toast.error("You do not have permission to reject return requests.");
+      return;
+    }
+
     const reason = prompt("Enter reason for rejection:");
     if (!reason) return;
     
@@ -771,9 +792,6 @@ export default function RefundRequestsPage() {
             {/* Header */}
             <div className="mb-4">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <RotateCcw className="w-5 h-5 text-blue-600" />
-                </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                     Return Requests
@@ -791,12 +809,12 @@ export default function RefundRequestsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-600">Pending</p>
-                    <p className="text-xl font-bold text-blue-600 mt-0.5">
+                    <p className="text-xl font-bold text-rose-600 mt-0.5">
                       {requests.length}
                     </p>
                   </div>
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <Clock className="w-5 h-5 text-blue-600" />
+                  <div className="p-2 bg-rose-50 rounded-lg">
+                    <Clock className="w-5 h-5 text-rose-600" />
                   </div>
                 </div>
               </div>
@@ -805,7 +823,7 @@ export default function RefundRequestsPage() {
             {/* Requests List */}
             {loading ? (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-500 mx-auto"></div>
                 <p className="mt-2 text-sm text-gray-600">Loading requests...</p>
               </div>
             ) : requests.length === 0 ? (
@@ -834,8 +852,8 @@ export default function RefundRequestsPage() {
                         {/* Left: Request Info (4 columns) */}
                         <div className="lg:col-span-4">
                           <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg flex-shrink-0 ${isCancelledOrder ? 'bg-amber-50' : 'bg-blue-50'}`}>
-                              <AlertCircle className={`w-4 h-4 ${isCancelledOrder ? 'text-amber-600' : 'text-blue-600'}`} />
+                            <div className={`p-2 rounded-lg flex-shrink-0 ${isCancelledOrder ? 'bg-amber-50' : 'bg-rose-50'}`}>
+                              <AlertCircle className={`w-4 h-4 ${isCancelledOrder ? 'text-amber-600' : 'text-rose-600'}`} />
                             </div>
                             
                             <div className="flex-1 min-w-0">
@@ -843,7 +861,7 @@ export default function RefundRequestsPage() {
                                 <h3 className="text-base font-semibold text-gray-900">
                                   {request.transactionId}
                                 </h3>
-                                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-medium rounded">
+                                <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-medium rounded">
                                   {refundReq.status === "pending" ? "Pending" : "Approved"}
                                 </span>
                                 {isCancelledOrder && (
@@ -851,13 +869,17 @@ export default function RefundRequestsPage() {
                                     Cancelled Order
                                   </span>
                                 )}
+                                {/* Type chip: lighter than the state chip so
+                                    type and state stay tellable apart. */}
                                 {refundReq.type === "return" && (
-                                  <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-medium rounded">
+                                  <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-medium rounded">
                                     Return Request
                                   </span>
                                 )}
+                                {/* Amber = still waiting, pairing with the
+                                    green "Inspected" chip that replaces it. */}
                                 {refundReq.type === "return" && refundReq.returnReceived && !refundReq.inspectionCompleted && (
-                                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-medium rounded">
+                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-medium rounded">
                                     Awaiting Inspection
                                   </span>
                                 )}
@@ -915,11 +937,11 @@ export default function RefundRequestsPage() {
                         {/* Middle: Requested Items & Photos (6 columns) */}
                         <div className="lg:col-span-6 space-y-2">
                           {/* Requested Items Summary */}
-                          <div className="p-2 bg-blue-50 rounded border border-blue-100">
-                            <p className="text-[10px] text-blue-700 font-medium mb-1">Requested Items:</p>
+                          <div className="p-2 bg-rose-50 rounded border border-rose-100">
+                            <p className="text-[10px] text-rose-700 font-medium mb-1">Requested Items:</p>
                             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                               {requestedItems.map((item: any, idx: number) => (
-                                <div key={idx} className="text-[10px] text-blue-900">
+                                <div key={idx} className="text-[10px] text-rose-900">
                                   • {item.groupName} - Qty: {item.quantity}
                                 </div>
                               ))}
@@ -928,20 +950,20 @@ export default function RefundRequestsPage() {
                           
                           {/* Item Photos for Return Requests */}
                           {refundReq.type === "return" && refundReq.itemPhotos && refundReq.itemPhotos.length > 0 && (
-                            <div className="p-2 bg-purple-50 rounded border border-purple-200">
-                              <p className="text-[10px] text-purple-700 font-medium mb-1.5">📸 Item Photos ({refundReq.itemPhotos.length}):</p>
+                            <div className="p-2 bg-rose-50 rounded border border-rose-200">
+                              <p className="text-[10px] text-rose-700 font-medium mb-1.5">📸 Item Photos ({refundReq.itemPhotos.length}):</p>
                               <div className="grid grid-cols-4 gap-1.5">
                                 {refundReq.itemPhotos.map((photo: string, idx: number) => (
                                   <img
                                     key={idx}
                                     src={photo}
                                     alt={`Item photo ${idx + 1}`}
-                                    className="w-full h-20 object-cover rounded border border-purple-300 cursor-pointer hover:opacity-80 transition-opacity"
+                                    className="w-full h-20 object-cover rounded border border-rose-300 cursor-pointer hover:opacity-80 transition-opacity"
                                     onClick={() => window.open(photo, '_blank')}
                                   />
                                 ))}
                               </div>
-                              <p className="text-[10px] text-purple-600 mt-1">Click to view full size</p>
+                              <p className="text-[10px] text-rose-600 mt-1">Click to view full size</p>
                             </div>
                           )}
                         </div>
@@ -1045,14 +1067,14 @@ export default function RefundRequestsPage() {
 
             <div className="p-5 space-y-3">
               {/* Info box */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+              <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-rose-300 rounded-lg p-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-500 rounded-lg">
+                  <div className="p-2 bg-gradient-to-r from-rose-500 to-pink-500 rounded-lg">
                     <Package className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-blue-900 mb-1">Customer Return</p>
-                    <p className="text-xs text-blue-800">
+                    <p className="text-sm font-bold text-rose-900 mb-1">Customer Return</p>
+                    <p className="text-xs text-rose-800">
                       Confirm that the customer has physically brought the items back to the store.
                     </p>
                   </div>
@@ -1093,22 +1115,22 @@ export default function RefundRequestsPage() {
               </div>
 
               {/* Return Status Selection - Compact Design */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-3">
+              <div className="bg-gradient-to-br from-rose-50 to-pink-50 border-2 border-rose-300 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="p-1 bg-purple-500 rounded">
+                  <div className="p-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded">
                     <RotateCcw className="w-3 h-3 text-white" />
                   </div>
-                  <h3 className="text-xs font-bold text-purple-900">Return Status *</h3>
+                  <h3 className="text-xs font-bold text-rose-900">Return Status *</h3>
                 </div>
-                <p className="text-[10px] text-purple-700 mb-2">
+                <p className="text-[10px] text-rose-700 mb-2">
                   Select the return completeness based on items returned:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <label 
                     className={`flex flex-col items-center justify-center p-2.5 border-2 rounded-lg cursor-pointer transition-all ${
                       returnStatus === "fully_returned"
-                        ? "border-purple-500 bg-white shadow-sm"
-                        : "border-purple-200 bg-white/50 hover:border-purple-400"
+                        ? "border-rose-500 bg-white shadow-sm"
+                        : "border-rose-200 bg-white/50 hover:border-rose-400"
                     }`}
                   >
                     <input
@@ -1117,16 +1139,16 @@ export default function RefundRequestsPage() {
                       value="fully_returned"
                       checked={returnStatus === "fully_returned"}
                       onChange={(e) => setReturnStatus(e.target.value as "fully_returned" | "partially_returned")}
-                      className="w-4 h-4 text-purple-600 mb-1.5"
+                      className="w-4 h-4 text-rose-600 mb-1.5"
                     />
-                    <div className="text-xs font-bold text-purple-900 leading-tight">Fully Returned</div>
+                    <div className="text-xs font-bold text-rose-900 leading-tight">Fully Returned</div>
                   </label>
 
                   <label 
                     className={`flex flex-col items-center justify-center p-2.5 border-2 rounded-lg cursor-pointer transition-all ${
                       returnStatus === "partially_returned"
-                        ? "border-purple-500 bg-white shadow-sm"
-                        : "border-purple-200 bg-white/50 hover:border-purple-400"
+                        ? "border-rose-500 bg-white shadow-sm"
+                        : "border-rose-200 bg-white/50 hover:border-rose-400"
                     }`}
                   >
                     <input
@@ -1135,9 +1157,9 @@ export default function RefundRequestsPage() {
                       value="partially_returned"
                       checked={returnStatus === "partially_returned"}
                       onChange={(e) => setReturnStatus(e.target.value as "fully_returned" | "partially_returned")}
-                      className="w-4 h-4 text-purple-600 mb-1.5"
+                      className="w-4 h-4 text-rose-600 mb-1.5"
                     />
-                    <div className="text-xs font-bold text-purple-900 leading-tight">Partially Returned</div>
+                    <div className="text-xs font-bold text-rose-900 leading-tight">Partially Returned</div>
                   </label>
                 </div>
               </div>
@@ -1206,19 +1228,19 @@ export default function RefundRequestsPage() {
 
             <div className="p-5 space-y-4">
               {/* Inspection Guide */}
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-4">
+              <div className="bg-gradient-to-br from-rose-50 to-pink-50 border-2 border-rose-300 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-blue-500 rounded-lg">
+                  <div className="p-2.5 bg-gradient-to-r from-rose-500 to-pink-500 rounded-lg">
                     <span className="text-2xl">🔍</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-blue-900 mb-1">Inspection Guide</p>
-                    <p className="text-xs text-blue-800 mb-2">
+                    <p className="text-sm font-bold text-rose-900 mb-1">Inspection Guide</p>
+                    <p className="text-xs text-rose-800 mb-2">
                       Mark each item as <strong>"Accepted"</strong> (good condition, can restock) or <strong>"Damaged"</strong> (cannot restock).
                     </p>
-                    <div className="bg-white/60 rounded p-2 border border-blue-200">
-                      <p className="text-xs font-bold text-blue-900 mb-1">💰 Refund Policy:</p>
-                      <ul className="text-xs text-blue-800 space-y-0.5">
+                    <div className="bg-white/60 rounded p-2 border border-rose-200">
+                      <p className="text-xs font-bold text-rose-900 mb-1">💰 Refund Policy:</p>
+                      <ul className="text-xs text-rose-800 space-y-0.5">
                         <li>✅ <strong>Accepted items:</strong> Full refund + restocked</li>
                         <li>❌ <strong>Damaged items:</strong> NO refund + NOT restocked</li>
                       </ul>
@@ -1411,7 +1433,7 @@ export default function RefundRequestsPage() {
                       value="cash"
                       checked={refundMethod === "cash"}
                       onChange={(e) => setRefundMethod(e.target.value as any)}
-                      className="w-3.5 h-3.5 text-blue-600"
+                      className="w-3.5 h-3.5 text-rose-600"
                     />
                     <span className="ml-2 text-xs text-gray-900">Cash</span>
                   </label>
@@ -1422,7 +1444,7 @@ export default function RefundRequestsPage() {
                       value="original_payment"
                       checked={refundMethod === "original_payment"}
                       onChange={(e) => setRefundMethod(e.target.value as any)}
-                      className="w-3.5 h-3.5 text-blue-600"
+                      className="w-3.5 h-3.5 text-rose-600"
                     />
                     <span className="ml-2 text-xs text-gray-900">
                       Original Payment Method ({selectedRefundForConfirmation.transaction.paymentMethod})
@@ -1435,7 +1457,7 @@ export default function RefundRequestsPage() {
                       value="bank_transfer"
                       checked={refundMethod === "bank_transfer"}
                       onChange={(e) => setRefundMethod(e.target.value as any)}
-                      className="w-3.5 h-3.5 text-blue-600"
+                      className="w-3.5 h-3.5 text-rose-600"
                     />
                     <span className="ml-2 text-xs text-gray-900">Bank Transfer</span>
                   </label>
@@ -1487,7 +1509,7 @@ export default function RefundRequestsPage() {
                   onChange={(e) => setRefundNotes(e.target.value)}
                   placeholder="e.g., Refunded at store counter, Transaction ref: 123456"
                   rows={2}
-                  className="w-full px-2.5 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-rose-400"
                 />
               </div>
 
@@ -1551,19 +1573,19 @@ export default function RefundRequestsPage() {
             <div className="p-4 space-y-3">
               {/* QR Code Image Display for Scan/Wallet Payments */}
               {(selectedRequest.paymentMethod === "scan" || selectedRequest.paymentMethod === "wallet") && (selectedRequest as any).refundRequest?.qrCodeImage && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <div className="bg-rose-50 border border-rose-200 rounded p-3">
                   <div className="flex items-start gap-2 mb-2">
                     <span className="text-xl">💳</span>
                     <div className="flex-1">
-                      <p className="font-medium text-blue-900 text-xs">
+                      <p className="font-medium text-rose-900 text-xs">
                         Customer's Payment QR Code / Account Info
                       </p>
-                      <p className="text-[10px] text-blue-800 mt-0.5">
+                      <p className="text-[10px] text-rose-800 mt-0.5">
                         Use this to send the refund back to customer's payment account
                       </p>
                     </div>
                   </div>
-                  <div className="bg-white rounded p-2 border border-blue-200">
+                  <div className="bg-white rounded p-2 border border-rose-200">
                     <img
                       src={(selectedRequest as any).refundRequest.qrCodeImage}
                       alt="Customer Payment QR Code"
@@ -1573,8 +1595,8 @@ export default function RefundRequestsPage() {
                 </div>
               )}
 
-              <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                <p className="text-xs text-blue-800">
+              <div className="bg-rose-50 border border-rose-200 rounded p-3">
+                <p className="text-xs text-rose-800">
                   💡 <strong>Pre-selected from customer request:</strong> Items and quantities have been automatically selected based on the customer's refund request. You can adjust if needed.
                 </p>
               </div>
@@ -1643,7 +1665,7 @@ export default function RefundRequestsPage() {
               </div>
 
               {/* Refund Calculation */}
-              <div className="bg-cyan-50 border border-cyan-200 rounded p-3">
+              <div className="bg-rose-50 border border-rose-200 rounded p-3">
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Refund Calculation</h3>
                 {(() => {
                   const totalItemRefundAmount = Object.entries(refundItems).reduce((total, [key, quantity]) => {
@@ -1675,9 +1697,9 @@ export default function RefundRequestsPage() {
                           <span className="text-orange-600">-{formatPrice(cartDiscountRefund)}</span>
                         </div>
                       )}
-                      <div className="border-t border-cyan-300 pt-1.5 flex justify-between font-semibold">
+                      <div className="border-t border-rose-300 pt-1.5 flex justify-between font-semibold">
                         <span className="text-gray-900">Total Refund:</span>
-                        <span className="text-cyan-700 text-base">{formatPrice(finalRefundAmount)}</span>
+                        <span className="text-rose-700 text-base">{formatPrice(finalRefundAmount)}</span>
                       </div>
                     </div>
                   );
@@ -1860,5 +1882,14 @@ export default function RefundRequestsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RefundRequestsPage() {
+  // Doc: "Manage Return Requests" - Owner + Manager only.
+  return (
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
+      <RefundRequestsContent />
+    </ProtectedRoute>
   );
 }

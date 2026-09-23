@@ -347,6 +347,19 @@ export function PaymentClearanceModal({
         timestamp: new Date().toISOString(),
         status: transactionStatus,
         branchName: receiptData.branchName,
+        // Attribute the sale to the signed-in operator. Reports previously
+        // showed whoever was *viewing* them as the seller, because nothing was
+        // ever recorded here.
+        ...(user
+          ? {
+              soldByUid: user.uid,
+              soldByName:
+                user.displayName?.trim() ||
+                user.email?.split("@")[0] ||
+                "Staff",
+              soldByRole: user.role,
+            }
+          : {}),
         sellingCurrency: selectedCurrency,
         exchangeRate: receiptData.exchangeRate,
         sellingTotal: receiptData.sellingTotal,

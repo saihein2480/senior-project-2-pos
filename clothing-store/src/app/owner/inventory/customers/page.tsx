@@ -202,6 +202,13 @@ function CustomerPageContent() {
    * coupons are preserved, so this is safe to run on any customer.
    */
   const handleActivateMembership = async (customer: Customer) => {
+    // Doc: "Adjust Loyalty Points" - Owner + Manager only.
+    if (!permissions.canAdjustLoyaltyPoints) {
+      setError("You do not have permission to change memberships.");
+      closeDropdown();
+      return;
+    }
+
     setError(null);
 
     // Enrolling is pointless while the programme is switched off.
@@ -243,6 +250,13 @@ function CustomerPageContent() {
    * re-activating restores their standing.
    */
   const handleDeactivateMembership = async (customer: Customer) => {
+    // Doc: "Adjust Loyalty Points" - Owner + Manager only.
+    if (!permissions.canAdjustLoyaltyPoints) {
+      setError("You do not have permission to change memberships.");
+      closeDropdown();
+      return;
+    }
+
     const confirmed = window.confirm(
       `Deactivate membership for ${describeCustomer(customer)}?\n\n` +
         `Their points and coupons are kept, so you can reactivate them later.`,
@@ -277,6 +291,13 @@ function CustomerPageContent() {
 
   // Handle edit customer
   const handleEditCustomer = (customer: Customer) => {
+    // Doc: "Edit Customer Info" - all three roles.
+    if (!permissions.canEditCustomers) {
+      setError("You do not have permission to edit customers.");
+      closeDropdown();
+      return;
+    }
+
     setEditingCustomer(customer);
     setIsModalOpen(true);
     setOpenDropdown(null);
@@ -548,13 +569,17 @@ function CustomerPageContent() {
                       Manage your customer database and relationships
                     </p>
                   </div>
-                  <Button
-                    className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
-                    onClick={() => setIsModalOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Customer
-                  </Button>
+                  {/* Doc: "Add New Customers" - all three roles (staff enrol
+                      walk-ins). */}
+                  {permissions.canAddCustomers && (
+                    <Button
+                      className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
+                      onClick={() => setIsModalOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Customer
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -776,22 +801,25 @@ function CustomerPageContent() {
                   </div>
                 </div>
 
-                {/* Receivables */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Receivables
-                      </p>
-                      <p className="text-3xl font-bold text-gray-900 mt-2">
-                        {formatPrice(stats.totalReceivables)}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-red-100 rounded-xl">
-                      <CreditCard className="h-6 w-6 text-red-600" />
+                {/* Receivables is outstanding debt - financial data.
+                    Doc: "Customer Analytics" Staff = Limited. */}
+                {permissions.canViewFullCustomerAnalytics && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          Receivables
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">
+                          {formatPrice(stats.totalReceivables)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-red-100 rounded-xl">
+                        <CreditCard className="h-6 w-6 text-red-600" />
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Search Bar */}
@@ -849,13 +877,16 @@ function CustomerPageContent() {
                         ? "No customers match your search criteria."
                         : "Get started by adding your first customer."}
                     </p>
-                    <Button
-                      className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
-                      onClick={() => setIsModalOpen(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Customer
-                    </Button>
+                    {/* Doc: "Add New Customers" - all three roles. */}
+                    {permissions.canAddCustomers && (
+                      <Button
+                        className="flex items-center bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium shadow-md border-0"
+                        onClick={() => setIsModalOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Customer
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -2062,22 +2093,29 @@ function CustomerPageContent() {
             }}
           >
             <div className="py-1">
-              <button
-                onClick={() => {
-                  const customer = customers.find(
-                    (c) => c.uid === openDropdown,
-                  );
-                  if (customer) handleEditCustomer(customer);
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Customer
-              </button>
+              {/* Doc: "Edit Customer Info" - all three roles. */}
+              {permissions.canEditCustomers && (
+                <button
+                  onClick={() => {
+                    const customer = customers.find(
+                      (c) => c.uid === openDropdown,
+                    );
+                    if (customer) handleEditCustomer(customer);
+                  }}
+                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Customer
+                </button>
+              )}
 
               {(() => {
                 const customer = customers.find((c) => c.uid === openDropdown);
                 if (!customer) return null;
+
+                // Doc: "Adjust Loyalty Points" - Owner + Manager. Staff can see
+                // a customer's membership and points but cannot change them.
+                if (!permissions.canAdjustLoyaltyPoints) return null;
 
                 const busy = membershipBusyId === customer.uid;
 

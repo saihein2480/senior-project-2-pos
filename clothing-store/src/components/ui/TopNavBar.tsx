@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePosSurfaceVisibility } from "@/hooks/usePosSurfaceVisibility";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -43,6 +45,9 @@ export function TopNavBar({
 }: TopNavBarProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const permissions = usePermissions();
+  // Paired with the Home menu entry in the Sidebar - one owner setting drives both.
+  const { isPosSurfaceVisible } = usePosSurfaceVisibility();
   const { getCartItemCount } = useCart();
   const {
     selectedCurrency,
@@ -116,8 +121,10 @@ export function TopNavBar({
       localStorage.setItem(storageKey, branchName);
       console.log("Saved to localStorage:", storageKey, branchName);
 
-      // Also save to Firebase settings if user is owner/manager
-      if (user?.role !== "staff") {
+      // Doc: "Branch Selection" is available to all roles, but only a role that
+      // can edit business settings persists it to the shared settings document.
+      // Staff keep their branch choice local to their own device.
+      if (permissions.canEditBusinessSettings) {
         try {
           // Use PATCH endpoint to update only currentBranch without affecting other fields
           const response = await fetch("/api/settings", {
@@ -506,19 +513,24 @@ export function TopNavBar({
               onViewChange={setViewAsRole}
             />
 
-            {/* Shopping Cart */}
-            <div
-              className="relative cursor-pointer"
-              onClick={() => {
-                setIsCartModalOpen(true);
-                onCartModalStateChange?.(true);
-              }}
-            >
-              <ShoppingCart className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                {getCartItemCount()}
-              </span>
-            </div>
+            {/* Shopping Cart. Hidden together with the Home menu entry when the
+                owner has turned off the walk-in POS in Settings. */}
+            {isPosSurfaceVisible && (
+              <button
+                type="button"
+                className="relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-pink-300 rounded"
+                aria-label={`Shopping cart, ${getCartItemCount()} item(s)`}
+                onClick={() => {
+                  setIsCartModalOpen(true);
+                  onCartModalStateChange?.(true);
+                }}
+              >
+                <ShoppingCart className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {getCartItemCount()}
+                </span>
+              </button>
+            )}
 
             {/* Notifications */}
             <div className="relative" ref={notificationDropdownRef}>

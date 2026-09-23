@@ -11,6 +11,20 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { StockService } from "@/services/stockService";
+import { CustomerNotificationService } from "@/services/customerNotificationService";
+
+/**
+ * Online order status -> the customer notification it should trigger.
+ *
+ * Statuses that are not here (`pending`, `confirmed`) are internal bookkeeping
+ * the customer has already been told about at checkout, so they stay silent.
+ */
+const STATUS_NOTIFICATION: Record<string, string> = {
+  packaging: "order_packaging",
+  delivering: "order_shipped",
+  shipped: "order_shipped",
+  delivered: "order_delivered",
+};
 
 export interface OnlineOrder {
   id: string;
@@ -93,12 +107,37 @@ export interface OnlineTransaction {
     uid?: string;
     displayName?: string;
     email?: string;
+    phone?: string;
+    address?: string;
+    customerType?: string;
   };
   items?: Array<{
+    productId?: string;
+    stockId?: string;
+    groupName?: string;
+    selectedColor?: string;
+    selectedSize?: string;
+    colorCode?: string;
     unitPrice?: number;
     originalPrice?: number;
     quantity?: number;
   }>;
+  /**
+   * Money breakdown stored at purchase time. These were already being written
+   * by the storefront (see api/transactions/create-cod and api/mmpay/webhook)
+   * but were missing from this interface, so readers had to cast to `any`.
+   */
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  /** Percentage applied at purchase time, e.g. 7 for 7%. */
+  taxRate?: number;
+  amountPaid?: number;
+  amountMmk?: number;
+  couponCode?: string;
+  appliedCouponCode?: string;
+  couponDiscountTHB?: number;
+  branchName?: string;
 }
 
 function normalizeDate(input: unknown): string {
@@ -224,6 +263,52 @@ class OnlineOrderService {
       .map((tx) => ({ ...tx, timestamp: normalizeDate(tx.timestamp || "") }));
   }
 
+  /**
+   * Tell the customer their order moved on, by email and Telegram.
+   *
+   * Best-effort and never throws: the status change is the operation that must
+   * succeed, and the owner should not see a failed save because the storefront
+   * notification service was unreachable.
+   */
+  private async notifyStatusChange(
+    order: OnlineOrder,
+    status: string,
+  ): Promise<void> {
+    const customerId = order.customer?.uid;
+    if (!customerId) return;
+
+    const normalised = (status || "").toLowerCase();
+    const type = this.isCancelledStatus(status)
+      ? "order_cancelled"
+      : STATUS_NOTIFICATION[normalised];
+
+    if (!type) return;
+
+    try {
+      await CustomerNotificationService.notifyOrderEvent({
+        customerId,
+        type,
+        order: {
+          orderRef: order.orderId || order.id,
+          totalAmount: Number(order.total || 0),
+          paymentMethod: order.paymentMethod || order.provider || "",
+          paymentStatus: order.paymentStatus || "",
+          items: (order.items || []).map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+          })),
+        },
+      });
+    } catch (error) {
+      // notifyOrderEvent already swallows its own errors; this guards against
+      // anything unexpected while building the payload.
+      console.error(
+        `Failed to notify customer about order ${order.id} -> ${status}:`,
+        error,
+      );
+    }
+  }
+
   async updateOnlineOrderStatus(
     orderId: string,
     status: string,
@@ -241,6 +326,11 @@ class OnlineOrderService {
       id: snap.id,
       ...(snap.data() as Omit<OnlineOrder, "id">),
     } as OnlineOrder;
+
+    // Only worth a message when something actually moved; owners re-save the
+    // same status often enough that this matters.
+    const statusChanged =
+      (current.status || "").toLowerCase() !== (status || "").toLowerCase();
 
     if (nextStatusIsCancelled) {
       shouldMarkRestoredAt = await this.restoreStockIfNeeded(current);
@@ -278,6 +368,10 @@ class OnlineOrderService {
         console.error("Failed to update linked COD transaction:", error);
       }
     }
+
+    if (statusChanged) {
+      await this.notifyStatusChange({ ...current, status }, status);
+    }
   }
 
   async updateOnlineOrderStatuses(
@@ -294,6 +388,19 @@ class OnlineOrderService {
       return;
     }
 
+    // Read the orders before the write so we can tell which ones actually
+    // changed status, and so we have the customer and totals for the messages.
+    const before = await Promise.all(
+      orderIds.map(async (orderId) => {
+        const snap = await getDoc(doc(firestore, "onlineOrders", orderId));
+        if (!snap.exists()) return null;
+        return {
+          id: snap.id,
+          ...(snap.data() as Omit<OnlineOrder, "id">),
+        } as OnlineOrder;
+      }),
+    );
+
     const batch = writeBatch(firestore);
     const updatedAt = new Date().toISOString();
 
@@ -305,6 +412,14 @@ class OnlineOrderService {
     });
 
     await batch.commit();
+
+    for (const order of before) {
+      if (!order) continue;
+      if ((order.status || "").toLowerCase() === (status || "").toLowerCase()) {
+        continue;
+      }
+      await this.notifyStatusChange({ ...order, status }, status);
+    }
   }
 
   async updateOnlineOrderPaymentStatus(

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +32,7 @@ export default function CancellationRequestsPage() {
 
 function CancellationRequestsContent() {
   const { user } = useAuth();
+  const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const [requests, setRequests] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,13 @@ function CancellationRequestsContent() {
 
   const handleApprove = async (transaction: Transaction) => {
     if (!transaction.id) return;
-    
+
+    // Doc: "Handle Cancellations" - Owner + Manager only.
+    if (!permissions.canHandleCancellations) {
+      toast.error("You do not have permission to approve cancellations.");
+      return;
+    }
+
     // Check if this is a paid order (cash/scan)
     const isPaidOrder = transaction.paymentMethod === "cash" || transaction.paymentMethod === "scan";
     
@@ -139,7 +147,13 @@ function CancellationRequestsContent() {
 
   const handleReject = async (transaction: Transaction) => {
     if (!transaction.id) return;
-    
+
+    // Doc: "Handle Cancellations" - Owner + Manager only.
+    if (!permissions.canHandleCancellations) {
+      toast.error("You do not have permission to reject cancellations.");
+      return;
+    }
+
     const reason = prompt("Enter reason for rejection:");
     if (!reason) return;
     
@@ -215,9 +229,6 @@ function CancellationRequestsContent() {
             <div className="mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-lg shadow-amber-500/30">
-                    <XCircle className="w-6 h-6 text-white" />
-                  </div>
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                       Order Cancellation Requests
@@ -256,7 +267,7 @@ function CancellationRequestsContent() {
             {/* Requests List */}
             {loading ? (
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-3 border-amber-200 border-t-amber-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-10 w-10 border-3 border-rose-200 border-t-rose-500 mx-auto"></div>
                 <p className="mt-4 text-gray-600 font-medium">Loading requests...</p>
               </div>
             ) : requests.length === 0 ? (
@@ -298,7 +309,7 @@ function CancellationRequestsContent() {
                                     PENDING
                                   </span>
                                   {isPaidOrder && (
-                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full border border-blue-200">
+                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded-full border border-rose-200">
                                       REFUND REQUIRED
                                     </span>
                                   )}
@@ -367,12 +378,12 @@ function CancellationRequestsContent() {
 
                                 {/* QR Code Preview for Scan */}
                                 {(request.paymentMethod === "scan") && cancelReq.qrCodeImage && (
-                                  <div className="mt-2 p-2.5 bg-blue-50 rounded-lg border border-blue-200">
+                                  <div className="mt-2 p-2.5 bg-rose-50 rounded-lg border border-rose-200">
                                     <div className="flex items-center gap-1.5">
-                                      <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                       </svg>
-                                      <p className="text-xs font-semibold text-blue-900">Customer Payment Account Attached</p>
+                                      <p className="text-xs font-semibold text-rose-900">Customer Payment Account Attached</p>
                                     </div>
                                   </div>
                                 )}
@@ -435,7 +446,7 @@ function CancellationRequestsContent() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-fit max-h-[95vh] flex flex-col">
             {/* Header */}
-            <div className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 flex justify-between items-center">
+            <div className="px-3 py-1.5 bg-gradient-to-r from-rose-500 to-pink-500 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -458,7 +469,7 @@ function CancellationRequestsContent() {
                 {/* Transaction Info - Compact Inline */}
                 <div className="bg-white rounded p-2 border border-gray-200 col-span-2">
                   <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-blue-500 rounded"></div>
+                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
                     <h3 className="text-xs font-bold text-gray-700">Transaction</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -480,7 +491,7 @@ function CancellationRequestsContent() {
                 {/* Order Summary - Compact */}
                 <div className="bg-white rounded p-2 border border-gray-200 col-span-2">
                   <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-blue-500 rounded"></div>
+                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
                     <h3 className="text-xs font-bold text-gray-700">Summary</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 text-xs">
@@ -496,7 +507,7 @@ function CancellationRequestsContent() {
                     </div>
                     <div className="flex flex-col justify-center items-end">
                       <span className="text-xs text-gray-500">Total</span>
-                      <span className="text-sm font-bold text-blue-600">{formatPrice(selectedRequest.total)}</span>
+                      <span className="text-sm font-bold text-rose-600">{formatPrice(selectedRequest.total)}</span>
                     </div>
                   </div>
                 </div>
@@ -506,7 +517,7 @@ function CancellationRequestsContent() {
                 {/* Items - Left side */}
                 <div className="bg-white rounded p-2 border border-gray-200 lg:col-span-2">
                   <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-blue-500 rounded"></div>
+                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
                     <h3 className="text-xs font-bold text-gray-700">Items ({selectedRequest.items.length})</h3>
                   </div>
                   <div className="space-y-1">
@@ -546,13 +557,13 @@ function CancellationRequestsContent() {
 
                 {/* QR Code - Right side (if exists) */}
                 {(selectedRequest.paymentMethod === "scan") && (selectedRequest as any).cancellationRequest?.qrCodeImage ? (
-                  <div className="bg-white rounded p-2 border border-blue-300">
+                  <div className="bg-white rounded p-2 border border-rose-200">
                     <div className="flex items-center gap-1 mb-1.5">
-                      <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                       </svg>
                       <div>
-                        <p className="text-xs font-bold text-blue-900 leading-tight">Refund QR</p>
+                        <p className="text-xs font-bold text-rose-900 leading-tight">Refund QR</p>
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded p-1.5 border border-gray-200">
@@ -575,7 +586,7 @@ function CancellationRequestsContent() {
             <div className="px-3 py-1.5 bg-white border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setShowDetailsModal(false)}
-                className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded font-semibold transition-all text-xs"
+                className="px-3 py-1 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded font-semibold transition-all text-xs"
               >
                 Close
               </button>

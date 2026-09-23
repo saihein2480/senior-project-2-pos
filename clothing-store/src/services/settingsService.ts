@@ -139,6 +139,16 @@ export interface BusinessSettings {
   enableSoundEffects: boolean;
   currencyRate: number;
   currentBranch?: string;
+  /**
+   * Owner workspace preference. When true, the walk-in POS surface is hidden
+   * from the OWNER's interface only: the Home entry in the side menu and the
+   * cart button in the top bar disappear together, since a cart with no way to
+   * reach the product grid is useless.
+   *
+   * Managers and staff are never affected - they always keep Home and the cart.
+   * See usePosSurfaceVisibility().
+   */
+  hidePosForOwner?: boolean;
   labelSettings?: {
     labelWidth: number;
     labelHeight: number;
@@ -197,6 +207,7 @@ export class SettingsService {
           enableSoundEffects: data.enableSoundEffects ?? false,
           currencyRate: data.currencyRate || 0,
           currentBranch: data.currentBranch || "Main Branch",
+          hidePosForOwner: data.hidePosForOwner ?? false,
           labelSettings: data.labelSettings,
           storeInfo: data.storeInfo || {},
           loyaltySettings: data.loyaltySettings || {

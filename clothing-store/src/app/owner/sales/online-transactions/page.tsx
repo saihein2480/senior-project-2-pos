@@ -14,6 +14,11 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  X,
+  User,
+  Package,
+  CreditCard,
 } from "lucide-react";
 
 type OrderWorkflowStatus =
@@ -53,7 +58,368 @@ function getNormalizedOrderStatus(
   return "unknown";
 }
 
+/** Human label for a payment method code. */
+function getPaymentMethodLabel(method?: string) {
+  const value = (method || "").toLowerCase();
+  if (value === "cod") return "💵 COD";
+  if (value === "cash") return "💵 Cash";
+  if (value === "scan" || value === "wallet") return "📱 QR Scan";
+  if (!value) return "-";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/** Trim floating point noise so a rate reads "7%" not "7.000000001%". */
+function formatRatePercent(percent: number) {
+  return String(Math.round(percent * 100) / 100);
+}
+
+/**
+ * Rebuild the money breakdown from what was stored at purchase time, so the
+ * figures always reconcile with what the customer actually paid.
+ *
+ * `discount` holds promotion savings only; coupon savings live separately in
+ * `couponDiscountTHB`.
+ */
+function getPaymentBreakdown(row: OnlineTransaction) {
+  const itemsSubtotal = (row.items || []).reduce(
+    (sum, item) =>
+      sum + Number(item.unitPrice || 0) * Number(item.quantity || 1),
+    0,
+  );
+
+  const storedSubtotal = Number(row.subtotal || 0);
+  const subtotal = storedSubtotal > 0 ? storedSubtotal : itemsSubtotal;
+
+  const promotionDiscount = Math.max(0, Number(row.discount || 0));
+  const couponDiscount = Math.max(0, Number(row.couponDiscountTHB || 0));
+  const taxableBase = Math.max(
+    0,
+    subtotal - promotionDiscount - couponDiscount,
+  );
+  const tax = Math.max(0, Number(row.tax || 0));
+
+  // Prefer the rate stored with the order; older records predate that field.
+  const storedRate = Number(row.taxRate || 0);
+  const taxPercent =
+    storedRate > 0
+      ? storedRate
+      : taxableBase > 0 && tax > 0
+        ? (tax / taxableBase) * 100
+        : 0;
+
+  const total = Number(row.total || 0) || taxableBase + tax;
+
+  return {
+    subtotal,
+    promotionDiscount,
+    couponDiscount,
+    tax,
+    taxPercent,
+    total,
+  };
+}
+
+/** Small labelled value used throughout the details modal. */
+function DetailRow({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        {label}
+      </span>
+      <span
+        className={`text-right text-sm ${
+          emphasis ? "font-bold text-gray-900" : "font-medium text-gray-700"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** Section wrapper so the three detail groups share one look. */
+function DetailSection({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-pink-100 px-4 py-2.5">
+        <span className="text-rose-500">{icon}</span>
+        <h3 className="text-[11px] font-bold uppercase tracking-wide text-rose-600">
+          {title}
+        </h3>
+      </div>
+      <div className="px-4 py-3">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Full breakdown of one online transaction: who bought it, what they bought,
+ * and how the money added up. The table only has room for a summary, so the
+ * shipping address, per-item variants and tax/coupon lines live here.
+ */
+function TransactionDetailsModal({
+  row,
+  orderStatus,
+  onClose,
+}: {
+  row: OnlineTransaction;
+  orderStatus: OrderWorkflowStatus;
+  onClose: () => void;
+}) {
+  const items = row.items || [];
+  const money = getPaymentBreakdown(row);
+  const couponCode = row.couponCode || row.appliedCouponCode;
+  const currency = row.sellingCurrency === "MMK" ? "Ks" : "THB";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex flex-shrink-0 items-start justify-between gap-3 bg-gradient-to-r from-rose-500 to-pink-500 px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-white">
+              Transaction Details
+            </h2>
+            <p className="mt-0.5 truncate text-xs text-white/80">
+              {row.transactionId || row.id}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close details"
+            className="flex-shrink-0 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 px-5 py-4">
+          {/* Customer */}
+          <DetailSection
+            title="Customer Information"
+            icon={<User className="h-4 w-4" />}
+          >
+            <div className="divide-y divide-gray-100">
+              <DetailRow
+                label="Name"
+                value={row.customer?.displayName || "-"}
+                emphasis
+              />
+              <DetailRow label="Email" value={row.customer?.email || "-"} />
+              <DetailRow label="Phone" value={row.customer?.phone || "-"} />
+              <DetailRow
+                label="Delivery Address"
+                value={row.customer?.address || "-"}
+              />
+              <DetailRow
+                label="Customer ID"
+                value={
+                  <span className="font-mono text-xs">
+                    {row.customer?.uid || "-"}
+                  </span>
+                }
+              />
+            </div>
+          </DetailSection>
+
+          {/* Products */}
+          <DetailSection
+            title={`Product Details (${items.length})`}
+            icon={<Package className="h-4 w-4" />}
+          >
+            {items.length === 0 ? (
+              <p className="py-2 text-center text-sm text-gray-500">
+                No item detail was recorded for this transaction.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      <th className="pb-2 pr-3">Product</th>
+                      <th className="pb-2 pr-3">Variant</th>
+                      <th className="pb-2 pr-3 text-right">Unit Price</th>
+                      <th className="pb-2 pr-3 text-right">Qty</th>
+                      <th className="pb-2 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {items.map((item, index) => {
+                      const quantity = Number(item.quantity || 1);
+                      const unitPrice = Number(item.unitPrice || 0);
+                      const variant = [item.selectedColor, item.selectedSize]
+                        .filter(Boolean)
+                        .join(" / ");
+
+                      return (
+                        <tr key={`${row.id}-item-${index}`}>
+                          <td className="py-2 pr-3 font-medium text-gray-900">
+                            {item.groupName || "Item"}
+                          </td>
+                          <td className="py-2 pr-3 text-gray-600">
+                            {variant || "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-700">
+                            ฿ {unitPrice.toFixed(2)}
+                          </td>
+                          <td className="py-2 pr-3 text-right text-gray-700">
+                            {quantity}
+                          </td>
+                          <td className="py-2 text-right font-semibold text-gray-900">
+                            ฿ {(unitPrice * quantity).toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </DetailSection>
+
+          {/* Payment */}
+          <DetailSection
+            title="Payment Details"
+            icon={<CreditCard className="h-4 w-4" />}
+          >
+            <div className="divide-y divide-gray-100">
+              <DetailRow
+                label="Payment Method"
+                value={getPaymentMethodLabel(row.paymentMethod)}
+              />
+              <DetailRow
+                label="Provider"
+                value={row.paymentProvider || "-"}
+              />
+              <DetailRow
+                label="Payment Status"
+                value={row.paymentStatus || row.status || "-"}
+              />
+              <DetailRow
+                label="Order Status"
+                value={<span className="capitalize">{orderStatus}</span>}
+              />
+              <DetailRow label="Order Ref" value={row.onlineOrderId || "-"} />
+              <DetailRow
+                label="Date"
+                value={
+                  row.timestamp
+                    ? new Date(row.timestamp).toLocaleString()
+                    : "-"
+                }
+              />
+            </div>
+
+            {/* Money breakdown */}
+            <div className="mt-3 space-y-1.5 rounded-xl bg-gray-50 p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="font-medium text-gray-900">
+                  ฿ {money.subtotal.toFixed(2)}
+                </span>
+              </div>
+
+              {money.promotionDiscount > 0 && (
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span>Promotion Discount</span>
+                  <span className="font-medium">
+                    -฿ {money.promotionDiscount.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {money.couponDiscount > 0 && (
+                <div className="flex items-center justify-between text-purple-700">
+                  <span className="flex items-center gap-1.5">
+                    Coupon Discount
+                    {couponCode && (
+                      <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">
+                        {couponCode}
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-medium">
+                    -฿ {money.couponDiscount.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">
+                  Tax ({formatRatePercent(money.taxPercent)}%)
+                </span>
+                <span className="font-medium text-gray-900">
+                  ฿ {money.tax.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-dashed border-gray-300 pt-2">
+                <span className="font-bold text-gray-900">Total (THB)</span>
+                <span className="text-base font-bold text-rose-600">
+                  ฿ {money.total.toFixed(2)}
+                </span>
+              </div>
+
+              {Number(row.sellingTotal || row.amountMmk || 0) > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Total ({currency})</span>
+                  <span className="font-semibold text-gray-900">
+                    {Number(
+                      row.sellingTotal || row.amountMmk || 0,
+                    ).toLocaleString()}{" "}
+                    {currency}
+                  </span>
+                </div>
+              )}
+
+              {Number(row.exchangeRate || 0) > 0 && (
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Exchange Rate</span>
+                  <span>1 THB = {row.exchangeRate} MMK</span>
+                </div>
+              )}
+            </div>
+          </DetailSection>
+        </div>
+
+        <div className="flex-shrink-0 border-t border-gray-200 bg-white px-5 py-3">
+          <button
+            onClick={onClose}
+            className="w-full rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:from-rose-600 hover:to-pink-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OnlineTransactionsContent() {
+  const [selectedRow, setSelectedRow] = useState<OnlineTransaction | null>(
+    null,
+  );
   const [rows, setRows] = useState<OnlineTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -317,7 +683,7 @@ function OnlineTransactionsContent() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search transaction, order ref, or customer..."
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                 </div>
 
@@ -341,7 +707,7 @@ function OnlineTransactionsContent() {
                           | "partially_refunded",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Status</option>
                     <option value="completed">Completed</option>
@@ -372,7 +738,7 @@ function OnlineTransactionsContent() {
                           | "cancelled",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Order Status</option>
                     <option value="pending">Pending</option>
@@ -395,7 +761,7 @@ function OnlineTransactionsContent() {
                         e.target.value as "all" | "cod" | "scan"
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Methods</option>
                     <option value="cod">💵 Cash on Delivery</option>
@@ -421,7 +787,7 @@ function OnlineTransactionsContent() {
                           | "custom",
                       )
                     }
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400 appearance-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="today">Today</option>
                     <option value="7d">Last 7 days</option>
@@ -439,21 +805,21 @@ function OnlineTransactionsContent() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
                   />
                 </div>
               )}
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-600">
+                <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100 text-left text-gray-700">
                   <tr>
                     <th className="px-4 py-3">Transaction ID</th>
                     <th className="px-4 py-3">Order Ref</th>
@@ -463,13 +829,14 @@ function OnlineTransactionsContent() {
                     <th className="px-4 py-3">Total (MMK)</th>
                     <th className="px-4 py-3">Payment Status</th>
                     <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         Loading online transactions...
@@ -478,7 +845,7 @@ function OnlineTransactionsContent() {
                   ) : currentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         No matching online transactions found.
@@ -486,16 +853,10 @@ function OnlineTransactionsContent() {
                     </tr>
                   ) : (
                     currentRows.map((row) => {
-                      const method = (row.paymentMethod || "").toLowerCase();
-                      let paymentMethodLabel = "-";
-                      
-                      if (method === "cod") paymentMethodLabel = "💵 COD";
-                      else if (method === "cash") paymentMethodLabel = "💵 Cash";
-                      else if (method === "scan" || method === "wallet") paymentMethodLabel = "📱 QR Scan";
-                      else if (method) {
-                        paymentMethodLabel = method.charAt(0).toUpperCase() + method.slice(1);
-                      }
-                      
+                      const paymentMethodLabel = getPaymentMethodLabel(
+                        row.paymentMethod,
+                      );
+
                       return (
                         <tr key={row.id} className="border-t border-gray-100">
                           <td className="px-4 py-3 font-medium text-gray-900">
@@ -554,6 +915,17 @@ function OnlineTransactionsContent() {
                             {row.timestamp
                               ? new Date(row.timestamp).toLocaleString()
                               : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRow(row)}
+                              title="View customer, product and payment details"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-50"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View Details
+                            </button>
                           </td>
                         </tr>
                       );
@@ -620,6 +992,22 @@ function OnlineTransactionsContent() {
           </div>
         </main>
       </div>
+
+      {selectedRow && (
+        <TransactionDetailsModal
+          row={selectedRow}
+          orderStatus={
+            (selectedRow.onlineOrderId
+              ? orderStatusByOrderRef[selectedRow.onlineOrderId]
+              : undefined) ??
+            getNormalizedOrderStatus(
+              selectedRow.status,
+              selectedRow.paymentStatus,
+            )
+          }
+          onClose={() => setSelectedRow(null)}
+        />
+      )}
     </div>
   );
 }

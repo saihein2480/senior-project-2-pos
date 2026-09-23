@@ -30,12 +30,21 @@ export interface SelectedCustomer {
   email: string;
   displayName?: string;
   customerImage?: string;
+  /**
+   * Contact details captured for online orders. The storefront writes these
+   * onto the transaction's `customer` (see the web app's
+   * api/transactions/create-cod), so reports can show who to contact and where
+   * to deliver without casting to `any`.
+   */
+  phone?: string;
+  address?: string;
   customerType?:
     | "retailer"
     | "wholesaler"
     | "distributor"
     | "individual"
-    | "other";
+    | "other"
+    | "online";
 }
 
 /**

@@ -42,10 +42,56 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { transactionService, Transaction } from "@/services/transactionService";
+import {
+  calculateChannelSplit,
+  calculateDailyNetMargin,
+  calculateLoyaltyCostTrend,
+  calculateLoyaltyEconomics,
+  calculatePointsLiability,
+  calculatePromotionCorrelation,
+  calculatePromotionSeries,
+  calculateRedemptionFunnel,
+  calculateReturnRateBySize,
+  calculateRevenueSeries,
+  calculateSellThroughBySize,
+  calculateStaffPerformance,
+  calculateStockAging,
+  chooseTimeGrain,
+  grainLabel,
+  summariseStockAging,
+  type ChannelSplitPoint,
+  type DailyNetMargin,
+  type LoyaltyCostPoint,
+  type LoyaltyCustomer,
+  type LoyaltyEconomics,
+  type PointsLiability,
+  type PromotionSeriesPoint,
+  type RedemptionFunnel,
+  type RevenueSeriesPoint,
+  type SizeReturnRate,
+  type SizeSellThrough,
+  type StaffPerformance,
+  type StockAging,
+  type StockAgingSummary,
+  type TimeGrain,
+} from "@/lib/analytics/retailAnalytics";
+import { barSize, timeAxisProps } from "@/components/analytics/timeAxis";
+import { SellThroughBySizeChart } from "@/components/analytics/SellThroughBySizeChart";
+import { NetMarginChart } from "@/components/analytics/NetMarginChart";
+import { StockAgingChart } from "@/components/analytics/StockAgingChart";
+import { ReturnRateBySizeChart } from "@/components/analytics/ReturnRateBySizeChart";
+import { StaffPerformanceChart } from "@/components/analytics/StaffPerformanceChart";
+import { ChannelSplitChart } from "@/components/analytics/ChannelSplitChart";
+import { MembershipProfitabilityChart } from "@/components/analytics/MembershipProfitabilityChart";
+import { LoyaltyCostTrendChart } from "@/components/analytics/LoyaltyCostTrendChart";
+import { LoyaltyLiabilityPanel } from "@/components/analytics/LoyaltyLiabilityPanel";
 import { StockService } from "@/services/stockService";
 import { CustomerService } from "@/services/customerService";
 import { ShopService } from "@/services/shopService";
-import { SettingsService } from "@/services/settingsService";
+import {
+  SettingsService,
+  resolveCouponPackages,
+} from "@/services/settingsService";
 import { StockItem } from "@/types/stock";
 import { Customer } from "@/types/customer";
 
@@ -102,22 +148,6 @@ interface RecentActivity {
   timestamp: Date;
   amount?: number;
   status?: string;
-}
-
-interface DailyRevenue {
-  date: string;
-  revenue: number;
-  profit: number;
-  orders: number;
-}
-
-interface PromotionRevenuePoint {
-  date: string;
-  promotionDiscount: number;
-  revenue: number;
-  discountedOrders: number;
-  totalOrders: number;
-  discountRate: number;
 }
 
 interface OrderStatusChart {
@@ -187,16 +217,60 @@ function OwnerDashboardContent() {
   const [filterBranch, setFilterBranch] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  const [dailyRevenueData, setDailyRevenueData] = useState<DailyRevenue[]>([]);
+  const [dailyRevenueData, setDailyRevenueData] = useState<RevenueSeriesPoint[]>(
+    [],
+  );
   const [promotionRevenueData, setPromotionRevenueData] = useState<
-    PromotionRevenuePoint[]
+    PromotionSeriesPoint[]
   >([]);
+  /**
+   * Bucket size the time-series charts are currently aggregated to.
+   *
+   * Surfaced in the UI because a chart silently switching from daily to
+   * quarterly totals would otherwise look like revenue had jumped an order of
+   * magnitude.
+   */
+  const [timeGrain, setTimeGrain] = useState<TimeGrain>("day");
   const [promotionCorrelation, setPromotionCorrelation] = useState<
     number | null
   >(null);
   const [orderStatusChartData, setOrderStatusChartData] = useState<
     OrderStatusChart[]
   >([]);
+
+  // Retail analytics series (see src/lib/analytics/retailAnalytics.ts)
+  const [sizeSellThrough, setSizeSellThrough] = useState<SizeSellThrough[]>([]);
+  const [netMarginData, setNetMarginData] = useState<DailyNetMargin[]>([]);
+  const [stockAging, setStockAging] = useState<StockAging[]>([]);
+  const [stockAgingSummary, setStockAgingSummary] =
+    useState<StockAgingSummary | null>(null);
+  const [returnRateBySize, setReturnRateBySize] = useState<SizeReturnRate[]>(
+    [],
+  );
+  const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>(
+    [],
+  );
+  const [channelSplit, setChannelSplit] = useState<ChannelSplitPoint[]>([]);
+
+  /**
+   * Loyalty programme economics.
+   *
+   * `economics` and `costTrend` follow the dashboard's date range and branch
+   * filter like every other series here. `funnel` and `liability` deliberately
+   * do not: they are derived from the current state of customer points and
+   * coupons, which is a point-in-time balance rather than something that happens
+   * inside a date window. The section header says so, otherwise the numbers look
+   * like they are ignoring the filters by mistake.
+   */
+  const [loyaltyEconomics, setLoyaltyEconomics] =
+    useState<LoyaltyEconomics | null>(null);
+  const [loyaltyCostTrend, setLoyaltyCostTrend] = useState<LoyaltyCostPoint[]>(
+    [],
+  );
+  const [redemptionFunnel, setRedemptionFunnel] =
+    useState<RedemptionFunnel | null>(null);
+  const [pointsLiability, setPointsLiability] =
+    useState<PointsLiability | null>(null);
 
   // Load shops and set initial branch filter
   useEffect(() => {
@@ -229,225 +303,6 @@ function OwnerDashboardContent() {
     }
   }, [startDate, endDate]);
 
-  // Calculate daily revenue data for chart
-  const calculateDailyRevenue = (
-    transactions: Transaction[],
-    startDate: Date,
-    endDate: Date,
-  ): DailyRevenue[] => {
-    const dailyData = new Map<
-      string,
-      { revenue: number; profit: number; orders: number }
-    >();
-
-    // Initialize all dates in range
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateKey = currentDate.toISOString().split("T")[0];
-      dailyData.set(dateKey, { revenue: 0, profit: 0, orders: 0 });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    // Aggregate transaction data by date
-    transactions.forEach((transaction) => {
-      if (
-        transaction.status === "completed" ||
-        transaction.status === "partially_refunded" ||
-        transaction.status === "refunded"
-      ) {
-        const dateKey = new Date(transaction.timestamp)
-          .toISOString()
-          .split("T")[0];
-        const existing = dailyData.get(dateKey);
-
-        if (existing) {
-          const totalRefunded =
-            transaction.refunds?.reduce(
-              (sum, refund) => sum + refund.totalAmount,
-              0,
-            ) || 0;
-          const netAmount = Math.max(0, transaction.total - totalRefunded);
-
-          const transactionProfit = transaction.items.reduce(
-            (sum, item) =>
-              sum + (item.unitPrice - item.originalPrice) * item.quantity,
-            0,
-          );
-
-          const refundedProfit =
-            transaction.refunds?.reduce((refundTotal, refund) => {
-              return (
-                refundTotal +
-                refund.items.reduce((refundItemTotal, refundItem) => {
-                  const originalItem = transaction.items[refundItem.itemIndex];
-                  if (originalItem) {
-                    return (
-                      refundItemTotal +
-                      (originalItem.unitPrice - originalItem.originalPrice) *
-                        refundItem.quantity
-                    );
-                  }
-                  return refundItemTotal;
-                }, 0)
-              );
-            }, 0) || 0;
-
-          existing.revenue += netAmount;
-          existing.profit += Math.max(0, transactionProfit - refundedProfit);
-          existing.orders += 1;
-        }
-      }
-    });
-
-    // Convert to array and format dates
-    return Array.from(dailyData.entries())
-      .map(([date, data]) => ({
-        date: new Date(date).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        }),
-        revenue: data.revenue,
-        profit: data.profit,
-        orders: data.orders,
-      }))
-      .sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateA.getTime() - dateB.getTime();
-      });
-  };
-
-  // Total promotional savings given away on a single transaction.
-  // Includes item-level promotions (group/variant/wholesale), the cart-level
-  // discount and any loyalty coupon applied at the till.
-  const getTransactionPromotionDiscount = (
-    transaction: Transaction,
-  ): number => {
-    const breakdown = transaction.discountBreakdown;
-
-    const itemLevelSavings = breakdown
-      ? (breakdown.wholesaleSavings || 0) +
-        (breakdown.groupPercentSavings || 0) +
-        (breakdown.groupFixedTotal || 0) +
-        (breakdown.variantPercentSavings || 0) +
-        (breakdown.variantFixedTotal || 0)
-      : 0;
-
-    const cartDiscount =
-      breakdown?.cartDiscount !== undefined
-        ? breakdown.cartDiscount
-        : transaction.discount || 0;
-
-    const couponDiscount = transaction.couponDiscount || 0;
-
-    return Math.max(0, itemLevelSavings + cartDiscount + couponDiscount);
-  };
-
-  // Calculate promotion vs revenue relationship data (daily buckets)
-  const calculatePromotionRevenue = (
-    transactions: Transaction[],
-    startDate: Date,
-    endDate: Date,
-  ): PromotionRevenuePoint[] => {
-    const dailyData = new Map<
-      string,
-      {
-        promotionDiscount: number;
-        revenue: number;
-        discountedOrders: number;
-        totalOrders: number;
-      }
-    >();
-
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateKey = currentDate.toISOString().split("T")[0];
-      dailyData.set(dateKey, {
-        promotionDiscount: 0,
-        revenue: 0,
-        discountedOrders: 0,
-        totalOrders: 0,
-      });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    transactions.forEach((transaction) => {
-      if (
-        transaction.status !== "completed" &&
-        transaction.status !== "partially_refunded" &&
-        transaction.status !== "refunded"
-      ) {
-        return;
-      }
-
-      const dateKey = new Date(transaction.timestamp)
-        .toISOString()
-        .split("T")[0];
-      const existing = dailyData.get(dateKey);
-      if (!existing) return;
-
-      const totalRefunded =
-        transaction.refunds?.reduce(
-          (sum, refund) => sum + refund.totalAmount,
-          0,
-        ) || 0;
-      const netAmount = Math.max(0, transaction.total - totalRefunded);
-      const promotionDiscount = getTransactionPromotionDiscount(transaction);
-
-      existing.revenue += netAmount;
-      existing.promotionDiscount += promotionDiscount;
-      existing.totalOrders += 1;
-      if (promotionDiscount > 0) existing.discountedOrders += 1;
-    });
-
-    return Array.from(dailyData.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, data]) => {
-        const gross = data.revenue + data.promotionDiscount;
-        return {
-          date: new Date(date).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          promotionDiscount: data.promotionDiscount,
-          revenue: data.revenue,
-          discountedOrders: data.discountedOrders,
-          totalOrders: data.totalOrders,
-          discountRate: gross > 0 ? (data.promotionDiscount / gross) * 100 : 0,
-        };
-      });
-  };
-
-  // Pearson correlation between daily promotion spend and daily revenue
-  const calculatePromotionCorrelation = (
-    points: PromotionRevenuePoint[],
-  ): number | null => {
-    const active = points.filter(
-      (point) => point.totalOrders > 0 || point.promotionDiscount > 0,
-    );
-    if (active.length < 3) return null;
-
-    const n = active.length;
-    const meanX =
-      active.reduce((sum, point) => sum + point.promotionDiscount, 0) / n;
-    const meanY = active.reduce((sum, point) => sum + point.revenue, 0) / n;
-
-    let covariance = 0;
-    let varianceX = 0;
-    let varianceY = 0;
-
-    active.forEach((point) => {
-      const dx = point.promotionDiscount - meanX;
-      const dy = point.revenue - meanY;
-      covariance += dx * dy;
-      varianceX += dx * dx;
-      varianceY += dy * dy;
-    });
-
-    if (varianceX === 0 || varianceY === 0) return null;
-
-    return covariance / Math.sqrt(varianceX * varianceY);
-  };
 
   // Calculate order status chart data
   const calculateOrderStatusChart = (
@@ -622,18 +477,96 @@ function OwnerDashboardContent() {
         customers,
       );
 
-      // Calculate chart data
-      const dailyRevenue = calculateDailyRevenue(
+      // One grain for every time series on the page, so the charts stack up
+      // against each other and the badge describes all of them.
+      const grain = chooseTimeGrain(rangeStartDate, rangeEndDate);
+      setTimeGrain(grain);
+
+      const dailyRevenue = calculateRevenueSeries(
         filteredTransactions,
         rangeStartDate,
         rangeEndDate,
+        grain,
       );
-      const promotionRevenue = calculatePromotionRevenue(
+      const promotionRevenue = calculatePromotionSeries(
         filteredTransactions,
         rangeStartDate,
         rangeEndDate,
+        grain,
       );
       const statusChart = calculateOrderStatusChart(dashboardStats);
+
+      // Retail analytics. Stock-based series use the branch-filtered stock list
+      // so sell-through and aging match the branch the owner is looking at.
+      const currencyRate = businessSettings?.currencyRate || 130;
+      const agingRows = calculateStockAging(
+        filteredTransactions,
+        stocksForStats,
+        rangeEndDate,
+      );
+
+      setSizeSellThrough(
+        calculateSellThroughBySize(filteredTransactions, stocksForStats),
+      );
+      setNetMarginData(
+        calculateDailyNetMargin(
+          filteredTransactions,
+          filteredExpenses,
+          rangeStartDate,
+          rangeEndDate,
+          currencyRate,
+          grain,
+        ),
+      );
+      setStockAging(agingRows);
+      setStockAgingSummary(summariseStockAging(agingRows));
+      setReturnRateBySize(calculateReturnRateBySize(filteredTransactions));
+      setStaffPerformance(calculateStaffPerformance(filteredTransactions));
+      setChannelSplit(
+        calculateChannelSplit(
+          filteredTransactions,
+          rangeStartDate,
+          rangeEndDate,
+          grain,
+        ),
+      );
+
+      // Loyalty programme economics.
+      //
+      // Member spend is aggregated from transactions rather than read off
+      // `customers.totalSpent`, because no POS code path ever increments that
+      // field — it is seeded to zero at creation and only ever displayed, so
+      // using it would report almost every member as having spent nothing.
+      const loyaltyCustomers = customers as LoyaltyCustomer[];
+      const nextLoyaltyEconomics = calculateLoyaltyEconomics(
+        filteredTransactions,
+        loyaltyCustomers,
+      );
+
+      // Percentage-based rewards only have a cost once they meet a basket, so
+      // the liability estimate is anchored to what members actually spend.
+      const basketForLiability =
+        nextLoyaltyEconomics.member.averageBasket ||
+        nextLoyaltyEconomics.nonMember.averageBasket;
+
+      setLoyaltyEconomics(nextLoyaltyEconomics);
+      setRedemptionFunnel(calculateRedemptionFunnel(loyaltyCustomers));
+      setPointsLiability(
+        calculatePointsLiability(
+          loyaltyCustomers,
+          resolveCouponPackages(businessSettings?.loyaltySettings),
+          basketForLiability,
+        ),
+      );
+      setLoyaltyCostTrend(
+        calculateLoyaltyCostTrend(
+          filteredTransactions,
+          loyaltyCustomers,
+          rangeStartDate,
+          rangeEndDate,
+          grain,
+        ),
+      );
 
       setStats(dashboardStats);
       setRevenueByMethod(paymentMethods);
@@ -648,7 +581,11 @@ function OwnerDashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, filterBranch, startDate, endDate]);
+    // `businessSettings` is a real dependency: it supplies the currency rate for
+    // net margin and the reward tiers for the points-liability estimate. It
+    // arrives from context a beat after first paint, so without it here the
+    // liability would stay empty until the owner changed a filter.
+  }, [dateRange, filterBranch, startDate, endDate, businessSettings]);
 
   useEffect(() => {
     loadDashboardData();
@@ -1753,15 +1690,26 @@ function OwnerDashboardContent() {
                       <h2 className="text-lg font-semibold text-gray-900">
                         {t.totalSaleProfitTrend}
                       </h2>
-                      <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
-                        {dateRange === "custom"
-                          ? `${startDate} — ${endDate}`
-                          : dateRange.toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Which bucket size the series is aggregated to. Without
+                            this, a range change that flips daily totals to
+                            quarterly ones reads as a sudden revenue jump. */}
+                        <span className="text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-full px-2.5 py-1">
+                          {grainLabel(timeGrain)}
+                        </span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
+                          {dateRange === "custom"
+                            ? `${startDate} — ${endDate}`
+                            : dateRange.toUpperCase()}
+                        </span>
+                      </div>
                     </div>
                     {dailyRevenueData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={dailyRevenueData}>
+                      <ResponsiveContainer width="100%" height={320}>
+                        <AreaChart
+                          data={dailyRevenueData}
+                          margin={{ top: 8, right: 8, bottom: 8 }}
+                        >
                           <defs>
                             <linearGradient
                               id="colorRevenue"
@@ -1806,13 +1754,12 @@ function OwnerDashboardContent() {
                           />
                           <XAxis
                             dataKey="date"
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
+                            {...timeAxisProps(dailyRevenueData.length)}
                           />
                           <YAxis
                             tick={{ fontSize: 12 }}
                             stroke="#6b7280"
-                            tickFormatter={(value) => `$${value}`}
+                            tickFormatter={(value) => `${value}`}
                           />
                           <Tooltip
                             contentStyle={{
@@ -1872,16 +1819,18 @@ function OwnerDashboardContent() {
                       )}
                     </div>
                     {hasPromotionData ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <ComposedChart data={promotionRevenueData}>
+                      <ResponsiveContainer width="100%" height={320}>
+                        <ComposedChart
+                          data={promotionRevenueData}
+                          margin={{ top: 8, right: 8, bottom: 8 }}
+                        >
                           <CartesianGrid
                             strokeDasharray="3 3"
                             stroke="#e5e7eb"
                           />
                           <XAxis
                             dataKey="date"
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
+                            {...timeAxisProps(promotionRevenueData.length)}
                           />
                           <YAxis
                             yAxisId="left"
@@ -1918,7 +1867,7 @@ function OwnerDashboardContent() {
                             dataKey="promotionDiscount"
                             fill="#8b5cf6"
                             name={t.promotionDiscount}
-                            barSize={18}
+                            barSize={barSize(promotionRevenueData.length, 18)}
                             radius={[4, 4, 0, 0]}
                           />
                           <Line
@@ -2021,16 +1970,18 @@ function OwnerDashboardContent() {
                       {t.dailyOrdersTrend}
                     </h2>
                     {dailyRevenueData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={dailyRevenueData}>
+                      <ResponsiveContainer width="100%" height={320}>
+                        <LineChart
+                          data={dailyRevenueData}
+                          margin={{ top: 8, right: 8, bottom: 8 }}
+                        >
                           <CartesianGrid
                             strokeDasharray="3 3"
                             stroke="#e5e7eb"
                           />
                           <XAxis
                             dataKey="date"
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
+                            {...timeAxisProps(dailyRevenueData.length)}
                           />
                           <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
                           <Tooltip
@@ -2051,7 +2002,13 @@ function OwnerDashboardContent() {
                             dataKey="orders"
                             stroke="#8b5cf6"
                             strokeWidth={2}
-                            dot={{ fill: "#8b5cf6", r: 4 }}
+                            // Per-point dots turn into a solid smear once the
+                            // series is long; drop them and keep the hover dot.
+                            dot={
+                              dailyRevenueData.length <= 40
+                                ? { fill: "#8b5cf6", r: 4 }
+                                : false
+                            }
                             activeDot={{ r: 6 }}
                             name={t.dailyOrders}
                           />
@@ -2064,6 +2021,70 @@ function OwnerDashboardContent() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Retail analytics: margin and channel */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <NetMarginChart data={netMarginData} />
+                  <ChannelSplitChart data={channelSplit} />
+                </div>
+
+                {/* Retail analytics: size performance */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                  <SellThroughBySizeChart data={sizeSellThrough} />
+                  <ReturnRateBySizeChart data={returnRateBySize} />
+                </div>
+
+                {/* Retail analytics: inventory aging needs the full width for
+                    the scatter plus its bucket summary */}
+                {stockAgingSummary && (
+                  <div className="mb-8">
+                    <StockAgingChart
+                      data={stockAging}
+                      summary={stockAgingSummary}
+                    />
+                  </div>
+                )}
+
+                {/* Retail analytics: staff attribution */}
+                <div className="mb-8">
+                  <StaffPerformanceChart data={staffPerformance} />
+                </div>
+
+                {/* Loyalty programme economics — does membership earn more than
+                    it gives away? */}
+                <div className="mb-8">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Programme Economics
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Whether the loyalty programme earns more than it costs.
+                        Outstanding points and coupons are a current balance, so
+                        they ignore the date range and branch filter.
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-full px-2.5 py-1">
+                      {grainLabel(timeGrain)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {loyaltyEconomics && (
+                      <MembershipProfitabilityChart data={loyaltyEconomics} />
+                    )}
+                    <LoyaltyCostTrendChart data={loyaltyCostTrend} />
+                  </div>
+
+                  {redemptionFunnel && pointsLiability && (
+                    <div className="mt-6">
+                      <LoyaltyLiabilityPanel
+                        funnel={redemptionFunnel}
+                        liability={pointsLiability}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Charts and Tables */}

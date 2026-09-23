@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { toast } from "react-hot-toast";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -47,7 +47,16 @@ export default function TransactionsPage() {
 function TransactionsPageContent() {
   const { user } = useAuth();
   const permissions = usePermissions();
-  const isOwner = user?.role === "owner";
+
+  // Bulk selection is only useful to a role that can act on the selection:
+  // Cancel Transactions (Owner + Manager) or Bulk Delete (Owner only).
+  const canSelectTransactions =
+    permissions.canCancelTransactions || permissions.canBulkDeleteTransactions;
+
+  // Cost, margin and wholesale columns are financial data. Doc: Staff gets
+  // "Limited" payment details and no Profit/Loss access.
+  const showFinancialColumns =
+    permissions.canViewFullPaymentDetails && permissions.canViewProfitLoss;
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const { t } = useLanguage();
@@ -650,6 +659,12 @@ function TransactionsPageContent() {
   };
 
   const handleRefundSubmit = async () => {
+    // Doc: "Refund Transactions" - Owner + Manager only.
+    if (!permissions.canRefundTransactions) {
+      toast.error("You do not have permission to refund transactions.");
+      return;
+    }
+
     if (!selectedTransaction || !selectedTransaction.id) return;
 
     // Prevent double submissions
@@ -772,6 +787,12 @@ function TransactionsPageContent() {
   };
 
   const handleCancelTransaction = async () => {
+    // Doc: "Cancel Transactions" - Owner + Manager only.
+    if (!permissions.canCancelTransactions) {
+      toast.error("You do not have permission to cancel transactions.");
+      return;
+    }
+
     if (!selectedTransaction) return;
 
     // Prevent double submissions
@@ -814,9 +835,8 @@ function TransactionsPageContent() {
 
   // Toggle selection for a transaction
   const toggleSelectTransaction = (transactionId: string) => {
-    if (!isOwner) {
-      // Only owner can select transactions for bulk actions
-      toast.error("Only owner accounts can select transactions.");
+    if (!canSelectTransactions) {
+      toast.error("You do not have permission to select transactions.");
       return;
     }
     setSelectedTransactions((prev) =>
@@ -828,8 +848,8 @@ function TransactionsPageContent() {
 
   // Select/deselect all transactions
   const toggleSelectAll = () => {
-    if (!isOwner) {
-      toast.error("Only owner accounts can select transactions.");
+    if (!canSelectTransactions) {
+      toast.error("You do not have permission to select transactions.");
       return;
     }
     const allTransactionIds = filteredTransactions.map((t) => t.id!);
@@ -843,6 +863,12 @@ function TransactionsPageContent() {
   // Bulk approve selected COD transactions
   const handleBulkApprove = async () => {
     if (selectedTransactions.length === 0) return;
+
+    // Doc: approval is a management action - Owner + Manager only.
+    if (!permissions.canApprovePayments) {
+      toast.error("You do not have permission to approve transactions.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to approve ${selectedTransactions.length} COD transaction(s)?`,
@@ -889,6 +915,12 @@ function TransactionsPageContent() {
   // Bulk cancel selected COD transactions
   const handleBulkCancel = async () => {
     if (selectedTransactions.length === 0) return;
+
+    // Doc: "Cancel Transactions" - Owner + Manager only.
+    if (!permissions.canCancelTransactions) {
+      toast.error("You do not have permission to cancel transactions.");
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to cancel ${selectedTransactions.length} COD transaction(s)?\n\nThis will restore inventory for all items.`,
@@ -944,6 +976,12 @@ function TransactionsPageContent() {
   const handleBulkDelete = async () => {
     if (selectedTransactions.length === 0) return;
 
+    // Doc: "Delete Transactions" / "Bulk Delete" - Owner only.
+    if (!permissions.canBulkDeleteTransactions) {
+      toast.error("Only the owner can delete transactions.");
+      return;
+    }
+
     const confirmed = window.confirm(
       `Are you sure you want to permanently delete ${selectedTransactions.length} transaction(s)?\n\nThis action cannot be undone and will remove the transactions from the database.`,
     );
@@ -977,6 +1015,12 @@ function TransactionsPageContent() {
   };
 
   const exportToCSV = () => {
+    // Doc: "Export Transactions" - Owner + Manager only.
+    if (!permissions.canExportTransactions) {
+      toast.error("You do not have permission to export transactions.");
+      return;
+    }
+
     if (filteredTransactions.length === 0) {
       toast.error("No data to export");
       return;
@@ -1397,19 +1441,23 @@ function TransactionsPageContent() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={exportToCSV}
-                    className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 px-4 py-2.5 text-sm rounded-xl shadow-sm"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </button>
+                  {/* Doc: "Export Transactions" - Owner + Manager only. */}
+                  {permissions.canExportTransactions && (
+                    <button
+                      onClick={exportToCSV}
+                      className="inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 px-4 py-2.5 text-sm rounded-xl shadow-sm"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Bulk Actions Bar */}
-            {isOwner && selectedTransactions.length > 0 && (
+            {/* Bulk Actions Bar. Each action inside is gated separately: the
+                doc gives Cancel to Owner + Manager but Delete to Owner only. */}
+            {canSelectTransactions && selectedTransactions.length > 0 && (
               <div className="mb-4 bg-gradient-to-r from-pink-50 to-pink-100 border border-pink-200 rounded-2xl p-4 shadow-sm">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-2">
@@ -1420,37 +1468,46 @@ function TransactionsPageContent() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={handleBulkApprove}
-                      className="flex items-center px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Approve 
-                    </button>
-                    <button
-                      onClick={handleBulkCancel}
-                      className="flex items-center px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Cancel Checkout 
-                    </button>
-                    <button
-                      onClick={handleBulkDelete}
-                      disabled={isProcessingDelete}
-                      className="flex items-center px-4 py-2.5 bg-red-500 text-white hover:bg-red-800 transition-colors text-sm font-medium rounded-xl shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isProcessingDelete ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash className="h-4 w-4 mr-2" />
-                          Delete 
-                        </>
-                      )}
-                    </button>
+                    {/* Doc: "Issue Refund Payments"/approval - Owner + Manager. */}
+                    {permissions.canApprovePayments && (
+                      <button
+                        onClick={handleBulkApprove}
+                        className="flex items-center px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Approve 
+                      </button>
+                    )}
+                    {/* Doc: "Cancel Transactions" - Owner + Manager. */}
+                    {permissions.canCancelTransactions && (
+                      <button
+                        onClick={handleBulkCancel}
+                        className="flex items-center px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel Checkout 
+                      </button>
+                    )}
+                    {/* Doc: "Bulk Delete" - Owner only. */}
+                    {permissions.canBulkDeleteTransactions && (
+                      <button
+                        onClick={handleBulkDelete}
+                        disabled={isProcessingDelete}
+                        className="flex items-center px-4 py-2.5 bg-red-500 text-white hover:bg-red-800 transition-colors text-sm font-medium rounded-xl shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isProcessingDelete ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash className="h-4 w-4 mr-2" />
+                            Delete 
+                          </>
+                        )}
+                      </button>
+                    )}
                     <button
                       onClick={() => setSelectedTransactions([])}
                       className="px-4 py-2.5 bg-gray-500 border border-gray-200 text-white   hover:bg-gray-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
@@ -1489,10 +1546,10 @@ function TransactionsPageContent() {
                                     filteredTransactions.length
                                 }
                                 onChange={toggleSelectAll}
-                                disabled={!isOwner}
+                                disabled={!canSelectTransactions}
                                 title={
-                                  !isOwner
-                                    ? "Only owner can select transactions"
+                                  !canSelectTransactions
+                                    ? "Your role cannot run bulk actions on transactions"
                                     : undefined
                                 }
                                 className="h-4 w-4 md:h-5 md:w-5 text-pink-600 focus:ring-pink-400 border-gray-300 rounded cursor-pointer touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1511,18 +1568,25 @@ function TransactionsPageContent() {
                             <th className="px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.total}
                             </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                              Original Total Price
-                            </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                              Discount Price
-                            </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                              Wholesale Amount
-                            </th>
-                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                              {t.profit}
-                            </th>
+                            {/* Doc: "View Payment Details" Staff = Limited and
+                                "View Profit/Loss Data" Staff = No Access, so the
+                                cost/margin columns are dropped for Staff. */}
+                            {showFinancialColumns && (
+                              <>
+                                <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                                  Original Total Price
+                                </th>
+                                <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                                  Discount Price
+                                </th>
+                                <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                                  Wholesale Amount
+                                </th>
+                                <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                                  {t.profit}
+                                </th>
+                              </>
+                            )}
                             <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.tax}
                             </th>
@@ -1573,10 +1637,10 @@ function TransactionsPageContent() {
                                     onChange={() =>
                                       toggleSelectTransaction(transaction.id!)
                                     }
-                                    disabled={!isOwner}
+                                    disabled={!canSelectTransactions}
                                     title={
-                                      !isOwner
-                                        ? "Only owner can select transactions"
+                                      !canSelectTransactions
+                                        ? "Your role cannot run bulk actions on transactions"
                                         : undefined
                                     }
                                     className="h-4 w-4 text-pink-600 focus:ring-pink-400 border-gray-300 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1701,6 +1765,10 @@ function TransactionsPageContent() {
                                     );
                                   })()}
                                 </td>
+                                {/* Financial columns - hidden from Staff, see
+                                    showFinancialColumns above. */}
+                                {showFinancialColumns && (
+                                  <>
                                 <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                   {formatPrice(
                                     getTransactionOriginalTotalPrice(
@@ -1798,6 +1866,8 @@ function TransactionsPageContent() {
                                     );
                                   })()}
                                 </td>
+                                  </>
+                                )}
                                 <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {(() => {
                                     const originalTax = transaction.tax || 0;
@@ -3017,8 +3087,10 @@ function TransactionsPageContent() {
                         );
                       }
 
-                      // Show Refund for completed and partially refunded transactions
+                      // Show Refund for completed and partially refunded transactions.
+                      // Doc: "Refund Transactions" - Owner + Manager only.
                       return (
+                        permissions.canRefundTransactions &&
                         (transaction?.status === "completed" ||
                           transaction?.status === "partially_refunded") && (
                           <button
@@ -3040,7 +3112,9 @@ function TransactionsPageContent() {
                       const transaction = transactions.find(
                         (t) => t.id === openDropdown,
                       );
+                      // Doc: "Cancel Transactions" - Owner + Manager only.
                       return (
+                        permissions.canCancelTransactions &&
                         transaction?.status !== "cancelled" && (
                           <button
                             onClick={() => {
@@ -3060,8 +3134,12 @@ function TransactionsPageContent() {
                       const transaction = transactions.find(
                         (t) => t.id === openDropdown,
                       );
+                      // Doc: "Update Delivery Status" - Owner + Manager can
+                      // change it; Staff is view only (the badge in the table
+                      // stays visible either way).
                       if (
                         !transaction ||
+                        !permissions.canUpdateDeliveryStatus ||
                         (transaction.paymentMethod !== "cod" &&
                           transaction.paymentMethod !== "scan") ||
                         transaction.status === "cancelled"

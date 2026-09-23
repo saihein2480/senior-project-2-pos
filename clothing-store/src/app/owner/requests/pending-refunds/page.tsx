@@ -19,9 +19,12 @@ import {
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermissions } from "@/hooks/usePermissions";
 
-export default function PendingRefundsPage() {
+function PendingRefundsContent() {
   const { user } = useAuth();
+  const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const [pendingRefunds, setPendingRefunds] = useState<Array<{
     transaction: Transaction;
@@ -219,7 +222,13 @@ export default function PendingRefundsPage() {
 
   const handleConfirmPayment = async () => {
     if (!selectedRefund) return;
-    
+
+    // Doc: "Issue Refund Payments" - Owner + Manager only.
+    if (!permissions.canApprovePayments) {
+      toast.error("You do not have permission to issue refund payments.");
+      return;
+    }
+
     setIsConfirming(true);
     
     try {
@@ -361,9 +370,6 @@ export default function PendingRefundsPage() {
             {/* Header */}
             <div className="mb-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-lg">
-                  <DollarSign className="w-4 h-4 text-white" />
-                </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
                     Refund Payment
@@ -440,7 +446,7 @@ export default function PendingRefundsPage() {
             {/* Pending Refunds List */}
             {loading ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-2 border-red-600 border-t-transparent mx-auto"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-rose-500 border-t-transparent mx-auto"></div>
                 <p className="mt-2 text-sm text-gray-600">Loading...</p>
               </div>
             ) : pendingRefunds.length === 0 ? (
@@ -513,18 +519,18 @@ export default function PendingRefundsPage() {
                         <div className="lg:col-span-3 space-y-1.5">
                           {/* Partial Refund Items */}
                           {item.type === "partial" && item.refund && (
-                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded p-1.5">
+                            <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-200 rounded p-1.5">
                               <div className="flex items-center gap-0.5 mb-0.5">
-                                <div className="w-1 h-1 bg-purple-500 rounded-full"></div>
-                                <p className="text-[9px] font-bold text-purple-900">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full"></div>
+                                <p className="text-[9px] font-bold text-rose-900">
                                   Items
                                 </p>
                               </div>
-                              <div className="bg-white rounded p-1 border border-purple-100">
-                                <p className="text-[9px] text-purple-800 font-semibold truncate leading-tight">
+                              <div className="bg-white rounded p-1 border border-rose-100">
+                                <p className="text-[9px] text-rose-800 font-semibold truncate leading-tight">
                                   {item.refund.refundId}
                                 </p>
-                                <p className="text-[8px] text-purple-600 leading-tight">
+                                <p className="text-[8px] text-rose-600 leading-tight">
                                   {item.refund.items.length} item(s)
                                 </p>
                               </div>
@@ -546,25 +552,25 @@ export default function PendingRefundsPage() {
                         <div className="lg:col-span-3">
                           {/* Display QR Code if uploaded by customer */}
                           {item.qrCodeImage ? (
-                            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-2 h-full flex flex-col">
+                            <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-200 rounded-lg p-2 h-full flex flex-col">
                               <div className="flex items-center gap-1.5 mb-2">
-                                <div className="p-1 bg-blue-500 rounded">
+                                <div className="p-1 bg-gradient-to-r from-rose-500 to-pink-500 rounded">
                                   <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                   </svg>
                                 </div>
-                                <p className="text-xs font-bold text-blue-900">
+                                <p className="text-xs font-bold text-rose-900">
                                   Customer QR
                                 </p>
                               </div>
-                              <div className="bg-white rounded p-2 border border-blue-300 flex-1 flex items-center justify-center">
+                              <div className="bg-white rounded p-2 border border-rose-200 flex-1 flex items-center justify-center">
                                 <img
                                   src={item.qrCodeImage}
                                   alt="Customer Payment QR"
                                   className="w-full max-w-[100px] max-h-24 object-contain rounded"
                                 />
                               </div>
-                              <p className="text-[9px] text-blue-700 text-center mt-1.5">
+                              <p className="text-[9px] text-rose-700 text-center mt-1.5">
                                 Transfer refund here
                               </p>
                             </div>
@@ -609,7 +615,7 @@ export default function PendingRefundsPage() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
             {/* Header with pink gradient */}
-            <div className="p-5 bg-gradient-to-r from-pink-500 to-rose-500 rounded-t-xl">
+            <div className="p-5 bg-gradient-to-r from-rose-500 to-pink-500 rounded-t-xl">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <CheckCircle className="w-5 h-5" />
                 Confirm Refund Payment
@@ -636,9 +642,9 @@ export default function PendingRefundsPage() {
               </div>
 
               {/* Refund Amount */}
-              <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-4 border-2 border-pink-200">
+              <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl p-4 border-2 border-rose-200">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-pink-900">Refund Amount</span>
+                  <span className="text-sm font-semibold text-rose-900">Refund Amount</span>
                   <span className="text-2xl font-bold text-pink-600">
                     {formatPrice(getRefundAmount(selectedRefund))}
                   </span>
@@ -709,7 +715,7 @@ export default function PendingRefundsPage() {
                 <button
                   onClick={handleConfirmPayment}
                   disabled={isConfirming}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-pink-200"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 font-semibold text-sm shadow-lg shadow-rose-200"
                 >
                   {isConfirming ? (
                     <>
@@ -729,5 +735,14 @@ export default function PendingRefundsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PendingRefundsPage() {
+  // Doc: "Issue Refund Payments" - Owner + Manager only.
+  return (
+    <ProtectedRoute requiredRole={["owner", "manager"]}>
+      <PendingRefundsContent />
+    </ProtectedRoute>
   );
 }

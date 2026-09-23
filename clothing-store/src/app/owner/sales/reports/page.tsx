@@ -2,7 +2,6 @@
 
 import { toast } from "react-hot-toast";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -104,7 +103,6 @@ interface Expense {
 }
 
 function ReportsPageContent() {
-  const { user } = useAuth();
   const { formatPrice } = useCurrency();
   const { businessSettings } = useSettings();
   const { t } = useLanguage();
@@ -964,7 +962,7 @@ function ReportsPageContent() {
         originalTotal > 0
           ? ((transaction.discount || 0) / originalTotal) * 100
           : 0;
-      const soldBy = user?.email?.split("@")[0] || "System";
+      const soldBy = resolveSoldBy(transaction);
       const statusMap: { [key: string]: string } = {
         completed: "Completed",
         pending: "Pending",
@@ -1137,6 +1135,26 @@ function ReportsPageContent() {
       const netQty = Math.max(0, item.quantity - refundedQty);
       return sum + item.originalPrice * netQty;
     }, 0);
+  };
+
+  /**
+   * Who actually made the sale.
+   *
+   * This used to read the signed-in viewer, so every row showed whoever had the
+   * report open rather than the operator who rang the sale up. Attribution is
+   * now recorded on the transaction at checkout; sales taken before that, and
+   * storefront orders where the customer serves themselves, are labelled
+   * honestly instead of being credited to the reader.
+   */
+  const resolveSoldBy = (transaction: Transaction) => {
+    if (transaction.soldByName?.trim()) return transaction.soldByName.trim();
+    if (
+      transaction.orderSource === "web_storefront" ||
+      transaction.source === "online"
+    ) {
+      return "Online Store";
+    }
+    return "—";
   };
 
   const getTransactionRefundAmount = (transaction: Transaction) => {
@@ -2733,16 +2751,19 @@ function ReportsPageContent() {
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center">
-                            <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center mr-2">
-                              <span className="text-xs font-medium text-blue-800">
-                                {user?.email?.charAt(0).toUpperCase() || "S"}
-                              </span>
-                            </div>
-                            <span className="text-gray-700">
-                              {user?.email?.split("@")[0] || "System"}
-                            </span>
-                          </div>
+                          {(() => {
+                            const soldBy = resolveSoldBy(transaction);
+                            return (
+                              <div className="flex items-center">
+                                <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center mr-2">
+                                  <span className="text-xs font-medium text-blue-800">
+                                    {soldBy.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-gray-700">{soldBy}</span>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span

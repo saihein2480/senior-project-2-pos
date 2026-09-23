@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
+import { usePosSurfaceVisibility } from "@/hooks/usePosSurfaceVisibility";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useViewMode } from "@/contexts/ViewModeContext";
@@ -78,6 +79,35 @@ interface SidebarProps extends NavigationProps {
   onCloseMobile?: () => void;
 }
 
+/**
+ * Refund-payment notification dismissal.
+ *
+ * The count comes from live Firestore data, so "mark as seen" is stored as a
+ * baseline rather than a flag: the badge returns only once the number of pending
+ * refund payments rises above what the owner last acknowledged.
+ */
+const REFUND_PAYMENTS_SEEN_KEY = "dismissedRefundPaymentsCount";
+const REFUND_PAYMENTS_SEEN_EVENT = "refundPaymentsSeenLocally";
+
+function readDismissedRefundPayments(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(REFUND_PAYMENTS_SEEN_KEY);
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeDismissedRefundPayments(count: number) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(REFUND_PAYMENTS_SEEN_KEY, String(count));
+  } catch {
+    // Storage blocked; the badge just stays visible.
+  }
+}
+
 export function Sidebar({
   activeItem,
   onItemClick,
@@ -91,8 +121,18 @@ export function Sidebar({
   const [logoError, setLogoError] = useState<boolean>(false);
   const [pendingCancellationCount, setPendingCancellationCount] = useState<number>(0);
   const [pendingRefundCount, setPendingRefundCount] = useState<number>(0);
-  const [pendingRefundPaymentsCount, setPendingRefundPaymentsCount] = useState<number>(0);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  /**
+   * Refund payments the owner has not acknowledged yet.
+   *
+   * Separate from `pendingRefundPaymentsCount`, which is the true outstanding
+   * workload: this one is the *notification*, so opening Refund Payment clears
+   * it even though the payments themselves are still pending. Mirrors the
+   * dismissal approach in useOnlineOrdersNotification.
+   */
+  const [unseenRefundPaymentsCount, setUnseenRefundPaymentsCount] =
+    useState<number>(0);
+  const refundPaymentsTotalRef = useRef<number>(0);
 
   // Use settings context for business name and logo
   const { businessSettings, isLoading } = useSettings();
@@ -105,14 +145,18 @@ export function Sidebar({
   useEffect(() => {
     const fetchPendingRequests = async () => {
       try {
-        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
+        const { collection, query, onSnapshot } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
         
         const transactionsRef = collection(db!, "transactions");
-        const q = query(
-          transactionsRef,
-          where("status", "!=", "cancelled")
-        );
+        // Deliberately unfiltered. This used to be
+        // `where("status", "!=", "cancelled")`, which silently broke the Refund
+        // Payment badge: approving a cancellation for a paid order sets
+        // status="cancelled" AND writes cancellationRefund.status="pending", so
+        // the one document that owes a refund payment was the one document
+        // excluded from the query. The /requests/pending-refunds page it links
+        // to queries the whole collection, so this now matches it.
+        const q = query(transactionsRef);
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
           let cancellationCount = 0;
@@ -121,13 +165,18 @@ export function Sidebar({
           
           snapshot.forEach((doc) => {
             const data = doc.data();
+            const isCancelled = /cancelled|canceled|void/i.test(
+              String(data.status || ""),
+            );
             
-            // Count pending CANCELLATION requests
-            if (data.cancellationRequest?.status === "pending") {
+            // Count pending CANCELLATION requests. Only actionable while the
+            // order is still live, matching the cancellations page listing.
+            if (!isCancelled && data.cancellationRequest?.status === "pending") {
               cancellationCount++;
             }
             
-            // Count pending REFUND requests
+            // Count pending REFUND requests. Not status-gated: a cancelled paid
+            // order with no cancellation refund can still have a return request.
             if (data.refundRequest?.status === "pending") {
               refundCount++;
             }
@@ -152,7 +201,19 @@ export function Sidebar({
           
           setPendingCancellationCount(cancellationCount);
           setPendingRefundCount(refundCount);
-          setPendingRefundPaymentsCount(paymentCount);
+
+          // Derive the unseen count here rather than in an effect, so reading
+          // localStorage stays inside a callback.
+          refundPaymentsTotalRef.current = paymentCount;
+          const dismissed = readDismissedRefundPayments();
+          if (paymentCount > dismissed) {
+            setUnseenRefundPaymentsCount(paymentCount - dismissed);
+          } else {
+            // Fewer pending than were dismissed (some got paid): re-baseline so
+            // the next new one shows up again.
+            writeDismissedRefundPayments(paymentCount);
+            setUnseenRefundPaymentsCount(0);
+          }
         });
         
         return unsubscribe;
@@ -163,6 +224,44 @@ export function Sidebar({
     
     fetchPendingRequests();
   }, []);
+
+  // The sidebar is mounted twice (desktop + mobile overlay), so a dismissal in
+  // one instance has to reach the other. Also covers other tabs via `storage`.
+  useEffect(() => {
+    const resync = () => {
+      const dismissed = readDismissedRefundPayments();
+      const total = refundPaymentsTotalRef.current;
+      setUnseenRefundPaymentsCount(total > dismissed ? total - dismissed : 0);
+    };
+
+    window.addEventListener(REFUND_PAYMENTS_SEEN_EVENT, resync);
+    window.addEventListener("storage", resync);
+    return () => {
+      window.removeEventListener(REFUND_PAYMENTS_SEEN_EVENT, resync);
+      window.removeEventListener("storage", resync);
+    };
+  }, []);
+
+  /**
+   * Everything needing attention under Online Sales: new paid orders plus
+   * outstanding cancellation, return and refund-payment work.
+   *
+   * Uses the *unseen* refund-payment count so acknowledging the child badge
+   * also settles the parent, rather than leaving a number the owner cannot
+   * clear.
+   */
+  const onlineSalesBadgeTotal =
+    unseenOrdersCount +
+    pendingCancellationCount +
+    pendingRefundCount +
+    unseenRefundPaymentsCount;
+
+  /** Acknowledge the current pending refund payments, hiding the badge. */
+  const markRefundPaymentsSeen = () => {
+    writeDismissedRefundPayments(refundPaymentsTotalRef.current);
+    setUnseenRefundPaymentsCount(0);
+    window.dispatchEvent(new Event(REFUND_PAYMENTS_SEEN_EVENT));
+  };
 
   // Listen to unread notifications count
   useEffect(() => {
@@ -212,9 +311,14 @@ export function Sidebar({
   // Get user role from auth context
   const { user } = useAuth();
   
-  // Get view mode - use viewAsRole for filtering menu items
-  const { viewAsRole } = useViewMode();
-  const userRole = viewAsRole || user?.role || "staff"; // Use viewAsRole if available
+  // Menu visibility follows the effective role, so an owner previewing Staff
+  // sees the Staff menu. Non-owners are pinned to their real role by the
+  // context, so this cannot be used to reveal menus a role should not have.
+  const { effectiveRole } = useViewMode();
+  const userRole = effectiveRole || user?.role || "staff";
+
+  // Owner-only preference: hides the Home entry together with the top-bar cart.
+  const { isPosSurfaceHidden } = usePosSurfaceVisibility();
 
   // Get translations
   const { t } = useLanguage();
@@ -308,7 +412,7 @@ export function Sidebar({
         },
         {
           id: "refund-report",
-          label: "Return Report",
+          label: "Online Report",
           icon: "FileText",
           href: "/owner/requests/refund-report",
           roles: ["owner", "manager"],
@@ -431,6 +535,11 @@ export function Sidebar({
       .filter((item) => {
         // If roles array exists, check if user role is included
         if (item.roles && !item.roles.includes(userRole)) {
+          return false;
+        }
+        // Owner preference: hide the walk-in POS entry point. Paired with the
+        // top-bar cart via usePosSurfaceVisibility so both vanish together.
+        if (item.id === "home" && isPosSurfaceHidden) {
           return false;
         }
         return true;
@@ -582,6 +691,7 @@ export function Sidebar({
               onClick={() => {
                 onItemClick?.(item);
                 if (item.id === "online-orders") markAsSeen();
+                if (item.id === "pending-refunds") markRefundPaymentsSeen();
               }}
               className={itemClasses}
             >
@@ -608,9 +718,11 @@ export function Sidebar({
                     {pendingRefundCount > 99 ? "99+" : pendingRefundCount}
                   </span>
                 )}
-                {item.id === "pending-refunds" && pendingRefundPaymentsCount > 0 && (
+                {/* Unseen rather than total: opening this page acknowledges the
+                    notification, even though the payments stay pending. */}
+                {item.id === "pending-refunds" && unseenRefundPaymentsCount > 0 && (
                   <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {pendingRefundPaymentsCount > 99 ? "99+" : pendingRefundPaymentsCount}
+                    {unseenRefundPaymentsCount > 99 ? "99+" : unseenRefundPaymentsCount}
                   </span>
                 )}
               </span>
@@ -641,18 +753,12 @@ export function Sidebar({
             {renderIcon(item.icon, iconClasses)}
             <span className="flex-1 text-left flex items-center justify-between min-w-0">
               <span className="truncate">{item.label}</span>
-              {item.id === "sales" && unseenOrdersCount > 0 && !isExpanded && (
-                <span
-                  className="w-2 h-2 bg-red-500 rounded-full mr-2 flex-shrink-0"
-                  title="New online order"
-                ></span>
-              )}
-              {item.id === "requests" && (pendingCancellationCount > 0 || pendingRefundCount > 0 || pendingRefundPaymentsCount > 0) && !isExpanded && (
+              {/* Online-order and refund activity belongs to Online Sales.
+                  It used to render against item.id "sales" (Walk-in Sales),
+                  which has nothing to do with online orders. */}
+              {item.id === "requests" && onlineSalesBadgeTotal > 0 && !isExpanded && (
                 <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                  {(() => {
-                    const total = pendingCancellationCount + pendingRefundCount + pendingRefundPaymentsCount;
-                    return total > 99 ? "99+" : total;
-                  })()}
+                  {onlineSalesBadgeTotal > 99 ? "99+" : onlineSalesBadgeTotal}
                 </span>
               )}
             </span>
