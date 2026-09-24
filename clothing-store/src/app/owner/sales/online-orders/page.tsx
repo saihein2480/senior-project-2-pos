@@ -35,6 +35,8 @@ type PaymentWorkflowStatus =
   | "paid"
   | "pending"
   | "failed"
+  /** MyanMyanPay reports a lapsed QR session as EXPIRED. */
+  | "expired"
   | "cancelled"
   | "pending_refund"
   | "refunded"
@@ -108,11 +110,20 @@ function getPaymentStatusLabel(row: OnlineOrder): string {
   if (/(partially_refunded)/.test(raw)) return "Partially Refunded";
   if (/(refunded)/.test(raw)) return "Fully Refunded";
   if (/(pending|processing|created|initiated)/.test(raw)) return "Pending";
+  // Before `expired` was recognised it fell through to the title-cased fallback
+  // below, which read "Expired" but classified as "unknown" — so the row
+  // vanished from every payment-status filter.
+  if (/(expired|timeout)/.test(raw)) return "Expired";
   if (/(fail|failed|error|declined)/.test(raw)) return "Failed";
   if (/(cancelled|canceled|void)/.test(raw)) return "Cancelled";
 
   const fallback = row.paymentStatus || row.status || "-";
-  return fallback.charAt(0).toUpperCase() + fallback.slice(1).toLowerCase();
+  return fallback
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function getNormalizedPaymentStatus(row: OnlineOrder): PaymentWorkflowStatus {
@@ -124,6 +135,7 @@ function getNormalizedPaymentStatus(row: OnlineOrder): PaymentWorkflowStatus {
   if (/(partially_refunded)/.test(raw)) return "partially_refunded";
   if (/(refunded)/.test(raw)) return "refunded";
   if (/(pending|processing|created|initiated)/.test(raw)) return "pending";
+  if (/(expired|timeout)/.test(raw)) return "expired";
   if (/(fail|failed|error|declined)/.test(raw)) return "failed";
   if (/(cancelled|canceled|void)/.test(raw)) return "cancelled";
 
@@ -1736,6 +1748,7 @@ function OnlineOrdersContent() {
                           | "all"
                           | "paid"
                           | "pending"
+                          | "expired"
                           | "failed"
                           | "cancelled"
                           | "pending_refund",
@@ -1746,6 +1759,7 @@ function OnlineOrdersContent() {
                     <option value="all">All Payment Status</option>
                     <option value="paid">Paid</option>
                     <option value="pending">Pending</option>
+                    <option value="expired">Expired</option>
                     <option value="failed">Failed</option>
                     <option value="cancelled">Cancelled</option>
                     <option value="pending_refund">Pending Refund</option>
