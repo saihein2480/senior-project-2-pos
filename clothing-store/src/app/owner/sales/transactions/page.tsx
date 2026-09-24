@@ -33,6 +33,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash,
+  Minus,
+  Plus,
+  Package,
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
 
@@ -122,6 +125,293 @@ function TransactionsPageContent() {
     } catch (e) {
       return hex;
     }
+  };
+
+  /** A single line of the Total hover breakdown. */
+  type BreakdownRow = {
+    label: string;
+    value: string;
+    /** discount = a saving, sub = a running subtotal, strong = the bottom line. */
+    tone?: "discount" | "sub" | "strong" | "muted";
+  };
+
+  /**
+   * Explain how a transaction's total was reached.
+   *
+   * Sales recorded with the itemised receipt carry `grossSubtotal` and
+   * `totalSavings`, which reconcile exactly (`gross - savings + tax = total`), so
+   * those drive the breakdown and every discount component can be named.
+   *
+   * Older sales and storefront orders only have `subtotal`/`discount`, whose
+   * meaning differs by channel — at the till `discount` already includes the
+   * coupon, on the storefront it does not — so those fall back to a short,
+   * unambiguous summary rather than a breakdown that might double-count.
+   */
+  const getTotalBreakdownRows = (transaction: Transaction): BreakdownRow[] => {
+    const rows: BreakdownRow[] = [];
+
+    const tax = Number(transaction.tax || 0);
+    const total = Number(transaction.total || 0);
+    const gross = Number(transaction.grossSubtotal || 0);
+    const savings = Number(transaction.totalSavings || 0);
+    const discount = Number(transaction.discount || 0);
+    const subtotal = Number(transaction.subtotal || 0) || total - tax;
+
+    const couponDiscount = Number(
+      transaction.couponDiscount ?? transaction.couponDiscountTHB ?? 0,
+    );
+    const couponCode =
+      transaction.couponCode || transaction.appliedCouponCode || "";
+
+    const taxableBase = Math.max(0, total - tax);
+    const storedRate = Number(transaction.taxRate || 0);
+    const taxPercent =
+      storedRate > 0
+        ? storedRate
+        : taxableBase > 0 && tax > 0
+          ? (tax / taxableBase) * 100
+          : 0;
+    const taxLabel = `${t.tax} (${Math.round(taxPercent * 100) / 100}%)`;
+
+    const pushDiscount = (label: string, amount: number) => {
+      if (amount > 0) {
+        rows.push({
+          label,
+          value: `-${formatPrice(amount)}`,
+          tone: "discount",
+        });
+      }
+    };
+
+    if (gross > 0 && savings > 0) {
+      rows.push({ label: t.grossSubtotalLabel, value: formatPrice(gross) });
+
+      const breakdown = transaction.discountBreakdown;
+      if (breakdown) {
+        pushDiscount(t.wholesalePrice, Number(breakdown.wholesaleSavings || 0));
+        pushDiscount(
+          t.groupLabel,
+          Number(breakdown.groupPercentSavings || 0) +
+            Number(breakdown.groupFixedTotal || 0),
+        );
+        pushDiscount(
+          t.variantLabel,
+          Number(breakdown.variantPercentSavings || 0) +
+            Number(breakdown.variantFixedTotal || 0),
+        );
+        pushDiscount(t.cartDiscountLabel, Number(breakdown.cartDiscount || 0));
+      } else {
+        // No component detail recorded; report the item-level saving as one line.
+        pushDiscount(t.itemDiscountsLabel, savings - couponDiscount);
+      }
+
+      pushDiscount(
+        couponCode ? `${t.couponLabel} (${couponCode})` : t.couponLabel,
+        couponDiscount,
+      );
+
+      rows.push({
+        label: t.afterDiscountLabel,
+        value: formatPrice(gross - savings),
+        tone: "sub",
+      });
+      rows.push({ label: taxLabel, value: formatPrice(tax) });
+      rows.push({
+        label: t.total,
+        value: formatPrice(total),
+        tone: "strong",
+      });
+      rows.push({
+        label: t.youSavedLabel,
+        value: formatPrice(savings),
+        tone: "discount",
+      });
+
+      return rows;
+    }
+
+    rows.push({ label: t.subtotal, value: formatPrice(subtotal) });
+    pushDiscount(t.discount, discount);
+    if (couponDiscount > 0 && couponDiscount !== discount) {
+      pushDiscount(
+        couponCode ? `${t.couponLabel} (${couponCode})` : t.couponLabel,
+        couponDiscount,
+      );
+    }
+    rows.push({ label: taxLabel, value: formatPrice(tax) });
+    rows.push({ label: t.total, value: formatPrice(total), tone: "strong" });
+
+    return rows;
+  };
+
+  /**
+   * The hover card shown on the Total cell.
+   *
+   * Refund lines are appended after the pricing breakdown so the cell explains
+   * both what was charged and what has since been given back.
+   */
+  const renderTotalTooltip = (
+    transaction: Transaction,
+    refundedAmount: number,
+    netTotal: number,
+  ) => {
+    const rows = getTotalBreakdownRows(transaction);
+    const isFullyRefunded = transaction.status === "refunded";
+    const tax = Number(transaction.tax || 0);
+
+    return (
+      <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-20 shadow-lg min-w-[220px]">
+        {rows.map((row, index) => (
+          <div
+            key={`${row.label}-${index}`}
+            className={`flex justify-between gap-4 ${
+              row.tone === "discount"
+                ? "text-emerald-300"
+                : row.tone === "sub"
+                  ? "font-medium border-t border-gray-600 mt-1 pt-1"
+                  : row.tone === "strong"
+                    ? "font-semibold border-t border-gray-600 mt-1 pt-1"
+                    : ""
+            }`}
+          >
+            <span>{row.label}</span>
+            <span>{row.value}</span>
+          </div>
+        ))}
+
+        {refundedAmount > 0 && (
+          <div className="border-t border-gray-600 pt-1 mt-1">
+            <div className="flex justify-between gap-4 text-amber-300">
+              <span>{t.refunded}</span>
+              <span>-{formatPrice(refundedAmount)}</span>
+            </div>
+            {isFullyRefunded && (
+              <div className="flex justify-between gap-4 text-amber-300">
+                <span>{t.taxRefundedLabel}</span>
+                <span>-{formatPrice(tax)}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-4 font-semibold">
+              <span>{t.netTotalLabel}</span>
+              <span>{formatPrice(netTotal)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /**
+   * Plain-text version of the same breakdown.
+   *
+   * The hover card lives inside a horizontally scrolling table, so it can be
+   * clipped at the edges; a native tooltip guarantees the numbers stay reachable.
+   */
+  const getTotalBreakdownTitle = (transaction: Transaction): string =>
+    getTotalBreakdownRows(transaction)
+      .map((row) => `${row.label}: ${row.value}`)
+      .join("\n");
+
+  /**
+   * Key used for a refund row.
+   *
+   * The index is part of the key because one transaction can contain the same
+   * item id more than once (e.g. the same variant added twice at different
+   * prices), and each occurrence must be refundable independently.
+   */
+  const getRefundKey = (itemId: string, index: number) => `${itemId}___${index}`;
+
+  /** Units of a given line already covered by earlier refunds. */
+  const getAlreadyRefunded = (transaction: Transaction, index: number) =>
+    transaction.refunds?.reduce((total, refund) => {
+      const refundItem = refund.items.find((ri) => ri.itemIndex === index);
+      return total + (refundItem?.quantity || 0);
+    }, 0) || 0;
+
+  /**
+   * Work out what a refund selection is worth.
+   *
+   * The cart discount is given back in proportion to the value being returned,
+   * so refunding half a discounted order returns half the discount too. Tax is
+   * not refunded, per store policy.
+   *
+   * Shared by the modal and the submit handler; they used to compute the amount
+   * separately, so the figure confirmed on screen and the one reported after
+   * processing could disagree whenever a cart discount was involved.
+   */
+  const getRefundSummary = (
+    transaction: Transaction,
+    selection: { [key: string]: number },
+  ) => {
+    let itemsSubtotal = 0;
+    let selectedUnits = 0;
+    let selectedLines = 0;
+
+    Object.entries(selection).forEach(([key, quantity]) => {
+      if (!quantity || quantity <= 0) return;
+
+      const [, rawIndex] = key.split("___");
+      const itemIndex = parseInt(rawIndex, 10);
+      const item = transaction.items[itemIndex];
+      if (!item || Number.isNaN(itemIndex)) return;
+
+      itemsSubtotal += item.unitPrice * quantity;
+      selectedUnits += quantity;
+      selectedLines += 1;
+    });
+
+    const transactionSubtotal = Number(transaction.subtotal || 0);
+    const transactionCartDiscount = Number(transaction.discount || 0);
+
+    let cartDiscountRate = 0;
+    let proportionalCartDiscount = 0;
+    if (transactionCartDiscount > 0 && transactionSubtotal > 0) {
+      cartDiscountRate = transactionCartDiscount / transactionSubtotal;
+      proportionalCartDiscount = itemsSubtotal * cartDiscountRate;
+    }
+
+    return {
+      itemsSubtotal,
+      selectedUnits,
+      selectedLines,
+      cartDiscountRate,
+      proportionalCartDiscount,
+      transactionCartDiscount,
+      refundAmount: Math.max(0, itemsSubtotal - proportionalCartDiscount),
+    };
+  };
+
+  /** Set one line's refund quantity, clamped to what is still refundable. */
+  const setRefundQuantity = (
+    itemId: string,
+    index: number,
+    quantity: number,
+    maxQuantity: number,
+  ) => {
+    const clamped = Math.max(0, Math.min(Math.floor(quantity), maxQuantity));
+    setRefundItems((prev) => ({
+      ...prev,
+      [getRefundKey(itemId, index)]: clamped,
+    }));
+  };
+
+  /** Select every refundable unit on the transaction. */
+  const selectAllRefundable = (transaction: Transaction) => {
+    const next: { [key: string]: number } = {};
+    transaction.items.forEach((item, index) => {
+      const available = item.quantity - getAlreadyRefunded(transaction, index);
+      next[getRefundKey(item.id, index)] = Math.max(0, available);
+    });
+    setRefundItems(next);
+  };
+
+  /** Reset every line to zero without closing the modal. */
+  const clearRefundSelection = (transaction: Transaction) => {
+    const next: { [key: string]: number } = {};
+    transaction.items.forEach((item, index) => {
+      next[getRefundKey(item.id, index)] = 0;
+    });
+    setRefundItems(next);
   };
 
   // Pagination state
@@ -661,7 +951,7 @@ function TransactionsPageContent() {
   const handleRefundSubmit = async () => {
     // Doc: "Refund Transactions" - Owner + Manager only.
     if (!permissions.canRefundTransactions) {
-      toast.error("You do not have permission to refund transactions.");
+      toast.error(t.noPermissionRefund);
       return;
     }
 
@@ -677,7 +967,7 @@ function TransactionsPageContent() {
         (quantity) => quantity > 0,
       );
       if (!hasItemsToRefund) {
-        toast.error("Please select at least one item to refund.");
+        toast.error(t.selectAtLeastOneItem);
         setIsProcessingRefund(false);
         return;
       }
@@ -718,30 +1008,15 @@ function TransactionsPageContent() {
 
       if (validationErrors.length > 0) {
         toast.error(
-          "Refund validation failed:\n\n" + validationErrors.join("\n"),
+          `${t.refundValidationFailed}\n\n` + validationErrors.join("\n"),
         );
         return;
       }
 
-      // Calculate total refund amount for display
-      const refundAmount = Object.entries(refundItems).reduce(
-        (total, [key, quantity]) => {
-          const [, index] = key.split("___");
-          const itemIndex = parseInt(index);
-          const item = selectedTransaction.items[itemIndex];
-          if (
-            !item ||
-            isNaN(itemIndex) ||
-            itemIndex < 0 ||
-            itemIndex >= selectedTransaction.items.length
-          ) {
-            console.warn(`Invalid item index ${itemIndex} for key ${key}`);
-            return total;
-          }
-          return total + item.unitPrice * quantity;
-        },
-        0,
-      );
+      // The same figure the modal confirmed. This used to be recomputed here
+      // without the proportional cart discount, so on a discounted order the
+      // amount reported after processing did not match what was shown.
+      const { refundAmount } = getRefundSummary(selectedTransaction, refundItems);
 
       // Process the refund through the service
       const refundId = await transactionService.processRefund(
@@ -764,8 +1039,10 @@ function TransactionsPageContent() {
         });
       }
 
-      toast.error(
-        `Refund processed successfully!\nRefund ID: ${refundId}\nAmount: ${formatPrice(
+      // Reported as a success; this was a `toast.error` call, which showed the
+      // confirmation styled as a failure.
+      toast.success(
+        `${t.refundProcessedSuccess}\n${t.transactionId}: ${refundId}\n${t.refundAmount}: ${formatPrice(
           refundAmount,
         )}`,
       );
@@ -1684,83 +1961,50 @@ function TransactionsPageContent() {
                                         0,
                                       ) || 0;
                                     const tax = transaction.tax || 0;
-                                    const subtotal =
-                                      transaction.subtotal ||
-                                      transaction.total - tax;
-                                    
+
                                     // For fully refunded transactions, also deduct tax
                                     const isFullyRefunded = transaction.status === "refunded";
                                     const taxToDeduct = isFullyRefunded ? tax : 0;
                                     const netTotal = transaction.total - refundedAmount - taxToDeduct;
 
+                                    const breakdownTitle =
+                                      getTotalBreakdownTitle(transaction);
+
                                     if (refundedAmount > 0) {
                                       return (
                                         <div className="flex flex-col group relative">
-                                          <span className="text-gray-900">
+                                          <span
+                                            className="text-gray-900 cursor-help"
+                                            title={breakdownTitle}
+                                          >
                                             {formatPrice(netTotal)}
                                           </span>
                                           <span className="text-xs text-gray-500">
                                             ({t.original}:{" "}
                                             {formatPrice(transaction.total)})
                                           </span>
-                                          {/* Tooltip */}
-                                          <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
-                                            <div>
-                                              {t.subtotal}:{" "}
-                                              {formatPrice(subtotal)}
-                                            </div>
-                                            <div>
-                                              {t.tax}: {formatPrice(isFullyRefunded ? 0 : tax)}
-                                              {isFullyRefunded && (
-                                                <span className="text-gray-400 ml-1">
-                                                  (refunded)
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="border-t border-gray-600 pt-1 mt-1">
-                                              <div>
-                                                {t.total}:{" "}
-                                                {formatPrice(transaction.total)}
-                                              </div>
-                                              <div>
-                                                {t.refunded}: -
-                                                {formatPrice(refundedAmount)}
-                                              </div>
-                                              {isFullyRefunded && (
-                                                <div>
-                                                  Tax Refunded: -
-                                                  {formatPrice(tax)}
-                                                </div>
-                                              )}
-                                              <div className="font-semibold">
-                                                Net Total:{" "}
-                                                {formatPrice(netTotal)}
-                                              </div>
-                                            </div>
-                                          </div>
+                                          {renderTotalTooltip(
+                                            transaction,
+                                            refundedAmount,
+                                            netTotal,
+                                          )}
                                         </div>
                                       );
                                     }
 
                                     return (
                                       <div className="group relative">
-                                        <span className="cursor-help">
+                                        <span
+                                          className="cursor-help"
+                                          title={breakdownTitle}
+                                        >
                                           {formatPrice(transaction.total)}
                                         </span>
-                                        {/* Tooltip */}
-                                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-3 whitespace-nowrap z-10 shadow-lg">
-                                          <div>
-                                            {t.subtotal}:{" "}
-                                            {formatPrice(subtotal)}
-                                          </div>
-                                          <div>
-                                            {t.tax}: {formatPrice(tax)}
-                                          </div>
-                                          <div className="border-t border-gray-600 pt-1 mt-1 font-semibold">
-                                            {t.total}:{" "}
-                                            {formatPrice(transaction.total)}
-                                          </div>
-                                        </div>
+                                        {renderTotalTooltip(
+                                          transaction,
+                                          refundedAmount,
+                                          netTotal,
+                                        )}
                                       </div>
                                     );
                                   })()}
@@ -2068,298 +2312,347 @@ function TransactionsPageContent() {
             </div>
 
             {/* Refund Modal */}
-            {showRefundModal && selectedTransaction && (
-              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-                <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-xl border border-white/20 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
-                  <div className="p-6 border-b border-gray-300/50 bg-white/50 backdrop-blur-sm">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-semibold text-gray-900">
-                        Refund Items
-                      </h2>
-                      <button
-                        onClick={() => setShowRefundModal(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                        aria-label="Close refund modal"
-                      >
-                        <X className="h-6 w-6" />
-                      </button>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Transaction ID: {selectedTransaction.transactionId}
-                    </p>
-                    <div className="mt-3 p-3 bg-cyan-50 rounded-lg border border-blue-200">
-                      <p className="text-sm text-blue-800">
-                        💡 <strong>Tip:</strong> You can only refund up to the
-                        available quantity for each item. The system will
-                        automatically limit your input to prevent
-                        over-refunding.
-                      </p>
-                    </div>
-                  </div>
+            {showRefundModal &&
+              selectedTransaction &&
+              (() => {
+                const summary = getRefundSummary(
+                  selectedTransaction,
+                  refundItems,
+                );
+                const hasSelection = summary.selectedUnits > 0;
 
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      {selectedTransaction.items.map((item, index) => {
-                        // Calculate already refunded quantity for this item
-                        const alreadyRefunded =
-                          selectedTransaction.refunds?.reduce(
-                            (total, refund) => {
-                              const refundItem = refund.items.find(
-                                (ri) => ri.itemIndex === index,
-                              );
-                              return total + (refundItem?.quantity || 0);
-                            },
-                            0,
-                          ) || 0;
+                const totalRefundable = selectedTransaction.items.reduce(
+                  (sum, item, index) =>
+                    sum +
+                    Math.max(
+                      0,
+                      item.quantity -
+                        getAlreadyRefunded(selectedTransaction, index),
+                    ),
+                  0,
+                );
 
-                        const availableToRefund =
-                          item.quantity - alreadyRefunded;
+                return (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
+                    <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-pink-200 bg-white shadow-2xl">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-3 bg-gradient-to-r from-rose-500 to-pink-500 px-5 py-4">
+                        <div className="min-w-0">
+                          <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                            <RotateCcw className="h-5 w-5" />
+                            {t.refundItemsTitle}
+                          </h2>
+                          <p className="mt-0.5 truncate text-xs font-medium text-white/80">
+                            {t.transactionId}:{" "}
+                            {selectedTransaction.transactionId}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowRefundModal(false)}
+                          className="shrink-0 rounded-full p-1.5 text-white/90 transition-colors hover:bg-white/20"
+                          aria-label={t.close}
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
 
-                        return (
-                          <div
-                            key={`${item.id}___${index}`}
-                            className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                      {/* Toolbar: how much is selected, and the bulk shortcuts */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-5 py-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          {summary.selectedUnits} / {totalRefundable}{" "}
+                          {t.itemsSelectedForRefund}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              selectAllRefundable(selectedTransaction)
+                            }
+                            disabled={totalRefundable === 0}
+                            className="rounded-full border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900">
-                                {item.groupName}
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                {(item.selectedColor || item.colorCode) &&
-                                  `Color: ${getDisplayColor(item)}`}{" "}
-                                {item.selectedSize &&
-                                  `Size: ${item.selectedSize}`}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                Price: {formatPrice(item.unitPrice)} ×{" "}
-                                {item.quantity} ={" "}
-                                {formatPrice(item.unitPrice * item.quantity)}
-                              </p>
-                              {alreadyRefunded > 0 && (
-                                <p className="text-sm text-orange-600">
-                                  Already refunded: {alreadyRefunded}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <label className="text-sm text-gray-600">
-                                Refund Qty:
-                              </label>
-                              <div className="flex flex-col items-center">
-                                <input
-                                  aria-label={`Refund quantity for ${item.groupName}`}
-                                  type="number"
-                                  min="0"
-                                  max={availableToRefund}
-                                  value={
-                                    Object.prototype.hasOwnProperty.call(
-                                      refundItems,
-                                      `${item.id}___${index}`,
-                                    )
-                                      ? refundItems[`${item.id}___${index}`]
-                                      : ""
-                                  }
-                                  onChange={(e) => {
-                                    if (e.target.value === "") {
-                                      setRefundItems((prev) => {
-                                        const next = { ...prev };
-                                        delete next[`${item.id}___${index}`];
-                                        return next;
-                                      });
-                                      return;
-                                    }
+                            {t.refundAllShortcut}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              clearRefundSelection(selectedTransaction)
+                            }
+                            disabled={!hasSelection}
+                            className="rounded-full border border-gray-300 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {t.clearSelection}
+                          </button>
+                        </div>
+                      </div>
 
-                                    const inputValue = parseInt(
-                                      e.target.value,
-                                      10,
-                                    );
-                                    const validatedValue = Math.min(
-                                      Math.max(inputValue, 0),
-                                      availableToRefund,
-                                    );
-                                    setRefundItems((prev) => ({
-                                      ...prev,
-                                      [`${item.id}___${index}`]: validatedValue,
-                                    }));
-                                  }}
-                                  onBlur={(e) => {
-                                    // Additional validation on blur to ensure value is within bounds
-                                    if (e.target.value === "") {
-                                      return;
-                                    }
-
-                                    const inputValue = parseInt(
-                                      e.target.value,
-                                      10,
-                                    );
-                                    if (inputValue > availableToRefund) {
-                                      setRefundItems((prev) => ({
-                                        ...prev,
-                                        [`${item.id}___${index}`]:
-                                          availableToRefund,
-                                      }));
-                                    }
-                                  }}
-                                  className={`w-20 px-2 py-1 border rounded text-center text-gray-900 ${
-                                    (refundItems[`${item.id}___${index}`] ||
-                                      0) > availableToRefund
-                                      ? "border-red-500 bg-red-50"
-                                      : "border-gray-300 bg-white"
-                                  }`}
-                                  disabled={availableToRefund <= 0}
-                                  placeholder="0"
-                                />
-                                {(refundItems[`${item.id}___${index}`] || 0) >
-                                  availableToRefund && (
-                                  <span className="text-xs text-red-500 mt-1">
-                                    Max: {availableToRefund}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-sm text-gray-500">
-                                / {availableToRefund}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-6 p-4 bg-cyan-50 rounded-lg">
-                      {(() => {
-                        // Calculate refund breakdown
-                        const totalItemRefundAmount = Object.entries(
-                          refundItems,
-                        ).reduce((total, [key, quantity]) => {
-                          const [, index] = key.split("___");
-                          const itemIndex = parseInt(index);
-                          const item = selectedTransaction.items[itemIndex];
-                          if (
-                            !item ||
-                            isNaN(itemIndex) ||
-                            itemIndex < 0 ||
-                            itemIndex >= selectedTransaction.items.length
-                          ) {
-                            console.warn(
-                              `Invalid item index ${itemIndex} for key ${key}`,
+                      {/* Item list */}
+                      <div className="flex-1 overflow-y-auto px-5 py-4">
+                        <div className="space-y-2.5">
+                          {selectedTransaction.items.map((item, index) => {
+                            const alreadyRefunded = getAlreadyRefunded(
+                              selectedTransaction,
+                              index,
                             );
-                            return total;
-                          }
-                          return total + item.unitPrice * quantity;
-                        }, 0);
+                            const availableToRefund = Math.max(
+                              0,
+                              item.quantity - alreadyRefunded,
+                            );
+                            const key = getRefundKey(item.id, index);
+                            const selectedQty = refundItems[key] || 0;
+                            const isExhausted = availableToRefund === 0;
 
-                        const transactionSubtotal =
-                          selectedTransaction.subtotal || 0;
-                        const transactionCartDiscount =
-                          selectedTransaction.discount || 0;
+                            const variant = [
+                              item.selectedColor || item.colorCode
+                                ? getDisplayColor(item)
+                                : "",
+                              item.selectedSize,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
 
-                        let totalProportionalCartDiscount = 0;
-                        let cartDiscountRate = 0;
-                        if (
-                          transactionCartDiscount > 0 &&
-                          transactionSubtotal > 0
-                        ) {
-                          cartDiscountRate =
-                            transactionCartDiscount / transactionSubtotal;
-                          totalProportionalCartDiscount =
-                            totalItemRefundAmount * cartDiscountRate;
-                        }
+                            return (
+                              <div
+                                key={key}
+                                className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                                  isExhausted
+                                    ? "border-gray-200 bg-gray-50 opacity-60"
+                                    : selectedQty > 0
+                                      ? "border-rose-300 bg-rose-50/60"
+                                      : "border-gray-200 bg-white hover:border-rose-200"
+                                }`}
+                              >
+                                {/* Thumbnail, so the cashier can match the item
+                                    to what the customer handed back */}
+                                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                                  {item.image ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={item.image}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-gray-300">
+                                      <Package className="h-6 w-6" />
+                                    </div>
+                                  )}
+                                </div>
 
-                        const finalRefundAmount =
-                          totalItemRefundAmount - totalProportionalCartDiscount;
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="truncate text-sm font-semibold text-gray-900">
+                                      {item.groupName}
+                                    </h4>
+                                    {isExhausted && (
+                                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                        {t.fullyRefundedItem}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {variant && (
+                                    <p className="mt-0.5 truncate text-xs text-gray-500">
+                                      {variant}
+                                    </p>
+                                  )}
+                                  <p className="mt-1 text-xs text-gray-600">
+                                    {formatPrice(item.unitPrice)} ×{" "}
+                                    {item.quantity}
+                                    <span className="mx-1.5 text-gray-300">
+                                      |
+                                    </span>
+                                    {t.availableLabel}: {availableToRefund}
+                                    {alreadyRefunded > 0 && (
+                                      <>
+                                        <span className="mx-1.5 text-gray-300">
+                                          |
+                                        </span>
+                                        <span className="text-amber-600">
+                                          {t.alreadyRefundedLabel}:{" "}
+                                          {alreadyRefunded}
+                                        </span>
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
 
-                        return (
-                          <div className="space-y-3">
-                            <h3 className="font-medium text-gray-900 text-lg">
-                              Refund Calculation
-                            </h3>
+                                {/* Quantity stepper. Replaces the bare number
+                                    field, which was easy to mistype on a touch
+                                    screen at the till. */}
+                                <div className="flex shrink-0 flex-col items-end gap-1">
+                                  <div className="flex items-center rounded-lg border border-gray-300 bg-white">
+                                    <button
+                                      type="button"
+                                      aria-label={`${t.refundQuantity} -1`}
+                                      onClick={() =>
+                                        setRefundQuantity(
+                                          item.id,
+                                          index,
+                                          selectedQty - 1,
+                                          availableToRefund,
+                                        )
+                                      }
+                                      disabled={isExhausted || selectedQty <= 0}
+                                      className="px-2 py-1 text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                                    >
+                                      <Minus className="h-3.5 w-3.5" />
+                                    </button>
+                                    <input
+                                      aria-label={`${t.refundQuantity}: ${item.groupName}`}
+                                      type="number"
+                                      inputMode="numeric"
+                                      min={0}
+                                      max={availableToRefund}
+                                      value={selectedQty === 0 ? "" : selectedQty}
+                                      placeholder="0"
+                                      disabled={isExhausted}
+                                      onChange={(e) =>
+                                        setRefundQuantity(
+                                          item.id,
+                                          index,
+                                          e.target.value === ""
+                                            ? 0
+                                            : parseInt(e.target.value, 10) || 0,
+                                          availableToRefund,
+                                        )
+                                      }
+                                      className="w-12 border-x border-gray-300 py-1 text-center text-sm font-semibold text-gray-900 outline-none disabled:bg-gray-100"
+                                    />
+                                    <button
+                                      type="button"
+                                      aria-label={`${t.refundQuantity} +1`}
+                                      onClick={() =>
+                                        setRefundQuantity(
+                                          item.id,
+                                          index,
+                                          selectedQty + 1,
+                                          availableToRefund,
+                                        )
+                                      }
+                                      disabled={
+                                        isExhausted ||
+                                        selectedQty >= availableToRefund
+                                      }
+                                      className="px-2 py-1 text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
+                                    >
+                                      <Plus className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
 
+                                  {!isExhausted && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setRefundQuantity(
+                                          item.id,
+                                          index,
+                                          availableToRefund,
+                                          availableToRefund,
+                                        )
+                                      }
+                                      className="text-[10px] font-semibold uppercase tracking-wide text-rose-600 hover:underline"
+                                    >
+                                      {t.maxShort} {availableToRefund}
+                                    </button>
+                                  )}
+
+                                  {selectedQty > 0 && (
+                                    <span className="text-xs font-bold text-rose-600">
+                                      {formatPrice(
+                                        item.unitPrice * selectedQty,
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Refund calculation */}
+                        <div className="mt-5 rounded-xl border border-rose-100 bg-rose-50/50 p-4">
+                          <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-rose-600">
+                            {t.refundCalculation}
+                          </h3>
+
+                          {!hasSelection ? (
+                            <p className="text-sm text-gray-500">
+                              {t.refundSummaryEmpty}
+                            </p>
+                          ) : (
                             <div className="space-y-2 text-sm">
                               <div className="flex justify-between">
                                 <span className="text-gray-600">
-                                  Items Subtotal:
+                                  {t.itemsSubtotalLabel}
                                 </span>
-                                <span className="text-gray-900">
-                                  {formatPrice(totalItemRefundAmount)}
+                                <span className="font-medium text-gray-900">
+                                  {formatPrice(summary.itemsSubtotal)}
                                 </span>
                               </div>
 
-                              {transactionCartDiscount > 0 && (
-                                <>
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">
-                                      Cart Discount (
-                                      {(cartDiscountRate * 100).toFixed(1)}%):
-                                    </span>
-                                    <span className="text-orange-600">
-                                      -
-                                      {formatPrice(
-                                        totalProportionalCartDiscount,
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="border-t border-gray-200 pt-2">
-                                    <div className="flex justify-between text-xs text-gray-500">
-                                      <span>
-                                        Original transaction had{" "}
-                                        {formatPrice(transactionCartDiscount)}{" "}
-                                        cart discount
-                                      </span>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-
-                              <div className="border-t border-gray-300 pt-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium text-gray-900">
-                                    Total Refund Amount:
+                              {summary.proportionalCartDiscount > 0 && (
+                                <div className="flex justify-between text-amber-700">
+                                  <span>
+                                    {t.cartDiscountLabel} (
+                                    {(summary.cartDiscountRate * 100).toFixed(
+                                      1,
+                                    )}
+                                    %)
                                   </span>
-                                  <span className="text-xl font-bold text-cyan-600">
-                                    {formatPrice(finalRefundAmount)}
+                                  <span className="font-medium">
+                                    -
+                                    {formatPrice(
+                                      summary.proportionalCartDiscount,
+                                    )}
                                   </span>
                                 </div>
+                              )}
+
+                              <div className="flex items-center justify-between border-t border-dashed border-rose-200 pt-2.5">
+                                <span className="font-semibold text-gray-900">
+                                  {t.totalRefundAmount}
+                                </span>
+                                <span className="text-xl font-bold text-rose-600">
+                                  {formatPrice(summary.refundAmount)}
+                                </span>
                               </div>
 
-                              {transactionCartDiscount > 0 && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
-                                  <div className="flex items-start">
-                                    <div className="text-amber-600 mr-2">
-                                      ℹ️
-                                    </div>
-                                    <div className="text-xs text-amber-800">
-                                      <strong>Note:</strong> The cart discount
-                                      is proportionally reduced from the refund
-                                      amount. Tax is not refunded as per store
-                                      policy.
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
+                              <p className="pt-1 text-xs leading-relaxed text-gray-500">
+                                {summary.transactionCartDiscount > 0
+                                  ? t.refundTaxNote
+                                  : t.refundTipBody}
+                              </p>
                             </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                          )}
+                        </div>
+                      </div>
 
-                    <div className="mt-6 flex justify-end space-x-3">
-                      <button
-                        onClick={() => setShowRefundModal(false)}
-                        className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleRefundSubmit}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-                      >
-                        Process Refund
-                      </button>
+                      {/* Sticky footer so the action stays reachable on a long
+                          item list */}
+                      <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-white px-5 py-4">
+                        <button
+                          onClick={() => setShowRefundModal(false)}
+                          disabled={isProcessingRefund}
+                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                        >
+                          {t.cancel}
+                        </button>
+                        <button
+                          onClick={handleRefundSubmit}
+                          disabled={!hasSelection || isProcessingRefund}
+                          className="rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 px-5 py-2 text-sm font-semibold text-white shadow-md transition-all hover:from-rose-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isProcessingRefund
+                            ? t.processingRefund
+                            : hasSelection
+                              ? `${t.processRefund} · ${formatPrice(summary.refundAmount)}`
+                              : t.processRefund}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                );
+              })()}
 
             {/* Cancel Transaction Modal */}
             {showCancelModal && selectedTransaction && (

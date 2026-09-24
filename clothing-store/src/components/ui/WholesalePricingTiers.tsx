@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, DollarSign, Package } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { WholesaleTier } from "@/types/stock";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface WholesalePricingTiersProps {
   wholesaleTiers: WholesaleTier[];
@@ -16,11 +17,12 @@ interface WholesalePricingTiersProps {
 export function WholesalePricingTiers({
   wholesaleTiers,
   className = "",
-  title = "Wholesale Pricing Tiers",
+  title,
   defaultExpanded = false,
 }: WholesalePricingTiersProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const { formatPrice } = useCurrency();
+  const { t } = useLanguage();
 
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
@@ -36,10 +38,12 @@ export function WholesalePricingTiers({
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <DollarSign className="h-5 w-5 text-gray-400 mr-2" />
-            <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+            <h3 className="text-lg font-medium text-gray-900">
+              {title ?? t.wholesalePricingTiers}
+            </h3>
             {wholesaleTiers.length > 0 && (
               <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-blue-800">
-                {wholesaleTiers.length} tier{wholesaleTiers.length !== 1 ? 's' : ''}
+                {wholesaleTiers.length} {t.tiersSuffix}
               </span>
             )}
           </div>
@@ -51,11 +55,11 @@ export function WholesalePricingTiers({
           >
             {isExpanded ? (
               <>
-                Hide <ChevronUp className="h-4 w-4 ml-1" />
+                {t.hide} <ChevronUp className="h-4 w-4 ml-1" />
               </>
             ) : (
               <>
-                Show <ChevronDown className="h-4 w-4 ml-1" />
+                {t.show} <ChevronDown className="h-4 w-4 ml-1" />
               </>
             )}
           </Button>
@@ -68,9 +72,9 @@ export function WholesalePricingTiers({
           {sortedTiers.length === 0 ? (
             <div className="text-center py-8">
               <Package className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-4 text-gray-500">No wholesale pricing tiers</p>
+              <p className="mt-4 text-gray-500">{t.noWholesaleTiers}</p>
               <p className="text-sm text-gray-400">
-                This product doesn&apos;t have any wholesale pricing configured.
+                {t.noWholesaleTiersHint}
               </p>
             </div>
           ) : (
@@ -90,7 +94,7 @@ export function WholesalePricingTiers({
                     </div>
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        Minimum Quantity: {tier.minQuantity}
+                        {t.minQuantity}: {tier.minQuantity}
                       </div>
                       {/* <div className="text-sm text-gray-500">
                         {tier.minQuantity === 1 
@@ -104,7 +108,7 @@ export function WholesalePricingTiers({
                     <div className="text-lg font-semibold text-green-600">
                       {formatPrice(tier.price)}
                     </div>
-                    <div className="text-sm text-gray-500">per item</div>
+                    <div className="text-sm text-gray-500">{t.perItem}</div>
                   </div>
                 </div>
               ))}
@@ -118,16 +122,16 @@ export function WholesalePricingTiers({
                     </div>
                     <div className="ml-3">
                       <h4 className="text-sm font-medium text-blue-900">
-                        Pricing Summary
+                        {t.pricingSummary}
                       </h4>
                       <div className="mt-2 text-sm text-blue-700">
                         <p>
-                          Best price: <span className="font-semibold">{formatPrice(Math.min(...sortedTiers.map(t => t.price)))}</span> 
-                          {" "}(min. {sortedTiers.find(t => t.price === Math.min(...sortedTiers.map(tier => tier.price)))?.minQuantity} items)
+                          {t.bestPrice}: <span className="font-semibold">{formatPrice(Math.min(...sortedTiers.map(item => item.price)))}</span> 
+                          {" "}({sortedTiers.find(item => item.price === Math.min(...sortedTiers.map(tier => tier.price)))?.minQuantity} {t.minItemsSuffix})
                         </p>
                         <p>
-                          Regular price: <span className="font-semibold">{formatPrice(Math.max(...sortedTiers.map(t => t.price)))}</span>
-                          {" "}(min. {sortedTiers.find(t => t.price === Math.max(...sortedTiers.map(tier => tier.price)))?.minQuantity} items)
+                          {t.regularPrice}: <span className="font-semibold">{formatPrice(Math.max(...sortedTiers.map(item => item.price)))}</span>
+                          {" "}({sortedTiers.find(item => item.price === Math.max(...sortedTiers.map(tier => tier.price)))?.minQuantity} {t.minItemsSuffix})
                         </p>
                       </div>
                     </div>

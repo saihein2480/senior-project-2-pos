@@ -2,6 +2,7 @@
 
 import React from "react";
 import { X, Gift, Tag, Ticket, Lock, Sparkles } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface RewardCoupon {
   id: string;
@@ -38,13 +39,18 @@ interface RewardRedemptionModalProps {
   onRedeemPackage: (packageId: string) => void;
 }
 
+/**
+ * `offLabel` is passed in rather than read from context, so the value still
+ * leads the translated word in both languages.
+ */
 function formatDiscount(
   discountType: "percentage" | "fixed",
   discountValue: number,
+  offLabel: string,
 ) {
   return discountType === "percentage"
-    ? `${discountValue}% off`
-    : `${discountValue} off`;
+    ? `${discountValue}% ${offLabel}`
+    : `${discountValue} ${offLabel}`;
 }
 
 /**
@@ -68,6 +74,8 @@ export function RewardRedemptionModal({
   onApplyCoupon,
   onRedeemPackage,
 }: RewardRedemptionModalProps) {
+  const { t } = useLanguage();
+
   if (!isOpen) return null;
 
   const reservedPoints = Math.max(0, currentPoints - availablePoints);
@@ -83,13 +91,13 @@ export function RewardRedemptionModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">
-                Loyalty Rewards
+                {t.loyaltyRewards}
               </h2>
               <p className="text-xs text-white/90">{customerName}</p>
             </div>
           </div>
           <button
-            title="Close"
+            title={t.close}
             onClick={onClose}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
           >
@@ -100,19 +108,21 @@ export function RewardRedemptionModal({
         {/* Points summary */}
         <div className="grid grid-cols-2 divide-x divide-pink-200 border-b-2 border-pink-200 bg-white/50">
           <div className="p-4">
-            <p className="text-xs font-semibold text-gray-600">Total Points</p>
+            <p className="text-xs font-semibold text-gray-600">
+              {t.totalPoints}
+            </p>
             <p className="text-2xl font-bold text-gray-900">{currentPoints}</p>
           </div>
           <div className="p-4">
             <p className="text-xs font-semibold text-gray-600">
-              Points for Redeem
+              {t.pointsForRedeem}
             </p>
             <p className="text-2xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
               {availablePoints}
             </p>
             {reservedPoints > 0 && (
               <p className="text-[11px] text-gray-600 mt-0.5 font-medium">
-                {reservedPoints} reserved by unused coupons
+                {reservedPoints} {t.reservedByUnusedCoupons}
               </p>
             )}
           </div>
@@ -137,9 +147,9 @@ export function RewardRedemptionModal({
                   <div className="h-7 w-7 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 flex items-center justify-center shadow-md">
                     <Tag className="h-4 w-4 text-white" />
                   </div>
-                  <span>Ready to Use</span>
+                  <span>{t.readyToUse}</span>
                   <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 text-xs font-bold text-green-700 border border-green-300">
-                    {coupons.length} {coupons.length === 1 ? "coupon" : "coupons"}
+                    {coupons.length} {t.coupons}
                   </span>
                 </h3>
 
@@ -149,10 +159,10 @@ export function RewardRedemptionModal({
                       <Tag className="h-6 w-6 text-gray-500" />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
-                      No coupons yet
+                      {t.noCouponsYet}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Redeem a reward below to get started!
+                      {t.redeemRewardToStart}
                     </p>
                   </div>
                 ) : (
@@ -168,7 +178,7 @@ export function RewardRedemptionModal({
                           {/* Decorative corner ribbon */}
                           <div className="absolute top-0 right-0 w-16 h-16">
                             <div className="absolute transform rotate-45 bg-gradient-to-r from-green-400 to-emerald-400 text-white text-[10px] font-bold py-1 right-[-35px] top-[15px] w-[100px] text-center shadow">
-                              READY
+                              {t.readyRibbon}
                             </div>
                           </div>
 
@@ -195,11 +205,12 @@ export function RewardRedemptionModal({
                                   {formatDiscount(
                                     coupon.discountType,
                                     coupon.discountValue,
+                                    t.offSuffix,
                                   )}
                                 </span>
                                 {typeof coupon.pointsCost === "number" && (
                                   <span className="text-xs text-gray-600 font-medium">
-                                    • Uses {coupon.pointsCost} pt{coupon.pointsCost === 1 ? "" : "s"}
+                                    • {coupon.pointsCost} {t.pointsUsedSuffix}
                                   </span>
                                 )}
                               </div>
@@ -210,7 +221,7 @@ export function RewardRedemptionModal({
                               disabled={isApplied}
                               className="flex-shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-black hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all transform hover:scale-105"
                             >
-                              {isApplied ? "Applied ✓" : "Apply Now"}
+                              {isApplied ? `${t.applied} ✓` : t.applyNow}
                             </button>
                           </div>
                         </div>
@@ -226,9 +237,9 @@ export function RewardRedemptionModal({
                   <div className="h-7 w-7 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 flex items-center justify-center shadow-md">
                     <Gift className="h-4 w-4 text-white" />
                   </div>
-                  <span>Available Rewards</span>
+                  <span>{t.availableRewards}</span>
                   <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 text-xs font-bold text-purple-700 border border-purple-300">
-                    {packages.filter((pkg) => pkg.affordable).length} of {packages.length} ready
+                    {packages.filter((pkg) => pkg.affordable).length}/{packages.length} {t.readySuffix}
                   </span>
                 </h3>
 
@@ -238,10 +249,10 @@ export function RewardRedemptionModal({
                       <Gift className="h-6 w-6 text-purple-500" />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
-                      No reward packages
+                      {t.noRewardPackages}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Add them in Settings
+                      {t.addRewardsInSettings}
                     </p>
                   </div>
                 ) : (
@@ -287,10 +298,11 @@ export function RewardRedemptionModal({
                                 {formatDiscount(
                                   pkg.discountType,
                                   pkg.discountValue,
+                                  t.offSuffix,
                                 )}
                               </span>
                               <span className="text-xs text-gray-600 font-medium">
-                                • Costs {pkg.pointsRequired} pt{pkg.pointsRequired === 1 ? "" : "s"}
+                                • {pkg.pointsRequired} {t.pointsCostSuffix}
                               </span>
                             </div>
                           </div>
@@ -302,13 +314,13 @@ export function RewardRedemptionModal({
                               className="flex-shrink-0 px-4 py-2 rounded-xl border-2 border-purple-500 bg-white text-purple-700 text-xs font-black hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 disabled:opacity-50 shadow-sm hover:shadow-md transition-all transform hover:scale-105"
                             >
                               {redeemingPackageId === pkg.id
-                                ? "Getting..."
-                                : "Redeem"}
+                                ? t.redeemingLabel
+                                : t.redeem}
                             </button>
                           ) : (
                             <div className="flex-shrink-0 px-3 py-2 rounded-xl bg-gray-100 border border-gray-300">
                               <span className="text-xs text-gray-600 font-bold">
-                                Need {pkg.pointsShort} more
+                                {pkg.pointsShort} {t.needMorePointsSuffix}
                               </span>
                             </div>
                           )}
@@ -328,7 +340,7 @@ export function RewardRedemptionModal({
             onClick={onClose}
             className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
           >
-            Done
+            {t.done}
           </button>
         </div>
       </div>

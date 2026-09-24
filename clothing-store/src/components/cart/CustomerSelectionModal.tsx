@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { X, Search, User, Users, Gift, Filter } from "lucide-react";
 import { Customer } from "@/types/customer";
 import { SelectedCustomer } from "@/types/cart";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Translations } from "@/lib/translations";
 
 type SourceFilter = "all" | "online" | "pos";
 type TypeFilter =
@@ -25,43 +27,46 @@ function isOnlineCustomer(customer: Customer) {
  * Online customers are labelled by their origin rather than their stored
  * `customerType`, which defaults to "individual" and is misleading here.
  */
-function getCustomerTypeLabel(customer: Customer): {
+function getCustomerTypeLabel(
+  customer: Customer,
+  t: Translations,
+): {
   label: string;
   className: string;
 } {
   if (isOnlineCustomer(customer)) {
     return {
-      label: "Online Customer",
+      label: t.onlineCustomer,
       className: "bg-cyan-100 text-cyan-800 border-cyan-200",
     };
   }
 
   const typeMap: Record<string, { label: string; className: string }> = {
     retailer: {
-      label: "Retailer",
+      label: t.retailer,
       className: "bg-purple-100 text-purple-800 border-purple-200",
     },
     wholesaler: {
-      label: "Wholesaler",
+      label: t.wholesaler,
       className: "bg-orange-100 text-orange-800 border-orange-200",
     },
     distributor: {
-      label: "Distributor",
+      label: t.distributor,
       className: "bg-indigo-100 text-indigo-800 border-indigo-200",
     },
     individual: {
-      label: "Individual",
+      label: t.individual,
       className: "bg-green-100 text-green-800 border-green-200",
     },
     other: {
-      label: "Other",
+      label: t.other,
       className: "bg-gray-100 text-gray-800 border-gray-200",
     },
   };
 
   return (
     typeMap[customer.customerType || ""] || {
-      label: customer.customerType || "Unknown",
+      label: customer.customerType || t.unknown,
       className: "bg-gray-100 text-gray-800 border-gray-200",
     }
   );
@@ -97,6 +102,7 @@ export function CustomerSelectionModal({
   onSelectCustomer,
   selectedCustomer,
 }: CustomerSelectionModalProps) {
+  const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -122,11 +128,11 @@ export function CustomerSelectionModal({
       if (data.success) {
         setCustomers(data.data || []);
       } else {
-        setError(data.error || "Failed to fetch customers");
+        setError(data.error || t.failedToFetchCustomers);
       }
     } catch (error) {
       console.error("Error fetching customers:", error);
-      setError("Failed to fetch customers");
+      setError(t.failedToFetchCustomers);
     } finally {
       setIsLoading(false);
     }
@@ -195,10 +201,10 @@ export function CustomerSelectionModal({
         <div className="flex items-center justify-between p-6 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <Users className="h-6 w-6 text-white" />
-            <h2 className="text-xl font-bold text-white">Select Customer</h2>
+            <h2 className="text-xl font-bold text-white">{t.selectCustomer}</h2>
           </div>
           <button
-            title="Close"
+            title={t.close}
             onClick={onClose}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
           >
@@ -212,7 +218,7 @@ export function CustomerSelectionModal({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-rose-400" />
             <input
               type="text"
-              placeholder="Search customers by name, email, or phone..."
+              placeholder={t.searchCustomersPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border-2 border-pink-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-500 text-gray-900 bg-white placeholder-gray-400"
@@ -222,38 +228,38 @@ export function CustomerSelectionModal({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs text-rose-600 font-medium">
               <Filter className="h-3.5 w-3.5" />
-              Filter
+              {t.filter}
             </div>
 
             <div className="relative">
               <select
-                title="Filter by customer source"
+                title={t.filterByCustomerSource}
                 value={sourceFilter}
                 onChange={(e) =>
                   setSourceFilter(e.target.value as SourceFilter)
                 }
                 className="px-3 py-1.5 border-2 border-pink-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
               >
-                <option value="all">All Sources</option>
-                <option value="online">Online</option>
-                <option value="pos">Walk-in</option>
+                <option value="all">{t.allSources}</option>
+                <option value="online">{t.online}</option>
+                <option value="pos">{t.walkIn}</option>
               </select>
             </div>
 
             <div className="relative">
               <select
-                title="Filter by customer type"
+                title={t.filterByCustomerType}
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
                 className="px-3 py-1.5 border-2 border-pink-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
               >
-                <option value="all">All Types</option>
-                <option value="online">Online Customer</option>
-                <option value="retailer">Retailer</option>
-                <option value="wholesaler">Wholesaler</option>
-                <option value="distributor">Distributor</option>
-                <option value="individual">Individual</option>
-                <option value="other">Other</option>
+                <option value="all">{t.allTypes}</option>
+                <option value="online">{t.onlineCustomer}</option>
+                <option value="retailer">{t.retailer}</option>
+                <option value="wholesaler">{t.wholesaler}</option>
+                <option value="distributor">{t.distributor}</option>
+                <option value="individual">{t.individual}</option>
+                <option value="other">{t.other}</option>
               </select>
             </div>
 
@@ -264,7 +270,7 @@ export function CustomerSelectionModal({
                 onChange={(e) => setMembersOnly(e.target.checked)}
                 className="h-4 w-4 rounded border-pink-300 text-rose-600 focus:ring-rose-500"
               />
-              Members only
+              {t.membersOnly}
             </label>
 
             {(sourceFilter !== "all" ||
@@ -281,12 +287,12 @@ export function CustomerSelectionModal({
                 }}
                 className="text-xs font-semibold text-rose-600 hover:text-rose-800 underline"
               >
-                Clear
+                {t.clear}
               </button>
             )}
 
             <span className="ml-auto text-xs text-gray-600 font-medium">
-              {filteredCustomers.length} of {customers.length}
+              {filteredCustomers.length} / {customers.length}
             </span>
           </div>
         </div>
@@ -309,10 +315,10 @@ export function CustomerSelectionModal({
             </div>
             <div className="ml-4 flex-1">
               <div className="text-sm font-semibold text-gray-900">
-                Unknown Customer
+                {t.unknownCustomer}
               </div>
               <div className="text-sm text-gray-600">
-                Default customer for walk-in sales
+                {t.defaultWalkInCustomerHint}
               </div>
             </div>
             {!selectedCustomer && (
@@ -337,7 +343,7 @@ export function CustomerSelectionModal({
                 onClick={fetchCustomers}
                 className="mt-2 text-rose-600 hover:text-rose-800 font-semibold underline"
               >
-                Try again
+                {t.retry}
               </button>
             </div>
           )}
@@ -348,8 +354,8 @@ export function CustomerSelectionModal({
               {filteredCustomers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   {searchTerm
-                    ? "No customers found matching your search."
-                    : "No customers available."}
+                    ? t.noCustomersMatchSearch
+                    : t.noCustomersAvailable}
                 </div>
               ) : (
                 filteredCustomers.map((customer) => (
@@ -377,7 +383,7 @@ export function CustomerSelectionModal({
                     </div>
                     <div className="ml-4 flex-1">
                       <div className="text-sm font-semibold text-gray-900">
-                        {customer.displayName || "No Name"}
+                        {customer.displayName || t.noName}
                       </div>
                       <div className="text-sm text-gray-600">
                         {customer.email}
@@ -389,7 +395,7 @@ export function CustomerSelectionModal({
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         {(() => {
-                          const typeInfo = getCustomerTypeLabel(customer);
+                          const typeInfo = getCustomerTypeLabel(customer, t);
                           return (
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border shadow-sm ${typeInfo.className}`}
@@ -402,7 +408,7 @@ export function CustomerSelectionModal({
                         {customer.isMember && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 border-purple-300 shadow-sm">
                             <Gift className="h-3 w-3" />
-                            Member
+                            {t.member}
                           </span>
                         )}
 
@@ -411,7 +417,7 @@ export function CustomerSelectionModal({
                           if (usable === 0) return null;
                           return (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-green-300 shadow-sm">
-                              {usable} coupon{usable === 1 ? "" : "s"}
+                              {usable} {t.coupons}
                             </span>
                           );
                         })()}
@@ -435,7 +441,7 @@ export function CustomerSelectionModal({
             onClick={onClose}
             className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
           >
-            Cancel
+            {t.cancel}
           </button>
         </div>
       </div>

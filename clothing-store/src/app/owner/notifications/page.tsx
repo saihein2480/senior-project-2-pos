@@ -6,6 +6,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { Bell, ShoppingCart, AlertCircle, RotateCcw, XCircle, Package, Check, Clock, Trash2, DollarSign } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatDistanceToNow } from "date-fns";
@@ -28,6 +29,7 @@ interface Notification {
 
 function NotificationsContent() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [activeItem, setActiveItem] = useState("notifications");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -227,10 +229,10 @@ function NotificationsContent() {
             {/* Page Title */}
             <div className="mb-8">
               <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-                Notifications
+                {t.notifications}
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Stay updated with all important activities and alerts
+                {t.notificationsSubtitle}
               </p>
             </div>
 
@@ -246,7 +248,7 @@ function NotificationsContent() {
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    All ({notifications.length})
+                    {t.all} ({notifications.length})
                   </button>
                   <button
                     onClick={() => setFilter("unread")}
@@ -256,7 +258,7 @@ function NotificationsContent() {
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    Unread ({unreadCount})
+                    {t.unread} ({unreadCount})
                   </button>
                 </div>
 
@@ -267,7 +269,7 @@ function NotificationsContent() {
                       className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
                     >
                       <Check className="w-4 h-4" />
-                      Mark all as read
+                      {t.markAllAsRead}
                     </button>
                   )}
                   {notifications.filter((n) => n.read).length > 0 && (
@@ -276,7 +278,7 @@ function NotificationsContent() {
                       className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                     >
                       <Trash2 className="w-4 h-4" />
-                      Clear read
+                      {t.clearRead}
                     </button>
                   )}
                 </div>
@@ -292,12 +294,12 @@ function NotificationsContent() {
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
                 <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {filter === "unread" ? "No unread notifications" : "No notifications yet"}
+                  {filter === "unread" ? t.noUnreadNotifications : t.noNotificationsYet}
                 </h3>
                 <p className="text-sm text-gray-600">
                   {filter === "unread"
-                    ? "You're all caught up! Check back later for new updates."
-                    : "You'll see notifications here when there are new activities."}
+                    ? t.allCaughtUp
+                    : t.notificationsWillAppearHere}
                 </p>
               </div>
             ) : (
@@ -349,7 +351,7 @@ function NotificationsContent() {
                               <button
                                 onClick={() => markAsRead(notification.id)}
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Mark as read"
+                                title={t.markAsRead}
                               >
                                 <Check className="w-4 h-4" />
                               </button>
@@ -357,7 +359,7 @@ function NotificationsContent() {
                             <button
                               onClick={() => deleteNotification(notification.id)}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
+                              title={t.delete}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

@@ -221,7 +221,7 @@ function MembershipPageContent() {
           <div className="max-w-7xl mx-auto">
             {/* Header */}
             <div className="mb-8">
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-pink-500">
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-gray-900">
                 Membership & Loyalty
               </h1>
               <p className="mt-2 text-sm text-gray-500">

@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useState, useEffect } from "react";
 import { X, User, Phone, MapPin, Upload, Tag } from "lucide-react";
 import { CreateCustomerRequest, Customer } from "@/types/customer";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface NewCustomerModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function NewCustomerModal({
   onSubmit,
   customer,
 }: NewCustomerModalProps) {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState<CreateCustomerRequest>({
     email: "",
     displayName: "",
@@ -146,14 +148,14 @@ export default function NewCustomerModal({
         "image/webp",
       ];
       if (!validTypes.includes(file.type)) {
-        toast.error("Please select a valid image file (PNG, JPG, JPEG, GIF, WebP)");
+        toast.error(t.selectValidImageFile);
         return;
       }
 
       // Validate file size (5MB limit)
       const maxSize = 5 * 1024 * 1024; // 5MB in bytes
       if (file.size > maxSize) {
-        toast.error("File size must be less than 5MB");
+        toast.error(t.fileSizeMustBeLessThan5MB);
         return;
       }
 
@@ -184,11 +186,11 @@ export default function NewCustomerModal({
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-gray-600" />
               <h2 className="text-xl font-semibold text-gray-900">
-                {customer ? "Edit Customer" : "New Customer Entry"}
+                {customer ? t.editCustomer : t.newCustomerEntry}
               </h2>
             </div>
             <button
-              aria-label="Close modal"
+              aria-label={t.closeModal}
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -204,18 +206,18 @@ export default function NewCustomerModal({
               {/* Left Side - Customer Image */}
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Customer Image
+                  {t.customerImage}
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-gray-400 transition-colors h-[200px] flex flex-col items-center justify-center">
                   {imagePreview ? (
                     <div className="relative">
                       <img
                         src={imagePreview}
-                        alt="Customer preview"
+                        alt={t.customerPreview}
                         className="w-20 h-20 object-cover rounded-full border-2 border-gray-200"
                       />
                       <button
-                        aria-label="Remove image"
+                        aria-label={t.removeImage}
                         type="button"
                         onClick={handleRemoveImage}
                         className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-sm"
@@ -241,10 +243,10 @@ export default function NewCustomerModal({
                         className="inline-flex items-center px-2 py-1 border-0 rounded-md text-xs text-white bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 shadow-sm transition-colors cursor-pointer"
                       >
                         <Upload className="h-3 w-3 mr-1" />
-                        Select
+                        {t.select}
                       </label>
                       <p className="text-xs text-gray-400 mt-1">
-                        Up to 5MB
+                        {t.upTo5MB}
                       </p>
                     </>
                   )}
@@ -257,7 +259,7 @@ export default function NewCustomerModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
-                      Name *
+                      {t.name} *
                     </label>
                     <div className="relative">
                       <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -269,14 +271,14 @@ export default function NewCustomerModal({
                         onChange={handleChange}
                         required
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
-                        placeholder="Enter customer name"
+                        placeholder={t.enterCustomerName}
                       />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="customerType" className="block text-sm font-medium text-gray-700 mb-1">
-                      Customer Type *
+                      {t.customerType} *
                     </label>
                     <div className="relative">
                       <Tag className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
@@ -288,12 +290,12 @@ export default function NewCustomerModal({
                         required
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent appearance-none bg-white text-gray-900 text-sm"
                       >
-                        <option value="">Select Type</option>
-                        <option value="retailer">Retailer</option>
-                        <option value="wholesaler">Wholesaler</option>
-                        <option value="distributor">Distributor</option>
-                        <option value="individual">Individual</option>
-                        <option value="other">Other</option>
+                        <option value="">{t.selectType}</option>
+                        <option value="retailer">{t.retailer}</option>
+                        <option value="wholesaler">{t.wholesaler}</option>
+                        <option value="distributor">{t.distributor}</option>
+                        <option value="individual">{t.individual}</option>
+                        <option value="other">{t.other}</option>
                       </select>
                     </div>
                   </div>
@@ -303,7 +305,7 @@ export default function NewCustomerModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Primary Phone Number *
+                      {t.primaryPhoneNumber} *
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -315,14 +317,14 @@ export default function NewCustomerModal({
                         onChange={handleChange}
                         required
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
-                        placeholder="Enter primary phone number"
+                        placeholder={t.enterPrimaryPhoneNumber}
                       />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="secondaryPhone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone Number (Optional)
+                      {t.phoneNumber} ({t.optional})
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -333,7 +335,7 @@ export default function NewCustomerModal({
                         value={formData.secondaryPhone}
                         onChange={handleChange}
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
-                        placeholder="Enter secondary phone number"
+                        placeholder={t.enterSecondaryPhoneNumber}
                       />
                     </div>
                   </div>
@@ -342,7 +344,7 @@ export default function NewCustomerModal({
                 {/* Row 3: Full Address */}
                 <div>
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Address
+                    {t.fullAddress}
                   </label>
                   <div className="relative">
                     <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
@@ -353,7 +355,7 @@ export default function NewCustomerModal({
                       onChange={handleChange}
                       rows={2}
                       className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent resize-none text-gray-900 text-sm"
-                      placeholder="Enter full address"
+                      placeholder={t.enterFullAddress}
                     />
                   </div>
                 </div>
@@ -362,7 +364,7 @@ export default function NewCustomerModal({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="township" className="block text-sm font-medium text-gray-700 mb-1">
-                      Township
+                      {t.township}
                     </label>
                     <div className="relative">
                       <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -373,14 +375,14 @@ export default function NewCustomerModal({
                         value={formData.township}
                         onChange={handleChange}
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
-                        placeholder="Enter township"
+                        placeholder={t.enterTownship}
                       />
                     </div>
                   </div>
 
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                      City
+                      {t.city}
                     </label>
                     <div className="relative">
                       <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -391,7 +393,7 @@ export default function NewCustomerModal({
                         value={formData.city}
                         onChange={handleChange}
                         className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
-                        placeholder="Enter city"
+                        placeholder={t.enterCity}
                       />
                     </div>
                   </div>
@@ -407,7 +409,7 @@ export default function NewCustomerModal({
                 className="flex items-center px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-sm"
               >
                 <X className="h-4 w-4 mr-1" />
-                Clear
+                {t.clear}
               </button>
               <button
                 type="submit"
@@ -416,14 +418,14 @@ export default function NewCustomerModal({
               >
                 <User className="h-4 w-4 mr-1" />
                 {isUploading
-                  ? "Uploading Image..."
+                  ? t.uploadingImage
                   : isSubmitting
                   ? customer
-                    ? "Updating..."
-                    : "Creating..."
+                    ? t.updating
+                    : t.creating
                   : customer
-                  ? "Update Customer"
-                  : "Save Customer"}
+                  ? t.updateCustomer
+                  : t.saveCustomer}
               </button>
             </div>
           </form>

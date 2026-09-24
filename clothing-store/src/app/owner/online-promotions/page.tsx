@@ -6,6 +6,9 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { StockService } from "@/services/stockService";
+import { ShopService } from "@/services/shopService";
+import { useSettings } from "@/contexts/SettingsContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   onlinePromotionService,
   OnlinePromotion,
@@ -20,13 +23,32 @@ import {
 type StockLite = {
   id: string;
   groupName: string;
+  /**
+   * Shop document id of the branch this stock belongs to.
+   *
+   * A product group stocked in several branches is several stock documents, one
+   * per branch, so this is what scopes the product dropdown to a branch.
+   */
+  shop: string;
   /** Used as the artwork on the customer announcement. */
   groupImage?: string;
   colorVariants?: Array<{ id?: string; color?: string; image?: string }>;
 };
 
+type ShopLite = { id: string; name: string };
+
+/** Format a stored ISO/`yyyy-mm-dd` date for the table, or "-" when absent. */
+function formatDate(value?: string): string {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString();
+}
+
 function OnlinePromotionsContent() {
   const permissions = usePermissions();
+  const { currentBranch } = useSettings();
+  const { t } = useLanguage();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -34,10 +56,13 @@ function OnlinePromotionsContent() {
 
   const [products, setProducts] = useState<StockLite[]>([]);
   const [promotions, setPromotions] = useState<OnlinePromotion[]>([]);
+  const [shops, setShops] = useState<ShopLite[]>([]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scope, setScope] = useState<PromotionScope>("group");
+  /** Shop document id. Chosen first: it scopes the product list below. */
+  const [branchId, setBranchId] = useState("");
   const [productId, setProductId] = useState("");
   const [variantId, setVariantId] = useState("");
   const [discountType, setDiscountType] =
@@ -56,9 +81,39 @@ function OnlinePromotionsContent() {
   const [notifyCustomers, setNotifyCustomers] = useState(true);
   const [announcing, setAnnouncing] = useState(false);
 
+  /** Shop id -> name, so the table can label rows that only stored an id. */
+  const shopLookup = useMemo(() => {
+    const lookup = new Map<string, string>();
+    shops.forEach((shop) => lookup.set(shop.id, shop.name));
+    return lookup;
+  }, [shops]);
+
+  const selectedBranchName = useMemo(
+    () => shopLookup.get(branchId) || "",
+    [shopLookup, branchId],
+  );
+
+  /**
+   * Products stocked in the selected branch.
+   *
+   * Stocks record their branch in `shop`, normally as a shop id. Older rows hold
+   * the branch *name* instead, and some hold nothing at all and are treated as
+   * belonging to "Main Branch" — the same tolerance the home and dashboard
+   * filters apply, so those products don't silently vanish from the dropdown.
+   */
+  const branchProducts = useMemo(() => {
+    if (!branchId) return [];
+
+    return products.filter((product) => {
+      if (product.shop === branchId) return true;
+      if (selectedBranchName && product.shop === selectedBranchName) return true;
+      return !product.shop && selectedBranchName === "Main Branch";
+    });
+  }, [products, branchId, selectedBranchName]);
+
   const selectedProduct = useMemo(
-    () => products.find((p) => p.id === productId),
-    [products, productId],
+    () => branchProducts.find((p) => p.id === productId),
+    [branchProducts, productId],
   );
 
   const variants = useMemo(
@@ -69,20 +124,23 @@ function OnlinePromotionsContent() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [stockRows, promotionRows] = await Promise.all([
+      const [stockRows, promotionRows, shopRows] = await Promise.all([
         StockService.getAllStocks(),
         onlinePromotionService.getPromotions(),
+        ShopService.getAllShops(),
       ]);
 
       setProducts(
         stockRows.map((row) => ({
           id: row.id,
           groupName: row.groupName,
+          shop: row.shop || "",
           groupImage: row.groupImage,
           colorVariants: row.colorVariants,
         })),
       );
       setPromotions(promotionRows);
+      setShops((shopRows || []).map((s) => ({ id: s.id, name: s.name })));
     } finally {
       setLoading(false);
     }
@@ -91,6 +149,27 @@ function OnlinePromotionsContent() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  /**
+   * Default the branch to the one selected in the top bar.
+   *
+   * That selection is a branch *name*, so it is resolved to a shop id here. Only
+   * applied while the field is untouched, so it never overrides a deliberate
+   * choice mid-edit.
+   */
+  useEffect(() => {
+    if (branchId || shops.length === 0 || !currentBranch) return;
+
+    const match = shops.find((shop) => shop.name === currentBranch);
+    if (match) setBranchId(match.id);
+  }, [branchId, shops, currentBranch]);
+
+  /** Changing branch invalidates the product and variant chosen under it. */
+  const handleBranchSelect = (nextBranchId: string) => {
+    setBranchId(nextBranchId);
+    setProductId("");
+    setVariantId("");
+  };
 
   const resetForm = () => {
     setName("");
@@ -103,28 +182,42 @@ function OnlinePromotionsContent() {
     setMaxDiscountTHB(0);
     setStartDate("");
     setEndDate("");
+    // `branchId` is intentionally kept: an owner setting up several promotions
+    // for one branch shouldn't have to reselect it every time.
   };
 
   const createPromotion = async () => {
     // Doc: "Create Promotions" - Owner + Manager only.
     if (!permissions.canCreatePromotions) {
-      window.alert("You do not have permission to create promotions.");
+      window.alert(t.noPermissionCreatePromotions);
+      return;
+    }
+
+    if (!branchId) {
+      window.alert(t.selectBranchRequired);
       return;
     }
 
     if (!name.trim() || !productId || discountValue <= 0) {
-      window.alert("Please fill required fields.");
+      window.alert(t.fillRequiredFields);
       return;
     }
 
     if (scope === "variant" && !variantId) {
-      window.alert("Please select a variant for variant promotion.");
+      window.alert(t.selectVariantRequired);
+      return;
+    }
+
+    // Nothing validated the range before, so a promotion could be saved with an
+    // end date before its start date and would simply never be active.
+    if (startDate && endDate && endDate < startDate) {
+      window.alert(t.endDateBeforeStart);
       return;
     }
 
     setSaving(true);
     try {
-      const targetProduct = products.find((p) => p.id === productId);
+      const targetProduct = branchProducts.find((p) => p.id === productId);
       const targetVariant = targetProduct?.colorVariants?.find(
         (v) => v.id === variantId,
       );
@@ -140,6 +233,8 @@ function OnlinePromotionsContent() {
         name: promotionName,
         description: promotionDescription,
         scope,
+        shop: branchId,
+        branchName: selectedBranchName,
         productId,
         productName: targetProduct?.groupName || "",
         variantId: scope === "variant" ? variantId : "",
@@ -174,8 +269,8 @@ function OnlinePromotionsContent() {
 
           window.alert(
             outcome.ok && outcome.data
-              ? `Promotion created. ${summariseBroadcast(outcome.data)}`
-              : `Promotion created, but customers were not notified: ${
+              ? `${t.promotionCreated} ${summariseBroadcast(outcome.data)}`
+              : `${t.promotionCreatedNotNotified} ${
                   outcome.error || "unknown error"
                 }`,
           );
@@ -198,7 +293,7 @@ function OnlinePromotionsContent() {
   const togglePromotion = async (row: OnlinePromotion) => {
     // Doc: "Edit Promotions" - Owner + Manager only.
     if (!permissions.canEditPromotions) {
-      window.alert("You do not have permission to edit promotions.");
+      window.alert(t.noPermissionEditPromotions);
       return;
     }
 
@@ -215,11 +310,11 @@ function OnlinePromotionsContent() {
   const deletePromotion = async (id: string) => {
     // Doc: "Delete Promotions" - Owner + Manager only.
     if (!permissions.canDeletePromotions) {
-      window.alert("You do not have permission to delete promotions.");
+      window.alert(t.noPermissionDeletePromotions);
       return;
     }
 
-    if (!window.confirm("Delete this promotion?")) return;
+    if (!window.confirm(t.deletePromotionConfirm)) return;
 
     try {
       await onlinePromotionService.deletePromotion(id);
@@ -265,124 +360,209 @@ function OnlinePromotionsContent() {
 
             <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="text-base font-semibold text-gray-900 mb-4">
-                Create Promotion
+                {t.createPromotion}
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Promotion name"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
-                />
-
-                <select
-                  title="PromotionScope"
-                  value={scope}
-                  onChange={(e) => {
-                    const next = e.target.value as PromotionScope;
-                    setScope(next);
-                    if (next !== "variant") setVariantId("");
-                  }}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                >
-                  <option value="group">Group Promotion</option>
-                  <option value="variant">Variant Promotion</option>
-                </select>
-
-                <select
-                  title="PromotionProduct"
-                  value={productId}
-                  onChange={(e) => {
-                    setProductId(e.target.value);
-                    setVariantId("");
-                  }}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                >
-                  <option value="">Select product group</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.groupName}
-                    </option>
-                  ))}
-                </select>
-
-                {scope === "variant" ? (
+                {/* Branch comes first: it decides which products can be promoted,
+                    since a product group is stocked per branch. */}
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.branch} <span className="text-rose-500">*</span>
+                  </span>
                   <select
-                    title="PromotionVariant"
-                    value={variantId}
-                    onChange={(e) => setVariantId(e.target.value)}
+                    title={t.selectBranch}
+                    value={branchId}
+                    onChange={(e) => handleBranchSelect(e.target.value)}
                     className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                   >
-                    <option value="">Select variant</option>
-                    {variants.map((v) => (
-                      <option key={v.id || v.color} value={v.id || ""}>
-                        {v.color || v.id}
+                    <option value="">{t.selectBranch}</option>
+                    {shops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name}
                       </option>
                     ))}
                   </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.promotionNameLabel}{" "}
+                    <span className="text-rose-500">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t.promotionNameLabel}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.promotionScope}
+                  </span>
+                  <select
+                    title={t.promotionScope}
+                    value={scope}
+                    onChange={(e) => {
+                      const next = e.target.value as PromotionScope;
+                      setScope(next);
+                      if (next !== "variant") setVariantId("");
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  >
+                    <option value="group">{t.groupPromotion}</option>
+                    <option value="variant">{t.variantPromotion}</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.productName} <span className="text-rose-500">*</span>
+                  </span>
+                  <select
+                    title={t.selectProductGroup}
+                    value={productId}
+                    disabled={!branchId}
+                    onChange={(e) => {
+                      setProductId(e.target.value);
+                      setVariantId("");
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  >
+                    <option value="">
+                      {!branchId
+                        ? t.selectBranchFirst
+                        : branchProducts.length === 0
+                          ? t.noProductsInBranch
+                          : t.selectProductGroup}
+                    </option>
+                    {branchProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.groupName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {scope === "variant" ? (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-gray-600">
+                      {t.variantLabel} <span className="text-rose-500">*</span>
+                    </span>
+                    <select
+                      title={t.selectVariantOption}
+                      value={variantId}
+                      disabled={!productId}
+                      onChange={(e) => setVariantId(e.target.value)}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      <option value="">
+                        {!productId
+                          ? t.selectProductGroup
+                          : t.selectVariantOption}
+                      </option>
+                      {variants.map((v) => (
+                        <option key={v.id || v.color} value={v.id || ""}>
+                          {v.color || v.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 ) : null}
 
-                <select
-                  title="PromotionDiscountType"
-                  value={discountType}
-                  onChange={(e) =>
-                    setDiscountType(e.target.value as PromotionDiscountType)
-                  }
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                >
-                  <option value="percentage">Percentage</option>
-                  <option value="fixed">Fixed THB</option>
-                </select>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.discount}
+                  </span>
+                  <select
+                    title={t.discount}
+                    value={discountType}
+                    onChange={(e) =>
+                      setDiscountType(e.target.value as PromotionDiscountType)
+                    }
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  >
+                    <option value="percentage">{t.percentageDiscount}</option>
+                    <option value="fixed">{t.fixedThbDiscount}</option>
+                  </select>
+                </label>
 
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={discountValue || ""}
-                  onChange={(e) =>
-                    setDiscountValue(Number(e.target.value || 0))
-                  }
-                  placeholder={
-                    discountType === "fixed"
-                      ? "Discount THB per item"
-                      : "Discount %"
-                  }
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
-                />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {discountType === "fixed"
+                      ? t.discountThbPlaceholder
+                      : t.discountPercentPlaceholder}{" "}
+                    <span className="text-rose-500">*</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={discountValue || ""}
+                    onChange={(e) =>
+                      setDiscountValue(Number(e.target.value || 0))
+                    }
+                    placeholder={
+                      discountType === "fixed"
+                        ? t.discountThbPlaceholder
+                        : t.discountPercentPlaceholder
+                    }
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+                  />
+                </label>
 
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={maxDiscountTHB || ""}
-                  onChange={(e) =>
-                    setMaxDiscountTHB(Number(e.target.value || 0))
-                  }
-                  placeholder="Max discount THB (optional)"
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
-                />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.maxDiscountPlaceholder}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={maxDiscountTHB || ""}
+                    onChange={(e) =>
+                      setMaxDiscountTHB(Number(e.target.value || 0))
+                    }
+                    placeholder={t.maxDiscountPlaceholder}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+                  />
+                </label>
 
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.startDate}
+                  </span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                </label>
 
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
-                />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-600">
+                    {t.endDate}
+                  </span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    // Stops an invalid range being picked in the first place;
+                    // createPromotion re-checks for typed-in dates.
+                    min={startDate || undefined}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                </label>
               </div>
 
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description (optional)"
+                placeholder={t.descriptionOptional}
                 className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
                 rows={2}
               />
@@ -400,10 +580,9 @@ function OnlinePromotionsContent() {
                     className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-400"
                   />
                   <span>
-                    Announce to customers
+                    {t.announceToCustomers}
                     <span className="block text-xs text-gray-500">
-                      Sends an email, and a Telegram message to customers who
-                      linked the bot. Customers who muted promotions are skipped.
+                      {t.announceToCustomersHint}
                     </span>
                   </span>
                 </label>
@@ -415,89 +594,139 @@ function OnlinePromotionsContent() {
                   className="rounded-md bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 shrink-0"
                 >
                   {announcing
-                    ? "Announcing..."
+                    ? t.announcingLabel
                     : saving
-                      ? "Saving..."
-                      : "Create Promotion"}
+                      ? t.savingLabel
+                      : t.createPromotion}
                 </button>
               </div>
             </section>
 
             <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="text-base font-semibold text-gray-900 mb-4">
-                Existing Promotions
+                {t.existingPromotions}
               </h2>
 
               {loading ? (
                 <div className="text-sm text-gray-500">
-                  Loading promotions...
+                  {t.loadingPromotions}
                 </div>
               ) : promotions.length === 0 ? (
-                <div className="text-sm text-gray-500">No promotions yet.</div>
+                <div className="text-sm text-gray-500">{t.noPromotionsYet}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50 text-left text-gray-600 border-b border-gray-200">
                       <tr>
-                        <th className="px-3 py-2 font-medium">Name</th>
-                        <th className="px-3 py-2 font-medium">Scope</th>
-                        <th className="px-3 py-2 font-medium">Target</th>
-                        <th className="px-3 py-2 font-medium">Discount</th>
-                        <th className="px-3 py-2 font-medium">Status</th>
+                        <th className="px-3 py-2 font-medium">
+                          {t.productName}
+                        </th>
+                        <th className="px-3 py-2 font-medium">{t.branch}</th>
+                        <th className="px-3 py-2 font-medium">
+                          {t.scopeColumn}
+                        </th>
+                        <th className="px-3 py-2 font-medium">
+                          {t.targetColumn}
+                        </th>
+                        <th className="px-3 py-2 font-medium">{t.discount}</th>
+                        <th className="px-3 py-2 font-medium">
+                          {t.validityColumn}
+                        </th>
+                        <th className="px-3 py-2 font-medium">{t.status}</th>
                         <th className="px-3 py-2 font-medium text-right">
-                          Actions
+                          {t.actions}
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {promotions.map((row) => (
-                        <tr key={row.id} className="border-t border-gray-100">
-                          <td className="px-3 py-2 text-gray-900">
-                            {row.name}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {row.scope === "group" ? "Group" : "Variant"}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {row.productName || row.productId}
-                            {row.scope === "variant" && row.variantName
-                              ? ` / ${row.variantName}`
-                              : ""}
-                          </td>
-                          <td className="px-3 py-2 text-gray-700">
-                            {row.discountType === "fixed"
-                              ? `THB ${Number(row.discountValue || 0).toFixed(2)}`
-                              : `${Number(row.discountValue || 0)}%`}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                                row.isActive
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-gray-100 text-gray-700"
-                              }`}
-                            >
-                              {row.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => void togglePromotion(row)}
-                              className="mr-2 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                            >
-                              {row.isActive ? "Disable" : "Enable"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void deletePromotion(row.id)}
-                              className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {promotions.map((row) => {
+                        // Promotions created before branch selection existed
+                        // stored neither name nor id; fall back through both.
+                        const branchLabel =
+                          row.branchName ||
+                          (row.shop ? shopLookup.get(row.shop) : "") ||
+                          "-";
+
+                        const hasStart = !!row.startDate;
+                        const hasEnd = !!row.endDate;
+
+                        return (
+                          <tr key={row.id} className="border-t border-gray-100">
+                            <td className="px-3 py-2 text-gray-900">
+                              {row.name}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {branchLabel}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {row.scope === "group"
+                                ? t.groupLabel
+                                : t.variantLabel}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {row.productName || row.productId}
+                              {row.scope === "variant" && row.variantName
+                                ? ` / ${row.variantName}`
+                                : ""}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {row.discountType === "fixed"
+                                ? `THB ${Number(row.discountValue || 0).toFixed(2)}`
+                                : `${Number(row.discountValue || 0)}%`}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                              {!hasStart && !hasEnd ? (
+                                <span className="text-gray-500">
+                                  {t.notScheduled}
+                                </span>
+                              ) : (
+                                <>
+                                  <span>{formatDate(row.startDate)}</span>
+                                  <span className="mx-1 text-gray-400">→</span>
+                                  <span>
+                                    {hasEnd ? (
+                                      formatDate(row.endDate)
+                                    ) : (
+                                      <span className="text-gray-500">
+                                        {t.noExpiry}
+                                      </span>
+                                    )}
+                                  </span>
+                                </>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  row.isActive
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {row.isActive ? t.active : t.inactive}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => void togglePromotion(row)}
+                                className="mr-2 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                {row.isActive
+                                  ? t.disableAction
+                                  : t.enableAction}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deletePromotion(row.id)}
+                                className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                              >
+                                {t.delete}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

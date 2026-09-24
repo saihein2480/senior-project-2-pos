@@ -8,6 +8,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { loginSchema, LoginFormData } from "@/types/schemas";
 import { Alert } from "@/components/ui/Alert";
 
@@ -15,6 +16,7 @@ export function OwnerLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login, error, clearError, user } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   useEffect(() => {
@@ -75,21 +77,21 @@ export function OwnerLogin() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to workspaces
+            {t.backToWorkspaces}
           </Link>
 
           <div>
             <h1 className="text-5xl font-bold text-gray-900 mb-2">
-              Your passion.
+              {t.loginTaglineOne}
             </h1>
             <h1 className="text-5xl font-bold text-gray-900 mb-2">
-              Your boutique.
+              {t.loginTaglineTwo}
             </h1>
             <h1 className="text-5xl font-bold text-pink-600 mb-6">
-              Your happy place.
+              {t.loginTaglineThree}
             </h1>
             <p className="text-gray-600 text-lg mb-12">
-              Less busywork, more doing what you love. Let's make today a lovely day for your store.
+              {t.ownerLoginBlurb}
             </p>
 
             <div className="flex justify-center mb-8">
@@ -107,7 +109,7 @@ export function OwnerLogin() {
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
             </svg>
-            Made for the business you love.
+            {t.madeForTheBusinessYouLove}
           </p>
         </div>
 
@@ -119,7 +121,7 @@ export function OwnerLogin() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Back to workspaces
+              {t.backToWorkspaces}
             </Link>
 
             {/* Account Badge */}
@@ -131,10 +133,14 @@ export function OwnerLogin() {
               </div>
             </div>
 
-            <p className="text-center text-pink-600 text-sm font-medium mb-4">Owner account</p>
-            <h2 className="text-4xl font-bold text-gray-900 text-center mb-2">Hello again!</h2>
+            <p className="text-center text-pink-600 text-sm font-medium mb-4">
+              {t.ownerAccount}
+            </p>
+            <h2 className="text-4xl font-bold text-gray-900 text-center mb-2">
+              {t.helloAgain}
+            </h2>
             <p className="text-gray-600 text-center mb-8">
-              Your store missed you. Let's get you signed in.
+              {t.ownerLoginSubtitle}
             </p>
 
             <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
@@ -142,7 +148,7 @@ export function OwnerLogin() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Email address
+                  {t.emailAddress}
                 </label>
                 <div className="relative">
                   <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,7 +158,7 @@ export function OwnerLogin() {
                     {...register("email")}
                     type="email"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 placeholder-gray-400"
-                    placeholder="you@yourstore.com"
+                    placeholder={t.emailPlaceholder}
                     autoComplete="email"
                   />
                 </div>
@@ -164,10 +170,10 @@ export function OwnerLogin() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-semibold text-gray-900">
-                    Password
+                    {t.password}
                   </label>
                   <button type="button" className="text-sm text-pink-600 hover:text-pink-700 font-medium">
-                    Forgot password?
+                    {t.forgotPassword}
                   </button>
                 </div>
                 <div className="relative">
@@ -178,11 +184,12 @@ export function OwnerLogin() {
                     {...register("password")}
                     type={showPassword ? "text" : "password"}
                     className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-gray-900 placeholder-gray-400"
-                    placeholder="Enter your password"
+                    placeholder={t.passwordPlaceholder}
                     autoComplete="current-password"
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? t.hidePassword : t.showPassword}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     onClick={() => setShowPassword(!showPassword)}
                   >
@@ -203,19 +210,21 @@ export function OwnerLogin() {
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white py-3 px-6 rounded-lg font-semibold hover:from-pink-600 hover:to-rose-600 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isLoading ? "Signing in..." : "Sign in"}
+                {isLoading ? t.signingIn : t.signIn}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
               </button>
 
               <div className="text-center">
-                <p className="text-sm text-gray-600 mb-2">Part of the store team?</p>
+                <p className="text-sm text-gray-600 mb-2">
+                  {t.partOfStoreTeam}
+                </p>
                 <Link
                   href="/auth/staff/login"
                   className="text-pink-600 hover:text-pink-700 font-medium text-sm inline-flex items-center gap-1"
                 >
-                  Sign in as Staff or Manager
+                  {t.signInAsStaff}
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                   </svg>
@@ -229,7 +238,7 @@ export function OwnerLogin() {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-4">
         <p className="text-center text-sm text-gray-500">
-          © 2026 ClothingStore POS · A little more organized. A lot more you.
+          © 2026 ClothingStore POS · {t.loginFooterNote}
         </p>
       </footer>
     </div>

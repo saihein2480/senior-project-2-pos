@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePosSurfaceVisibility } from "@/hooks/usePosSurfaceVisibility";
@@ -32,7 +31,11 @@ import {
   DollarSign,
 } from "lucide-react";
 import { ShoppingCartModal } from "./ShoppingCartModal";
-import { useOnlineOrdersNotification } from "@/hooks/useOnlineOrdersNotification";
+import {
+  OWNER_NOTIFICATION_TYPES,
+  useOwnerNotificationBadge,
+  type OwnerNotificationType,
+} from "@/hooks/useOwnerNotifications";
 
 interface TopNavBarProps {
   onCartModalStateChange?: (isOpen: boolean) => void;
@@ -43,7 +46,6 @@ export function TopNavBar({
   onCartModalStateChange,
   onMenuToggle,
 }: TopNavBarProps) {
-  const router = useRouter();
   const { user, logout } = useAuth();
   const permissions = usePermissions();
   // Paired with the Home menu entry in the Sidebar - one owner setting drives both.
@@ -55,7 +57,7 @@ export function TopNavBar({
     defaultCurrency,
     getCurrencySymbol,
   } = useCurrency();
-  const { businessSettings, refreshSettings } = useSettings();
+  const { currentBranch, setCurrentBranch } = useSettings();
   const { language, setLanguage, t } = useLanguage();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -64,7 +66,6 @@ export function TopNavBar({
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [shops, setShops] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingShops, setIsLoadingShops] = useState(false);
-  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
@@ -72,7 +73,13 @@ export function TopNavBar({
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const notificationDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { unseenOrdersCount, markAsSeen } = useOnlineOrdersNotification();
+  /**
+   * Bell badge. Opening the bell acknowledges everything currently unread, so
+   * the count resets and stays reset as the user moves between pages.
+   */
+  const { unseenCount, markAllSeen } = useOwnerNotificationBadge(
+    user?.uid || user?.email || undefined,
+  );
 
   // Get view mode context for role switching
   const { viewAsRole, setViewAsRole, isViewingAsOtherRole } = useViewMode();
@@ -98,76 +105,35 @@ export function TopNavBar({
     console.log("Currency changed to:", currency);
   };
 
-  const handleBranchChange = async (branchName: string) => {
-    try {
-      console.log("User object:", user);
-      console.log("User UID:", user?.uid);
-      console.log("Attempting to change branch to:", branchName);
-
-      // Use email as fallback identifier if uid is not available
-      const userId = user?.uid || user?.email;
-
-      if (!userId) {
-        console.error("No user identification available (uid or email)");
-        toast.error("User not authenticated", {
-          duration: 2,
-          position: "top-right",
-        });
-        return;
-      }
-
-      // Save branch selection to localStorage for immediate effect
-      const storageKey = `userBranch_${userId}`;
-      localStorage.setItem(storageKey, branchName);
-      console.log("Saved to localStorage:", storageKey, branchName);
-
-      // Doc: "Branch Selection" is available to all roles, but only a role that
-      // can edit business settings persists it to the shared settings document.
-      // Staff keep their branch choice local to their own device.
-      if (permissions.canEditBusinessSettings) {
-        try {
-          // Use PATCH endpoint to update only currentBranch without affecting other fields
-          const response = await fetch("/api/settings", {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ currentBranch: branchName }),
-          });
-
-          if (!response.ok) {
-            console.error("Failed to save branch to Firebase");
-          }
-        } catch (error) {
-          console.error("Error saving branch to Firebase:", error);
-        }
-      }
-
-      // Immediately close dropdown
-      setIsBranchDropdownOpen(false);
-      console.log("Dropdown closed");
-
-      // Refresh settings to reflect the new branch across all pages
-      console.log("Refreshing settings...");
-      await refreshSettings();
-      console.log("Settings refreshed");
-
-      // Force Next.js to refresh the current page to pick up the new branch
-      router.refresh();
-      console.log("Page refreshed");
-
-      // Show success notification
-      toast.success(`Switched to ${branchName}`, {
-        duration: 2,
+  /**
+   * Switch the working branch.
+   *
+   * The settings context applies the change locally and every screen listening
+   * to it re-filters straight away, so there is no page reload here. It used to
+   * call `router.refresh()`, which reloaded the whole route and still left
+   * anything reading cached settings a step behind.
+   *
+   * Doc: "Branch Selection" is available to all roles, but only a role that can
+   * edit business settings persists it as the business-wide default. Staff keep
+   * their branch choice local to their own device.
+   */
+  const handleBranchChange = (branchName: string) => {
+    if (!user?.uid && !user?.email) {
+      toast.error(t.userNotAuthenticated, {
+        duration: 2000,
         position: "top-right",
       });
-    } catch (error) {
-      console.error("Error switching branch:", error);
-      toast.error("Failed to switch branch", {
-        duration: 2,
-        position: "top-right",
-      });
+      return;
     }
+
+    setCurrentBranch(branchName, permissions.canEditBusinessSettings);
+    setIsBranchDropdownOpen(false);
+
+    // Branch name leads so the sentence reads naturally in both languages.
+    toast.success(`${branchName} ${t.branchSelected}`, {
+      duration: 2000,
+      position: "top-right",
+    });
   };
 
   // Load shops on component mount
@@ -239,34 +205,6 @@ export function TopNavBar({
     };
   }, []);
 
-  // Listen to unread notifications count
-  useEffect(() => {
-    const fetchUnreadNotifications = async () => {
-      try {
-        const { collection, query, where, onSnapshot } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        
-        if (!db) return;
-        
-        const notificationsRef = collection(db, "notifications");
-        const q = query(
-          notificationsRef,
-          where("read", "==", false)
-        );
-        
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          setUnreadNotificationsCount(snapshot.size);
-        });
-        
-        return unsubscribe;
-      } catch (error) {
-        console.error("Error fetching unread notifications:", error);
-      }
-    };
-    
-    fetchUnreadNotifications();
-  }, []);
-
   // The sticky bar sits at z-30: above in-page content such as product card
   // badges (z-10/z-20), but below the mobile sidebar overlay (z-40) and drawer
   // (z-50) so those can still cover it.
@@ -292,24 +230,17 @@ export function TopNavBar({
             <div className="relative" ref={branchDropdownRef}>
               <button
                 onClick={(e) => {
-                  console.log(
-                    "Branch button clicked, current state:",
-                    isBranchDropdownOpen,
-                  );
                   e.stopPropagation();
                   setIsBranchDropdownOpen(!isBranchDropdownOpen);
-                  console.log("Dropdown toggled to:", !isBranchDropdownOpen);
                 }}
                 aria-haspopup="menu"
                 aria-expanded={isBranchDropdownOpen}
                 className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
-                title="Click to change branch"
+                title={t.clickToChangeBranch}
               >
                 <Store className="w-4 h-4 text-gray-900" />
                 <span className="text-xs sm:text-sm font-medium text-gray-900 max-w-[80px] sm:max-w-none truncate">
-                  {businessSettings?.currentBranch === "No Branch"
-                    ? t.noBranch
-                    : businessSettings?.currentBranch || t.mainBranch}
+                  {currentBranch === "No Branch" ? t.noBranch : currentBranch}
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 text-gray-900 transition-transform ${
@@ -328,24 +259,22 @@ export function TopNavBar({
                 >
                   {isLoadingShops ? (
                     <div className="px-3 py-2 text-sm text-gray-500 text-center">
-                      Loading branches...
+                      {t.loadingBranches}
                     </div>
                   ) : shops.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-gray-500 text-center">
-                      No branches available
+                      {t.noBranchesAvailable}
                     </div>
                   ) : (
                     <>
                       {shops.map((shop) => {
-                        const isSelected =
-                          businessSettings?.currentBranch === shop.name;
+                        const isSelected = currentBranch === shop.name;
                         return (
                           <button
                             key={shop.id}
                             role="menuitem"
                             type="button"
                             onClick={(e) => {
-                              console.log("Branch clicked:", shop.name);
                               e.preventDefault();
                               e.stopPropagation();
                               handleBranchChange(shop.name);
@@ -360,7 +289,9 @@ export function TopNavBar({
                               <Store className="w-4 h-4" />
                               <span>{shop.name}</span>
                             </div>
-                            
+                            {isSelected && (
+                              <Check className="w-4 h-4 text-pink-600" />
+                            )}
                           </button>
                         );
                       })}
@@ -535,14 +466,26 @@ export function TopNavBar({
             {/* Notifications */}
             <div className="relative" ref={notificationDropdownRef}>
               <button
-                onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                onClick={() => {
+                  const opening = !showNotificationDropdown;
+                  setShowNotificationDropdown(opening);
+                  // Clear the badge on open only, so closing the dropdown
+                  // cannot re-acknowledge anything that arrived while it was up.
+                  if (opening) markAllSeen();
+                }}
                 className="relative cursor-pointer focus:outline-none flex items-center"
-                aria-label="Notifications"
+                aria-label={
+                  unseenCount > 0
+                    ? `${t.notifications} (${unseenCount})`
+                    : t.notifications
+                }
+                aria-haspopup="menu"
+                aria-expanded={showNotificationDropdown}
               >
                 <Bell className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
-                {unreadNotificationsCount > 0 && (
+                {unseenCount > 0 && (
                   <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
+                    {unseenCount > 99 ? "99+" : unseenCount}
                   </span>
                 )}
               </button>
@@ -613,7 +556,7 @@ interface NotificationDropdownProps {
 
 interface Notification {
   id: string;
-  type: "online_order" | "cancellation_request" | "refund_request" | "refund_payment" | "low_stock" | "out_of_stock";
+  type: OwnerNotificationType;
   title: string;
   message: string;
   read: boolean;
@@ -621,20 +564,8 @@ interface Notification {
   link?: string;
 }
 
-// The "notifications" collection is shared with customer-facing
-// notifications (written with a `userId` field for the storefront
-// account). Only these types are meant for the owner/staff POS UI.
-const OWNER_NOTIFICATION_TYPES = new Set<Notification["type"]>([
-  "online_order",
-  "cancellation_request",
-  "refund_request",
-  "refund_payment",
-  "low_stock",
-  "out_of_stock",
-]);
-
 function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps) {
-  const router = useRouter();
+  const { t } = useLanguage();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [position, setPosition] = useState({ top: 0, right: 0 });
@@ -779,13 +710,13 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
   const getTimeAgo = (date: Date) => {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
     
-    if (seconds < 60) return "just now";
+    if (seconds < 60) return t.justNow;
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 60) return `${minutes}${t.minutesAgo}`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) return `${hours}${t.hoursAgo}`;
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
+    if (days < 7) return `${days}${t.daysAgo}`;
     return date.toLocaleDateString();
   };
 
@@ -801,7 +732,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
     >
       {/* Header */}
       <div className="bg-gradient-to-r from-rose-500 to-pink-500 px-4 py-3 flex items-center justify-between">
-        <h3 className="text-white font-semibold text-lg">Notifications</h3>
+        <h3 className="text-white font-semibold text-lg">{t.notifications}</h3>
         <button
           onClick={() => {
             onClose();
@@ -809,7 +740,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
           }}
           className="text-white text-sm hover:underline cursor-pointer bg-transparent border-none"
         >
-          View All
+          {t.viewAll}
         </button>
       </div>
 
@@ -822,7 +753,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
         ) : notifications.length === 0 ? (
           <div className="py-8 text-center">
             <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">No notifications yet</p>
+            <p className="text-gray-500 text-sm">{t.noNotificationsYet}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -884,7 +815,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
             }}
             className="text-sm text-pink-600 hover:text-pink-700 font-medium block text-center w-full cursor-pointer bg-transparent border-none"
           >
-            See all notifications →
+            {t.seeAllNotifications} →
           </button>
         </div>
       )}

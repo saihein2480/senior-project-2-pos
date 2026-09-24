@@ -1580,11 +1580,11 @@ function OwnerSettingsContent() {
                           {/* Program Summary */}
                           <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-200 rounded-xl p-4">
                             <h3 className="text-sm font-semibold text-rose-900 mb-3">
-                              📊 Program Summary
+                               Coupon Package Summary
                             </h3>
                             <div className="space-y-2 text-sm text-rose-800">
                               <p>
-                                ✓ Customers earn{" "}
+                                 Customers earn{" "}
                                 <span className="font-semibold">
                                   {settings.loyaltySettings?.pointsPerPurchase || 1} point(s)
                                 </span>{" "}
@@ -1607,7 +1607,7 @@ function OwnerSettingsContent() {
                                   )
                                   .map((pkg) => (
                                     <p key={pkg.id}>
-                                      ✓{" "}
+                                      {" "}
                                       <span className="font-semibold">
                                         {pkg.pointsRequired} points
                                       </span>{" "}
@@ -1622,7 +1622,7 @@ function OwnerSettingsContent() {
                                   ))
                               )}
                               <p>
-                                ✓ Using a coupon deducts the points of its own
+                                 Using a coupon deducts the points of its own
                                 package
                               </p>
                             </div>

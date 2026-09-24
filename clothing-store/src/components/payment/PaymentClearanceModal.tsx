@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { X, User, CreditCard, Wallet, QrCode, Eye, Truck } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { SelectedCustomer } from "@/types/cart";
 import { CartItem } from "@/types/cart";
 import { transactionService } from "@/services/transactionService";
@@ -99,6 +100,7 @@ export function PaymentClearanceModal({
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
     useCurrency();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("cash");
   const [amountPaid, setAmountPaid] = useState<number>(0);
@@ -318,7 +320,7 @@ export function PaymentClearanceModal({
       selectedPaymentMethod === "cash" &&
       amountPaid < totalInSellingCurrency
     ) {
-      toast.error("Insufficient payment amount");
+      toast.error(t.insufficientPaymentAmount);
       return;
     }
 
@@ -390,9 +392,9 @@ export function PaymentClearanceModal({
       setIsProcessing(false);
       console.error("Error preparing receipt:", error);
       toast.error(
-        `Error preparing receipt: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }. Please try again.`,
+        `${t.errorPreparingReceipt}: ${
+          error instanceof Error ? error.message : t.unknownError
+        }. ${t.pleaseTryAgain}`,
       );
     }
   };
@@ -466,7 +468,7 @@ export function PaymentClearanceModal({
       // Show appropriate success message
       if (transactionStatus === "pending") {
         toast.success(
-          `${selectedPaymentMethod.toUpperCase()} order created successfully! Transaction is pending confirmation.`,
+          `${selectedPaymentMethod.toUpperCase()} ${t.orderCreatedPendingConfirmation}`,
         );
       }
 
@@ -483,9 +485,9 @@ export function PaymentClearanceModal({
       setIsProcessing(false);
       console.error("Error recording transaction:", error);
       toast.error(
-        `Error recording transaction: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }. Please try again.`,
+        `${t.errorRecordingTransaction}: ${
+          error instanceof Error ? error.message : t.unknownError
+        }. ${t.pleaseTryAgain}`,
       );
     }
   };
@@ -588,17 +590,17 @@ export function PaymentClearanceModal({
     const sellingCurrency = data.sellingCurrency as "THB" | "MMK";
 
     const itemDiscountRows: Array<[string, number]> = [
-      ["Wholesale price saving", b.wholesaleSavings],
-      ["Group discount", b.groupPercentSavings],
-      ["Group offer", b.groupFixedTotal],
-      ["Variant discount", b.variantPercentSavings],
-      ["Variant offer", b.variantFixedTotal],
+      [t.wholesalePriceSaving, b.wholesaleSavings],
+      [t.groupDiscountLabel, b.groupPercentSavings],
+      [t.groupOffer, b.groupFixedTotal],
+      [t.variantDiscountLabel, b.variantPercentSavings],
+      [t.variantOffer, b.variantFixedTotal],
     ];
 
     const hasItemDiscount = itemDiscountRows.some(([, amount]) => amount > 0);
 
     rows.push({
-      label: hasItemDiscount ? "Subtotal (before discount)" : "Subtotal",
+      label: hasItemDiscount ? t.grossSubtotalLabel : t.subtotal,
       value: formatPrice(b.grossSubtotal),
       tone: "plain",
     });
@@ -615,7 +617,7 @@ export function PaymentClearanceModal({
 
     if (hasItemDiscount) {
       rows.push({
-        label: "Subtotal after item discount",
+        label: t.subtotalAfterItemDiscount,
         value: formatPrice(b.itemsTotal),
         tone: "subtotal",
       });
@@ -625,8 +627,8 @@ export function PaymentClearanceModal({
       rows.push({
         label:
           b.cartDiscountPercent > 0
-            ? `Cart discount (${b.cartDiscountPercent}%)`
-            : "Cart discount",
+            ? `${t.cartDiscountLabel} (${b.cartDiscountPercent}%)`
+            : t.cartDiscountLabel,
         value: `-${formatPrice(b.cartDiscount)}`,
         tone: "discount",
       });
@@ -635,7 +637,7 @@ export function PaymentClearanceModal({
       // the next line is tax and the total already shows the result.
       if (b.couponDiscount > 0) {
         rows.push({
-          label: "Subtotal after discount",
+          label: t.subtotalAfterDiscount,
           value: formatPrice(b.subtotalAfterDiscounts),
           tone: "subtotal",
         });
@@ -644,23 +646,25 @@ export function PaymentClearanceModal({
 
     if (b.couponDiscount > 0) {
       rows.push({
-        label: b.couponCode ? `Coupon (${b.couponCode})` : "Coupon",
+        label: b.couponCode
+          ? `${t.couponLabel} (${b.couponCode})`
+          : t.couponLabel,
         value: `-${formatPrice(b.couponDiscount)}`,
         tone: "discount",
       });
     }
 
     rows.push({
-      label: `Tax (${formatRatePercent(b.taxRate)}%)`,
+      label: `${t.tax} (${formatRatePercent(b.taxRate)}%)`,
       value: formatPrice(b.tax),
       tone: "plain",
     });
 
-    rows.push({ label: "TOTAL", value: formatPrice(b.total), tone: "grand" });
+    rows.push({ label: t.total, value: formatPrice(b.total), tone: "grand" });
 
     if (b.totalSavings > 0) {
       rows.push({
-        label: "You saved",
+        label: t.youSavedLabel,
         value: formatPrice(b.totalSavings),
         tone: "savings",
       });
@@ -670,7 +674,7 @@ export function PaymentClearanceModal({
     // with it explicitly rather than being converted a second time.
     if (data.sellingCurrency !== defaultCurrency) {
       rows.push({
-        label: `Total (${data.sellingCurrency})`,
+        label: `${t.total} (${data.sellingCurrency})`,
         value: formatPrice(data.sellingTotal, sellingCurrency),
         tone: "plain",
       });
@@ -678,19 +682,19 @@ export function PaymentClearanceModal({
 
     if (data.paymentMethod === "cash") {
       rows.push({
-        label: "Paid",
+        label: t.paid,
         value: formatPrice(data.amountPaid, sellingCurrency),
         tone: "plain",
       });
       rows.push({
-        label: "Change",
+        label: t.change,
         value: formatPrice(data.change, sellingCurrency),
         tone: "plain",
       });
     }
 
     rows.push({
-      label: "Payment",
+      label: t.paymentMethod,
       value: data.paymentMethod.toUpperCase(),
       tone: "plain",
     });
@@ -709,14 +713,14 @@ export function PaymentClearanceModal({
     const c = data.customer;
 
     if (c) {
-      rows.push(["Customer", c.displayName || c.email || "-"]);
-      if (c.phone) rows.push(["Phone", c.phone]);
-      if (c.address) rows.push(["Address", c.address]);
-      if (c.email && c.displayName) rows.push(["Account", c.email]);
+      rows.push([t.customer, c.displayName || c.email || "-"]);
+      if (c.phone) rows.push([t.phone, c.phone]);
+      if (c.address) rows.push([t.address, c.address]);
+      if (c.email && c.displayName) rows.push([t.account, c.email]);
     }
 
     rows.push([
-      "Cashier",
+      t.cashier,
       data.cashierName
         ? `${data.cashierName} (${data.cashierRole || "Staff"})`
         : data.cashierRole || "Staff",
@@ -730,7 +734,7 @@ export function PaymentClearanceModal({
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      toast.error("Please allow popups to print the receipt");
+      toast.error(t.allowPopupsToPrint);
       return;
     }
 
@@ -814,7 +818,7 @@ export function PaymentClearanceModal({
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Receipt - ${receiptData.transactionId}</title>
+          <title>${escapeHtml(t.receipt)} - ${receiptData.transactionId}</title>
           <style>
             @media print {
               @page {
@@ -950,13 +954,13 @@ export function PaymentClearanceModal({
           <div class="header">
             ${
               receiptData.showBusinessLogo && receiptData.businessLogo
-                ? `<img class="logo" src="${receiptData.businessLogo}" alt="Business Logo" />`
+                ? `<img class="logo" src="${receiptData.businessLogo}" alt="${escapeHtml(t.businessLogo)}" />`
                 : ""
             }
-            <div class="title">${receiptData.businessName || "RECEIPT"}</div>
+            <div class="title">${receiptData.businessName || escapeHtml(t.receipt)}</div>
             <div class="branch">${receiptData.branchName || "Main Branch"}</div>
             <div class="datetime">${new Date(receiptData.timestamp).toLocaleString()}</div>
-            <div style="margin-top: 4px;">Trans: ${receiptData.transactionId}</div>
+            <div style="margin-top: 4px;">${escapeHtml(t.transaction)}: ${receiptData.transactionId}</div>
           </div>
 
           ${buildInfoRows(receiptData)
@@ -982,12 +986,12 @@ export function PaymentClearanceModal({
                 ${row.discountLabels.length > 0 ? `<div class="item-note">${escapeHtml(row.discountLabels.join(" · "))}</div>` : ""}
                 ${
                   row.savedLine
-                    ? `<div class="item-saving"><span>Discount</span><span>${escapeHtml(row.savedLine)}</span></div>`
+                    ? `<div class="item-saving"><span>${escapeHtml(t.discount)}</span><span>${escapeHtml(row.savedLine)}</span></div>`
                     : ""
                 }
                 ${
                   row.netLine
-                    ? `<div class="item-line"><span>You pay</span><span>${escapeHtml(row.netLine)}</span></div>`
+                    ? `<div class="item-line"><span>${escapeHtml(t.youPay)}</span><span>${escapeHtml(row.netLine)}</span></div>`
                     : ""
                 }
               </div>
@@ -1020,8 +1024,8 @@ export function PaymentClearanceModal({
           </div>
 
           <div class="footer">
-            <div class="thank-you">Thank You!</div>
-            <div>Please come again</div>
+            <div class="thank-you">${escapeHtml(t.thankYou)}</div>
+            <div>${escapeHtml(t.visitAgain)}</div>
             ${
               receiptData.invoiceFooterMessage
                 ? `<div style="margin-top: 8px; font-size: ${detailSize}; text-align: center;">${receiptData.invoiceFooterMessage}</div>`
@@ -1029,7 +1033,7 @@ export function PaymentClearanceModal({
             }
             ${
               receiptData.invoiceFooterImage
-                ? `<div style="margin-top: 8px; text-align: center;"><img src="${receiptData.invoiceFooterImage}" alt="Invoice Footer" style="max-width: 100%; max-height: 80px; object-fit: contain;" /></div>`
+                ? `<div style="margin-top: 8px; text-align: center;"><img src="${receiptData.invoiceFooterImage}" alt="${escapeHtml(t.invoiceFooter)}" style="max-width: 100%; max-height: 80px; object-fit: contain;" /></div>`
                 : ""
             }
           </div>
@@ -1097,10 +1101,10 @@ export function PaymentClearanceModal({
           {/* Receipt Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
             <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">
-              Payment Complete
+              {t.paymentComplete}
             </h2>
             <button
-              title="Cancel Payment"
+              title={t.cancelPayment}
               onClick={() => {
                 // Cancel payment - just close without recording transaction
                 setShowReceipt(false);
@@ -1130,14 +1134,14 @@ export function PaymentClearanceModal({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={receiptData.businessLogo}
-                      alt="Business Logo"
+                      alt={t.businessLogo}
                       className="mx-auto mb-2 max-h-14 object-contain"
                     />
                   )}
                   <div
                     className={`font-bold text-black ${receiptSize === "58mm" ? "text-sm lg:text-base xl:text-lg" : "text-base lg:text-lg xl:text-xl"}`}
                   >
-                    {receiptData.businessName || "RECEIPT"}
+                    {receiptData.businessName || t.receipt}
                   </div>
                   <div
                     className={`text-black ${receiptSize === "58mm" ? "text-xs lg:text-sm xl:text-base" : "text-sm lg:text-base xl:text-lg"} mt-1`}
@@ -1152,7 +1156,7 @@ export function PaymentClearanceModal({
                   <div
                     className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
                   >
-                    Trans: {receiptData.transactionId}
+                    {t.transaction}: {receiptData.transactionId}
                   </div>
                 </div>
 
@@ -1191,7 +1195,7 @@ export function PaymentClearanceModal({
                         <div
                           className={`flex justify-between text-black ${noteText}`}
                         >
-                          <span>Discount</span>
+                          <span>{t.discount}</span>
                           <span>{row.savedLine}</span>
                         </div>
                       )}
@@ -1199,7 +1203,7 @@ export function PaymentClearanceModal({
                         <div
                           className={`flex justify-between text-black ${bodyText}`}
                         >
-                          <span>You pay</span>
+                          <span>{t.youPay}</span>
                           <span>{row.netLine}</span>
                         </div>
                       )}
@@ -1238,12 +1242,12 @@ export function PaymentClearanceModal({
                   <div
                     className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                   >
-                    Thank You!
+                    {t.thankYou}
                   </div>
                   <div
                     className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
                   >
-                    Please come again
+                    {t.visitAgain}
                   </div>
                   {receiptData.invoiceFooterMessage && (
                     <div
@@ -1256,7 +1260,7 @@ export function PaymentClearanceModal({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={receiptData.invoiceFooterImage}
-                      alt="Invoice Footer"
+                      alt={t.invoiceFooter}
                       className="mx-auto mt-2 max-h-20 object-contain"
                     />
                   )}
@@ -1271,7 +1275,7 @@ export function PaymentClearanceModal({
                 disabled={isProcessing}
                 className="flex-1 bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:from-rose-600 hover:to-pink-600 transition-all text-sm lg:text-base font-bold shadow-md hover:shadow-lg"
               >
-                <span className="text-white">Print Receipt</span>
+                <span className="text-white">{t.printReceipt}</span>
               </button>
               <button
                 onClick={async () => {
@@ -1281,7 +1285,7 @@ export function PaymentClearanceModal({
                 disabled={isProcessing}
                 className="flex-1 bg-white text-gray-700 border-2 border-pink-300 px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-pink-50 transition-all text-sm lg:text-base font-bold shadow-sm hover:shadow-md"
               >
-                <span>Skip Print</span>
+                <span>{t.skipPrint}</span>
               </button>
             </div>
           </div>
@@ -1297,11 +1301,11 @@ export function PaymentClearanceModal({
         <div className="flex items-center justify-between p-3 md:p-4 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center space-x-2 md:space-x-3">
             <h2 className="text-lg md:text-xl font-bold text-white">
-              Payment Clearance
+              {t.paymentClearance}
             </h2>
             {selectedCurrency !== defaultCurrency && (
               <button
-                title="View detailed currency information"
+                title={t.viewCurrencyDetails}
                 onClick={() => setShowDetailModal(true)}
                 className="text-white hover:bg-white/20 transition-colors p-1.5 md:p-2 rounded-full touch-manipulation"
               >
@@ -1310,7 +1314,7 @@ export function PaymentClearanceModal({
             )}
           </div>
           <button
-            title="Close"
+            title={t.close}
             onClick={onClose}
             className="text-white hover:bg-white/20 transition-colors p-1.5 md:p-2 rounded-full touch-manipulation"
           >
@@ -1318,19 +1322,9 @@ export function PaymentClearanceModal({
           </button>
         </div>
 
-        {/*
-          One scroll container on narrow screens, two independent panes from md up.
-
-          The panes used to own the scrolling at every width. Stacked in a column
-          on a phone that produced two separate short scroll areas, so the wheel
-          or a swipe only did anything while the pointer happened to be inside the
-          right one. Scrolling the wrapper instead means a swipe anywhere in the
-          body moves the whole thing; `overscroll-contain` stops the gesture
-          continuing into the page behind once it reaches the end.
-        */}
-        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-y-auto md:overflow-hidden overscroll-contain">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           {/* Left Side - Customer Info & Payment Summary */}
-          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 md:overflow-y-auto md:overscroll-contain bg-white/50">
+          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 overflow-y-auto bg-white/50">
             {/* Customer Information */}
             <div className="flex items-center space-x-2 md:space-x-3 mb-3 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
               <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
@@ -1353,7 +1347,7 @@ export function PaymentClearanceModal({
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">
-                  {customer?.displayName || "Default"}
+                  {customer?.displayName || t.defaultCustomer}
                 </p>
               </div>
               <div className="text-right">
@@ -1365,7 +1359,7 @@ export function PaymentClearanceModal({
             <div className="mb-4 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-rose-600" />
-                Items ({items.length})
+                {t.items} ({items.length})
               </h3>
               <div className="max-h-32 overflow-y-auto space-y-1">
                 {items.map((item) => (
@@ -1379,13 +1373,14 @@ export function PaymentClearanceModal({
                         <p className="text-gray-500 text-xs">
                           {item.selectedColor && `${getDisplayColor(item)}`}
                           {item.selectedColor && item.selectedSize && " • "}
-                          {item.selectedSize && `Size ${item.selectedSize}`}
+                          {item.selectedSize &&
+                            `${t.size} ${item.selectedSize}`}
                         </p>
                       )}
                     </div>
                     <div className="text-right ml-2">
                       <p className="text-gray-800 font-medium">
-                        Qty: {item.quantity}
+                        {t.quantity}: {item.quantity}
                       </p>
                       <p className="text-gray-600">
                         {formatPrice(item.unitPrice * item.quantity)}
@@ -1400,7 +1395,7 @@ export function PaymentClearanceModal({
             <div className="space-y-2 mb-4 bg-gradient-to-br from-rose-50 to-pink-100 rounded-xl p-3 border-2 border-pink-300 shadow-md">
               {/* Subtotal */}
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-700 font-medium">Subtotal</span>
+                <span className="text-gray-700 font-medium">{t.subtotal}</span>
                 <span className="text-gray-900 font-semibold">
                   {formatPrice(subtotal)}
                 </span>
@@ -1413,8 +1408,8 @@ export function PaymentClearanceModal({
                   {discountBreakdown.wholesaleSavings > 0 && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-amber-700 flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-amber-100 rounded text-[10px] font-bold">WHOLESALE</span>
-                        Savings
+                        <span className="px-1.5 py-0.5 bg-amber-100 rounded text-[10px] font-bold">{t.wholeSale}</span>
+                        {t.savings}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.wholesaleSavings)}
@@ -1426,8 +1421,8 @@ export function PaymentClearanceModal({
                   {discountBreakdown.groupPercentSavings > 0 && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-rose-700 flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">GROUP %</span>
-                        Discount
+                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">{t.groupLabel} %</span>
+                        {t.discount}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.groupPercentSavings)}
@@ -1439,8 +1434,8 @@ export function PaymentClearanceModal({
                   {discountBreakdown.groupFixedTotal > 0 && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-rose-700 flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">GROUP</span>
-                        Fixed
+                        <span className="px-1.5 py-0.5 bg-rose-100 rounded text-[10px] font-bold">{t.groupLabel}</span>
+                        {t.fixedLabel}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.groupFixedTotal)}
@@ -1452,8 +1447,8 @@ export function PaymentClearanceModal({
                   {discountBreakdown.variantPercentSavings > 0 && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-purple-700 flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">VARIANT %</span>
-                        Discount
+                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">{t.variantLabel} %</span>
+                        {t.discount}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.variantPercentSavings)}
@@ -1465,8 +1460,8 @@ export function PaymentClearanceModal({
                   {discountBreakdown.variantFixedTotal > 0 && (
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-purple-700 flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">VARIANT</span>
-                        Fixed
+                        <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">{t.variantLabel}</span>
+                        {t.fixedLabel}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.variantFixedTotal)}
@@ -1479,9 +1474,9 @@ export function PaymentClearanceModal({
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-green-700 flex items-center gap-1">
                         <span className="px-1.5 py-0.5 bg-green-100 rounded text-[10px] font-bold">
-                          CART {discountBreakdown.cartDiscountPercent > 0 ? `${discountBreakdown.cartDiscountPercent}%` : ''}
+                          {t.cartLabel} {discountBreakdown.cartDiscountPercent > 0 ? `${discountBreakdown.cartDiscountPercent}%` : ''}
                         </span>
-                        Discount
+                        {t.discount}
                       </span>
                       <span className="text-red-600 font-semibold">
                         -{formatPrice(discountBreakdown.cartDiscount)}
@@ -1496,9 +1491,9 @@ export function PaymentClearanceModal({
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-purple-700 flex items-center gap-1">
                     <span className="px-1.5 py-0.5 bg-purple-100 rounded text-[10px] font-bold">
-                      {couponCode || 'COUPON'}
+                      {couponCode || t.couponLabel}
                     </span>
-                    Loyalty
+                    {t.loyalty}
                   </span>
                   <span className="text-red-600 font-semibold">
                     -{formatPrice(couponDiscount)}
@@ -1509,7 +1504,7 @@ export function PaymentClearanceModal({
               {/* Tax */}
               {tax > 0 && (
                 <div className="flex justify-between items-center text-xs pt-1 border-t border-pink-300">
-                  <span className="text-gray-700 font-medium">Tax</span>
+                  <span className="text-gray-700 font-medium">{t.tax}</span>
                   <span className="text-gray-900 font-semibold">
                     +{formatPrice(tax)}
                   </span>
@@ -1518,7 +1513,9 @@ export function PaymentClearanceModal({
 
               {/* Total */}
               <div className="flex justify-between items-center py-2 border-t-2 border-pink-300">
-                <span className="text-sm font-bold text-gray-900">Total</span>
+                <span className="text-sm font-bold text-gray-900">
+                  {t.total}
+                </span>
                 <span className="text-lg font-black text-rose-600">
                   {formatPrice(total)}
                 </span>
@@ -1527,14 +1524,14 @@ export function PaymentClearanceModal({
               {selectedPaymentMethod === "cash" && (
                 <div className="space-y-1 pt-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">Paid</span>
+                    <span className="text-xs text-gray-600">{t.paid}</span>
                     <span className="text-sm font-medium text-gray-900">
                       {formatPrice(amountPaid, selectedCurrency)}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600">Change</span>
+                    <span className="text-xs text-gray-600">{t.change}</span>
                     <span
                       className={`text-sm font-medium ${
                         change >= 0 ? "text-green-600" : "text-red-600"
@@ -1551,7 +1548,7 @@ export function PaymentClearanceModal({
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                 <Wallet className="h-4 w-4 text-rose-600" />
-                Payment Method
+                {t.paymentMethod}
               </h3>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1565,7 +1562,7 @@ export function PaymentClearanceModal({
                   }`}
                 >
                   <CreditCard className="h-5 w-5" />
-                  <span className="text-xs font-bold">Cash</span>
+                  <span className="text-xs font-bold">{t.cash}</span>
                 </button>
 
                 {/* COD (Cash On Delivery) */}
@@ -1578,49 +1575,29 @@ export function PaymentClearanceModal({
                   }`}
                 >
                   <Truck className="h-5 w-5" />
-                  <span className="text-xs font-bold">COD</span>
+                  <span className="text-xs font-bold">{t.cod}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right Side - Calculator. `w-2/5` had no breakpoint, so on a phone the
-              keypad was squeezed to 40% of the modal width even though the panes
-              stack vertically there. */}
-          <div className="w-full md:w-2/5 p-3 md:overflow-y-auto md:overscroll-contain bg-white/50">
+          {/* Right Side - Calculator */}
+          <div className="w-2/5 p-3 overflow-y-auto bg-white/50">
             {/* Amount Display */}
             <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl p-3 mb-3 shadow-sm">
-              {/*
-                A text field with a decimal keypad rather than type="number".
-
-                A focused number input treats the mouse wheel as increment /
-                decrement, and this field is focused automatically when the modal
-                opens. That had two consequences at the till: scrolling with the
-                pointer over the field silently changed the cash taken, and the
-                wheel never reached the scroll container, so the modal looked
-                frozen until the cashier clicked elsewhere to blur the field.
-                inputMode="decimal" keeps the numeric keypad on touch devices.
-              */}
               <input
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
+                type="number"
                 value={calculatorDisplay === "0" ? "" : calculatorDisplay}
                 ref={amountInputRef}
                 onChange={(e) => {
-                  // Keep digits and at most one decimal point, which is the only
-                  // validation type="number" was providing here.
-                  const cleaned = e.target.value.replace(/[^\d.]/g, "");
-                  const [whole, ...rest] = cleaned.split(".");
-                  const value =
-                    rest.length > 0 ? `${whole}.${rest.join("")}` : whole;
-
+                  const value = e.target.value;
                   setCalculatorDisplay(value);
-                  setAmountPaid(value === "" ? 0 : parseFloat(value) || 0);
+                  setAmountPaid(value === "" ? 0 : parseFloat(value));
                 }}
                 placeholder="0"
-                aria-label="Amount received"
                 className="w-full text-xl font-bold text-gray-900 bg-transparent text-right border-none outline-none"
+                min="0"
+                step="0.01"
               />
             </div>
 
@@ -1698,7 +1675,7 @@ export function PaymentClearanceModal({
               onClick={() => handleCalculatorInput("Clear")}
               className="w-full p-2 bg-gray-200 hover:bg-gray-300 border border-gray-300 rounded font-medium text-gray-900 mb-3 transition-colors"
             >
-              Clear
+              {t.clear}
             </button>
 
             {/* Pay Now Button */}
@@ -1717,7 +1694,7 @@ export function PaymentClearanceModal({
                   : "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600"
               }`}
             >
-              {isProcessing ? "Processing..." : "Pay Now"}
+              {isProcessing ? t.processing : t.payNow}
             </button>
           </div>
         </div>
@@ -1730,10 +1707,10 @@ export function PaymentClearanceModal({
             {/* Detail Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                Currency Details
+                {t.currencyDetails}
               </h3>
               <button
-                title="Close Modal"
+                title={t.close}
                 onClick={() => setShowDetailModal(false)}
                 className="text-gray-600 hover:text-gray-800 transition-colors p-1 rounded-full hover:bg-gray-200"
               >
@@ -1746,7 +1723,7 @@ export function PaymentClearanceModal({
               {/* Items with dual currency */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Items
+                  {t.items}
                 </h4>
                 <div className="space-y-2">
                   {items.map((item, index) => (
@@ -1762,7 +1739,7 @@ export function PaymentClearanceModal({
                           {getDisplayColor(item)}{" "}
                           {item.selectedColor || item.selectedSize ? "•" : ""}{" "}
                           {item.selectedSize} {item.selectedSize ? "•" : ""}{" "}
-                          Qty: {item.quantity}
+                          {t.quantity}: {item.quantity}
                         </p>
                       </div>
                       <div className="text-right">
@@ -1785,7 +1762,7 @@ export function PaymentClearanceModal({
               <div className="border-t border-gray-200 pt-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-gray-700">
-                    Total
+                    {t.total}
                   </span>
                   <div className="text-right">
                     <p className="text-sm font-medium text-gray-900">
@@ -1800,7 +1777,7 @@ export function PaymentClearanceModal({
                 {/* Paid with dual currency */}
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-gray-700">
-                    Paid
+                    {t.paid}
                   </span>
                   <div className="text-right">
                     <p className="text-sm font-medium text-gray-900">
@@ -1824,7 +1801,7 @@ export function PaymentClearanceModal({
                 {/* Change with dual currency */}
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700">
-                    Change
+                    {t.change}
                   </span>
                   <div className="text-right">
                     <p
@@ -1853,12 +1830,18 @@ export function PaymentClearanceModal({
               {/* Currency Information */}
               <div className="border-t border-gray-200 pt-3">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Currency Information
+                  {t.currencyInformation}
                 </h4>
                 <div className="space-y-1 text-xs text-gray-600">
-                  <p>Selling Currency: {selectedCurrency}</p>
-                  <p>Main Currency: {defaultCurrency}</p>
-                  <p>Exchange Rate: {currencyRate}</p>
+                  <p>
+                    {t.sellingCurrency}: {selectedCurrency}
+                  </p>
+                  <p>
+                    {t.mainCurrency} {defaultCurrency}
+                  </p>
+                  <p>
+                    {t.exchangeRate}: {currencyRate}
+                  </p>
                 </div>
               </div>
             </div>

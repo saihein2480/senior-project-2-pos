@@ -1,7 +1,9 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Customer } from "@/types/customer";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
@@ -20,6 +22,11 @@ export function DeleteConfirmationModal({
   onConfirm,
   onCancel,
 }: DeleteConfirmationModalProps) {
+  const { t } = useLanguage();
+  // These amounts were previously formatted as USD, which is wrong for a store
+  // trading in THB/MMK. Use the shop's own currency formatting instead.
+  const { formatPrice } = useCurrency();
+
   if (!isOpen || !customer) return null;
 
   return (
@@ -40,25 +47,27 @@ export function DeleteConfirmationModal({
               </div>
               <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                 <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  Delete Customer
+                  {t.deleteCustomer}
                 </h3>
                 <div className="mt-2">
+                  {/* The name leads the sentence so it reads naturally in both
+                      English and Burmese. */}
                   <p className="text-sm text-gray-500">
-                    Are you sure you want to delete{" "}
                     <span className="font-semibold text-gray-700">
                       {customer.displayName || customer.email}
-                    </span>
-                    ? This action cannot be undone and will permanently remove all customer data.
+                    </span>{" "}
+                    {t.willBePermanentlyDeleted}
                   </p>
                   {customer.totalSpent && customer.totalSpent > 0 && (
                     <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <p className="text-sm text-yellow-800">
-                        <strong>Warning:</strong> This customer has purchase history with a total spent of{" "}
+                        <strong>{t.warning}:</strong>{" "}
+                        {t.customerHasPurchaseHistory}
+                      </p>
+                      <p className="mt-1 text-sm text-yellow-800">
+                        {t.totalSpent}:{" "}
                         <span className="font-semibold">
-                          {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: 'USD'
-                          }).format(customer.totalSpent)}
+                          {formatPrice(customer.totalSpent)}
                         </span>
                       </p>
                     </div>
@@ -66,12 +75,9 @@ export function DeleteConfirmationModal({
                   {customer.receivables && customer.receivables > 0 && (
                     <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
                       <p className="text-sm text-orange-800">
-                        <strong>Outstanding Receivables:</strong>{" "}
+                        <strong>{t.outstandingReceivables}:</strong>{" "}
                         <span className="font-semibold">
-                          {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: 'USD'
-                          }).format(customer.receivables)}
+                          {formatPrice(customer.receivables)}
                         </span>
                       </p>
                     </div>
@@ -95,10 +101,10 @@ export function DeleteConfirmationModal({
               {isDeleting ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Deleting...
+                  {t.deleting}
                 </div>
               ) : (
-                "Delete Customer"
+                t.deleteCustomer
               )}
             </button>
             <button
@@ -107,7 +113,7 @@ export function DeleteConfirmationModal({
               disabled={isDeleting}
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
-              Cancel
+              {t.cancel}
             </button>
           </div>
         </div>

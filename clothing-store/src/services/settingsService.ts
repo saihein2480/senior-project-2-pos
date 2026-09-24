@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  onSnapshot,
   setDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -172,6 +173,49 @@ export interface CurrencyInfo {
   symbol: string;
 }
 
+/**
+ * Shape a raw settings document into `BusinessSettings`.
+ *
+ * Extracted so the one-shot read and the live subscription below cannot drift:
+ * a field defaulted in one and not the other would make the same settings look
+ * different depending on how they were loaded.
+ */
+function mapSettingsDoc(data: Record<string, any>): BusinessSettings {
+  return {
+    businessName: data.businessName || "",
+    shortName: data.shortName || "",
+    defaultCurrency: data.defaultCurrency || "THB",
+    taxRate: data.taxRate || 0,
+    registeredBy: data.registeredBy || "",
+    registeredAt: data.registeredAt || "",
+    businessLogo: data.businessLogo || "",
+    showBusinessLogoOnInvoice: data.showBusinessLogoOnInvoice ?? true,
+    autoPrintReceiptAfterCheckout: data.autoPrintReceiptAfterCheckout ?? true,
+    invoiceFooterMessage: data.invoiceFooterMessage || "",
+    invoiceFooterImage: data.invoiceFooterImage || "",
+    receiptPaperSize: data.receiptPaperSize || "80mm",
+    enableDarkMode: data.enableDarkMode ?? false,
+    enableSoundEffects: data.enableSoundEffects ?? false,
+    currencyRate: data.currencyRate || 0,
+    currentBranch: data.currentBranch || "Main Branch",
+    hidePosForOwner: data.hidePosForOwner ?? false,
+    labelSettings: data.labelSettings,
+    storeInfo: data.storeInfo || {},
+    loyaltySettings: data.loyaltySettings || {
+      enabled: false,
+      minimumSpendAmount: 500,
+      pointsPerPurchase: 1,
+      couponPackages: [],
+      pointsForCoupon: 10,
+      couponDiscountType: "percentage",
+      couponDiscountValue: 10,
+      couponValidityDays: 30,
+    },
+    createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+    updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+  };
+}
+
 export class SettingsService {
   private static currencyMap: Record<"THB" | "MMK", CurrencyInfo> = {
     THB: { code: "THB", name: "Thai Baht", symbol: "฿" },
@@ -188,43 +232,7 @@ export class SettingsService {
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-          businessName: data.businessName || "",
-          shortName: data.shortName || "",
-          defaultCurrency: data.defaultCurrency || "THB",
-          taxRate: data.taxRate || 0,
-          registeredBy: data.registeredBy || "",
-          registeredAt: data.registeredAt || "",
-          businessLogo: data.businessLogo || "",
-          showBusinessLogoOnInvoice: data.showBusinessLogoOnInvoice ?? true,
-          autoPrintReceiptAfterCheckout:
-            data.autoPrintReceiptAfterCheckout ?? true,
-          invoiceFooterMessage: data.invoiceFooterMessage || "",
-          invoiceFooterImage: data.invoiceFooterImage || "",
-          receiptPaperSize: data.receiptPaperSize || "80mm",
-          enableDarkMode: data.enableDarkMode ?? false,
-          enableSoundEffects: data.enableSoundEffects ?? false,
-          currencyRate: data.currencyRate || 0,
-          currentBranch: data.currentBranch || "Main Branch",
-          hidePosForOwner: data.hidePosForOwner ?? false,
-          labelSettings: data.labelSettings,
-          storeInfo: data.storeInfo || {},
-          loyaltySettings: data.loyaltySettings || {
-            enabled: false,
-            minimumSpendAmount: 500,
-            pointsPerPurchase: 1,
-            couponPackages: [],
-            pointsForCoupon: 10,
-            couponDiscountType: 'percentage',
-            couponDiscountValue: 10,
-            couponValidityDays: 30,
-          },
-          createdAt:
-            data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-          updatedAt:
-            data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
-        };
+        return mapSettingsDoc(docSnap.data());
       }
 
       return null; // No settings found
@@ -232,6 +240,40 @@ export class SettingsService {
       console.error("Error fetching business settings:", error);
       throw new Error("Failed to fetch business settings");
     }
+  }
+
+  /**
+   * Watch the business settings document and report every change.
+   *
+   * Settings are shared by the whole business, so a change made anywhere — the
+   * Settings page, another device, or the branch picker in the top bar — has to
+   * reach every open screen without anyone reloading. A one-shot read cannot do
+   * that, which is why switching branch used to need a page refresh before the
+   * rest of the app noticed.
+   *
+   * @returns an unsubscribe function; a no-op when Firebase is not configured.
+   */
+  static subscribeToBusinessSettings(
+    onChange: (settings: BusinessSettings | null) => void,
+    onError?: (error: unknown) => void,
+  ): () => void {
+    if (!db || !isFirebaseConfigured) {
+      onError?.(new Error("Firebase is not configured"));
+      return () => {};
+    }
+
+    const docRef = doc(db, COLLECTION_NAME, SETTINGS_DOC_ID);
+
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        onChange(snapshot.exists() ? mapSettingsDoc(snapshot.data()) : null);
+      },
+      (error) => {
+        console.error("Error watching business settings:", error);
+        onError?.(error);
+      },
+    );
   }
 
   static async saveBusinessSettings(

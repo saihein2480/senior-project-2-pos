@@ -20,6 +20,19 @@ export interface OnlinePromotion {
   name: string;
   description?: string;
   scope: PromotionScope;
+  /**
+   * The branch this promotion belongs to: the shop document id, plus its name
+   * for display.
+   *
+   * A product group that is stocked in three branches exists as three separate
+   * stock documents, so `productId` already implies a branch. Recording it
+   * explicitly means the promotions table can name the branch without loading
+   * stocks, and the branch survives even if the stock document is later removed.
+   *
+   * Absent on promotions created before branch selection was introduced.
+   */
+  shop?: string;
+  branchName?: string;
   productId: string;
   productName?: string;
   variantId?: string;
@@ -38,6 +51,10 @@ export interface CreateOnlinePromotionInput {
   name: string;
   description?: string;
   scope: PromotionScope;
+  /** Shop document id of the branch the promoted product belongs to. */
+  shop?: string;
+  /** Branch name, stored for display alongside `shop`. */
+  branchName?: string;
   productId: string;
   productName?: string;
   variantId?: string;
@@ -91,8 +108,12 @@ class OnlinePromotionService {
   async createPromotion(input: CreateOnlinePromotionInput): Promise<void> {
     if (!db) return;
 
+    // Every optional field is coalesced to a concrete value: Firestore rejects
+    // `undefined`, and `input` is spread wholesale.
     await addDoc(collection(db, COLLECTION_NAME), {
       ...input,
+      shop: input.shop || "",
+      branchName: input.branchName || "",
       isActive: input.isActive ?? true,
       startDate: input.startDate || "",
       endDate: input.endDate || "",

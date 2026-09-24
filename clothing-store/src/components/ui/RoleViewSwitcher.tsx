@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { UserRole } from "@/types/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Translations } from "@/lib/translations";
 import { Eye, ChevronDown, Check } from "lucide-react";
 
 interface RoleViewSwitcherProps {
@@ -10,31 +12,39 @@ interface RoleViewSwitcherProps {
   onViewChange: (role: UserRole) => void;
 }
 
-const VIEWS: {
+/**
+ * The selectable previews.
+ *
+ * Built from the active dictionary rather than declared as a module constant, so
+ * the labels follow the language the user picked.
+ */
+function getViews(t: Translations): {
   role: UserRole;
   label: string;
   description: string;
   dot: string;
-}[] = [
-  {
-    role: "owner",
-    label: "Owner View",
-    description: "Full system access",
-    dot: "bg-purple-500",
-  },
-  {
-    role: "manager",
-    label: "Manager View",
-    description: "Everything except shops and staff",
-    dot: "bg-blue-500",
-  },
-  {
-    role: "staff",
-    label: "Staff View",
-    description: "POS, customers and settings only",
-    dot: "bg-green-500",
-  },
-];
+}[] {
+  return [
+    {
+      role: "owner",
+      label: t.ownerView,
+      description: t.ownerViewDesc,
+      dot: "bg-purple-500",
+    },
+    {
+      role: "manager",
+      label: t.managerView,
+      description: t.managerViewDesc,
+      dot: "bg-blue-500",
+    },
+    {
+      role: "staff",
+      label: t.staffView,
+      description: t.staffViewDesc,
+      dot: "bg-green-500",
+    },
+  ];
+}
 
 /**
  * RoleViewSwitcher - lets an owner preview the POS as a Manager or Staff member.
@@ -48,6 +58,7 @@ export function RoleViewSwitcher({
   onViewChange,
 }: RoleViewSwitcherProps) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +87,8 @@ export function RoleViewSwitcher({
     return null;
   }
 
-  const currentViewData = VIEWS.find((v) => v.role === currentView);
+  const views = getViews(t);
+  const currentViewData = views.find((v) => v.role === currentView);
   const isPreviewing = currentView !== "owner";
 
   return (
@@ -89,8 +101,8 @@ export function RoleViewSwitcher({
         aria-expanded={isOpen}
         title={
           isPreviewing
-            ? `Previewing as ${currentViewData?.label}. Your role is still Owner.`
-            : "Preview the POS as another role"
+            ? `${currentViewData?.label} ${t.previewActiveSuffix}`
+            : t.previewAsAnotherRole
         }
         className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
           isPreviewing
@@ -114,15 +126,13 @@ export function RoleViewSwitcher({
         >
           <div className="px-3 py-2 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              View as
+              {t.viewAs}
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              See and use the POS exactly as that role does
-            </p>
+            <p className="text-xs text-gray-400 mt-1">{t.viewAsHint}</p>
           </div>
 
           <div className="py-1">
-            {VIEWS.map((view) => (
+            {views.map((view) => (
               <button
                 key={view.role}
                 role="menuitemradio"
@@ -164,19 +174,11 @@ export function RoleViewSwitcher({
           <div className="px-3 py-2 border-t border-gray-100 mt-1">
             {isPreviewing ? (
               <p className="text-xs text-amber-800">
-                You are working with{" "}
                 <span className="font-semibold">{currentViewData?.label}</span>{" "}
-                permissions. Actions that role cannot perform are hidden and
-                blocked. Your account is still{" "}
-                <span className="font-semibold">Owner</span> - switch back any
-                time.
+                {t.previewingWithPermissions}
               </p>
             ) : (
-              <p className="text-xs text-gray-500">
-                Pick a role to check what it can reach. The preview applies real
-                permissions, so it reflects what that person actually
-                experiences.
-              </p>
+              <p className="text-xs text-gray-500">{t.previewAsHint}</p>
             )}
           </div>
         </div>

@@ -4,6 +4,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { SettingsService } from "@/services/settingsService";
 import { useSettings } from "@/contexts/SettingsContext";
 import { X, Minus, Plus, ShoppingCart, Eye, User, Users, Gift } from "lucide-react";
@@ -43,6 +44,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const { formatPrice, getCurrencySymbol } = useCurrency();
   const { selectedCurrency, defaultCurrency, currencyRate } = useCurrency();
   const { taxRate } = useSettings();
+  const { t } = useLanguage();
   const [discountAmount, setDiscountAmount] = React.useState<string>("");
   const [cartDiscountPercent, setCartDiscountPercent] =
     React.useState<number>(0);
@@ -224,14 +226,14 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       });
 
       if (!result.success) {
-        setLoyaltyError(result.error || "Failed to redeem this reward");
+        setLoyaltyError(result.error || t.failedToRedeemReward);
         return;
       }
 
       await loadCustomerLoyalty(selectedCustomerUid);
     } catch (error) {
       console.error("Error redeeming reward for customer:", error);
-      setLoyaltyError("An error occurred. Please try again.");
+      setLoyaltyError(t.errorOccurredTryAgain);
     } finally {
       setRedeemingPackageId(null);
     }
@@ -386,7 +388,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         // Store the cart discount percentage - it will be applied to subtotal after individual discounts
         setCartDiscountPercent(value);
       } else {
-        toast.error("Please enter a valid discount percentage (0-100)");
+        toast.error(t.invalidDiscountPercent);
       }
     } else {
       // Custom amount discount — treat as a fixed numeric amount in the currently selected/display currency
@@ -396,7 +398,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setCartDiscountPercent(0);
         setDiscountAmount("");
       } else {
-        toast.error("Please enter a valid discount amount (0 or greater)");
+        toast.error(t.invalidDiscountAmount);
       }
     }
   };
@@ -405,7 +407,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const handleApplyGroupDiscount = () => {
     const value = parseFloat(groupDiscountAmount) || 0;
     if (!selectedGroupForDiscount) {
-      toast.error("Please select a group");
+      toast.error(t.selectProductGroup);
       return;
     }
 
@@ -423,7 +425,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           return copy;
         });
       } else {
-        toast.error("Please enter a valid discount percentage (0-100)");
+        toast.error(t.invalidDiscountPercent);
       }
     } else {
       // Custom amount discount - store TOTAL fixed amount for the whole group (display currency)
@@ -439,7 +441,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setGroupSearchTerm("");
         setShowGroupDropdown(false);
       } else {
-        toast.error("Please enter a valid discount amount (0 or greater)");
+        toast.error(t.invalidDiscountAmount);
       }
     }
   };
@@ -447,7 +449,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
   const handleApplyVariantDiscount = () => {
     const value = parseFloat(variantDiscountAmount) || 0;
     if (!selectedVariantForDiscount) {
-      toast.error("Please select a variant");
+      toast.error(t.selectVariantOption);
       return;
     }
 
@@ -465,7 +467,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           return copy;
         });
       } else {
-        toast.error("Please enter a valid discount percentage (0-100)");
+        toast.error(t.invalidDiscountPercent);
       }
     } else {
       // Custom amount discount - store fixed amount (in display currency) for this variant
@@ -481,7 +483,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         setVariantSearchTerm("");
         setShowVariantDropdown(false);
       } else {
-        toast.error("Please enter a valid discount amount (0 or greater)");
+        toast.error(t.invalidDiscountAmount);
       }
     }
   };
@@ -576,7 +578,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
   const handleCheckout = () => {
     if (cart.items.length === 0) {
-      toast.error("Your cart is empty");
+      toast.error(t.cartEmpty);
       return;
     }
 
@@ -879,15 +881,15 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     const lineFinalTotal = finalUnitPrice * item.quantity;
 
     const discountLabels: string[] = [];
-    if (item.isWholesalePricing) discountLabels.push("Wholesale price");
+    if (item.isWholesalePricing) discountLabels.push(t.wholesalePrice);
     if (item.groupDiscount && item.groupDiscount > 0) {
-      discountLabels.push(`Group -${item.groupDiscount}%`);
+      discountLabels.push(`${t.groupLabel} -${item.groupDiscount}%`);
     }
     if (item.variantDiscount && item.variantDiscount > 0) {
-      discountLabels.push(`Variant -${item.variantDiscount}%`);
+      discountLabels.push(`${t.variantLabel} -${item.variantDiscount}%`);
     }
-    if (groupFixedPerUnit > 0) discountLabels.push("Group offer");
-    if (variantFixedPerUnit > 0) discountLabels.push("Variant offer");
+    if (groupFixedPerUnit > 0) discountLabels.push(t.groupOffer);
+    if (variantFixedPerUnit > 0) discountLabels.push(t.variantOffer);
 
     return {
       itemId: item.id,
@@ -958,14 +960,14 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           <div className="flex items-center space-x-2 md:space-x-3">
             <ShoppingCart className="h-6 w-6 text-white" />
             <h2 className="text-lg md:text-xl font-bold text-white">
-              Shopping Cart
+              {t.shoppingCart}
             </h2>
             <span className="bg-white text-rose-600 text-xs md:text-sm font-bold px-2 md:px-2.5 py-0.5 rounded-full shadow-sm">
-              {cart.totalItems} items
+              {cart.totalItems} {t.items}
             </span>
           </div>
           <button
-            title="Close cart"
+            title={t.closeCart}
             onClick={onClose}
             className="rounded-full p-2 text-white hover:bg-white/20 transition-colors"
           >
@@ -981,8 +983,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             {cart.items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <ShoppingCart className="h-16 w-16 mb-6 text-gray-300" />
-                <p className="text-xl font-medium">Your cart is empty</p>
-                <p className="text-sm">Add some items to see them here</p>
+                <p className="text-xl font-medium">{t.cartEmpty}</p>
+                <p className="text-sm">{t.addItemsToSeeThemHere}</p>
               </div>
             ) : (
               <div className="grid gap-3">
@@ -1010,7 +1012,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             ) : (
                               <div className="w-full h-full bg-gradient-to-br from-gray-100 to-pink-100 flex items-center justify-center">
                                 <span className="text-gray-400 text-xs">
-                                  No Image
+                                  {t.noImage}
                                 </span>
                               </div>
                             )}
@@ -1025,11 +1027,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 #{index + 1}. {item.groupName}
                               </h3>
                               <p className="text-xs text-gray-600">
-                                Shop: {shopNames[item.shop] || item.shop}
+                                {t.shop}: {shopNames[item.shop] || item.shop}
                               </p>
                             </div>
                             <button
-                              title="Remove item from cart"
+                              title={t.removeFromCart}
                               onClick={() => removeFromCart(item.id)}
                               className="text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 p-1.5 rounded-full transition-all ml-2 shadow-sm"
                             >
@@ -1044,7 +1046,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               <div className="flex items-center gap-4">
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs font-medium text-gray-700">
-                                    Color:
+                                    {t.color}:
                                   </span>
                                   <div
                                     className="w-5 h-5 rounded-full border border-gray-300"
@@ -1078,7 +1080,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs font-medium text-gray-700">
-                                    Size:
+                                    {t.size}:
                                   </span>
                                   <span className="text-xs font-medium text-gray-800">
                                     {item.selectedSize}
@@ -1089,7 +1091,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Uint Price */}
                               <div className="flex items-center space-x-2">
                                 <span className="text-xs font-medium text-gray-700">
-                                  Price:
+                                  {t.price}:
                                 </span>
                                 <span className="text-xs font-bold text-gray-900">
                                   {formatPrice(item.unitPrice)}
@@ -1137,7 +1139,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                   return (
                                     <div className="flex items-center space-x-2">
                                       <span className="text-xs font-medium text-gray-700">
-                                        After Discount:
+                                        {t.afterDiscountLabel}:
                                       </span>
                                       <span className="text-xs font-bold text-green-600">
                                         {SettingsService.formatPrice(
@@ -1155,7 +1157,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {item.groupDiscount && item.groupDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
-                                    Group: {item.groupDiscount}% OFF
+                                    {t.groupLabel}: {item.groupDiscount}%{" "}
+                                    {t.offLabel}
                                   </span>
                                   <button
                                     onClick={() =>
@@ -1163,18 +1166,18 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     }
                                     className="text-xs text-red-600 hover:text-red-800 font-medium"
                                   >
-                                    Remove
+                                    {t.remove}
                                   </button>
                                 </div>
                               ) : groupFixedDiscounts[item.groupName] ? (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
-                                    Group:{" "}
+                                    {t.groupLabel}:{" "}
                                     {SettingsService.formatPrice(
                                       groupFixedDiscounts[item.groupName],
                                       selectedCurrency as "THB" | "MMK",
                                     )}{" "}
-                                    OFF
+                                    {t.offLabel}
                                   </span>
                                   <button
                                     onClick={() =>
@@ -1184,7 +1187,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     }
                                     className="text-xs text-red-600 hover:text-red-800 font-medium"
                                   >
-                                    Remove
+                                    {t.remove}
                                   </button>
                                 </div>
                               ) : null}
@@ -1194,7 +1197,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               item.variantDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
-                                    Variant: {item.variantDiscount}% OFF
+                                    {t.variantLabel}: {item.variantDiscount}%{" "}
+                                    {t.offLabel}
                                   </span>
                                   <button
                                     onClick={() =>
@@ -1202,18 +1206,18 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     }
                                     className="text-xs text-red-600 hover:text-red-800 font-medium"
                                   >
-                                    Remove
+                                    {t.remove}
                                   </button>
                                 </div>
                               ) : variantFixedDiscounts[item.id] ? (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
-                                    Variant:{" "}
+                                    {t.variantLabel}:{" "}
                                     {SettingsService.formatPrice(
                                       variantFixedDiscounts[item.id],
                                       selectedCurrency as "THB" | "MMK",
                                     )}{" "}
-                                    OFF
+                                    {t.offLabel}
                                   </span>
                                   <button
                                     onClick={() =>
@@ -1221,7 +1225,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     }
                                     className="text-xs text-red-600 hover:text-red-800 font-medium"
                                   >
-                                    Remove
+                                    {t.remove}
                                   </button>
                                 </div>
                               ) : null}
@@ -1230,7 +1234,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {item.isWholesalePricing && (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200 shadow-sm">
-                                    WHOLESALE PRICING
+                                    {t.wholesalePricingBadge}
                                   </span>
                                   <button
                                     onClick={() =>
@@ -1238,7 +1242,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     }
                                     className="text-xs text-red-600 hover:text-red-800 font-medium"
                                   >
-                                    Remove
+                                    {t.remove}
                                   </button>
                                 </div>
                               )}
@@ -1285,14 +1289,14 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                       <div className="flex items-center justify-between">
                                         <div className="flex-1">
                                           <p className="text-xs font-medium text-gray-800 mb-1">
-                                            Wholesale Price Available
+                                            {t.wholesalePriceAvailable}
                                           </p>
                                           <p className="text-xs text-gray-700">
-                                            Total {totalGroupQuantity} items ={" "}
-                                            {formatPrice(matchingTier.price)}{" "}
-                                            total (
-                                            {formatPrice(wholesalePricePerItem)}
-                                            /item)
+                                            {t.total} {totalGroupQuantity}{" "}
+                                            {t.items} ={" "}
+                                            {formatPrice(matchingTier.price)} (
+                                            {formatPrice(wholesalePricePerItem)}{" "}
+                                            {t.perItem})
                                           </p>
                                         </div>
                                         {isFirstInGroup && (
@@ -1321,24 +1325,25 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                                 currentTotal - wholesaleTotal;
 
                                               toast(
-                                                (t) => (
+                                                (toastItem) => (
                                                   <div className="flex flex-col gap-3 p-1 w-[320px]">
                                                     <div className="text-sm font-semibold text-gray-900 border-b pb-2">
-                                                      Apply wholesale pricing?
+                                                      {
+                                                        t.applyWholesalePricingConfirm
+                                                      }
                                                     </div>
                                                     <div className="text-sm text-gray-700 space-y-1">
                                                       <p>
-                                                        All{" "}
                                                         <span className="font-semibold">
                                                           &quot;{item.groupName}
                                                           &quot;
                                                         </span>{" "}
-                                                        items.
+                                                        {t.allItemsInGroupSuffix}
                                                       </p>
                                                       <div className="bg-gray-50 p-2 rounded flex flex-col gap-1 mt-2 border border-gray-100">
                                                         <div className="flex justify-between">
                                                           <span>
-                                                            Current Total:
+                                                            {t.currentTotal}:
                                                           </span>
                                                           <span className="font-semibold">
                                                             {formatPrice(
@@ -1348,7 +1353,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                                         </div>
                                                         <div className="flex justify-between">
                                                           <span>
-                                                            Wholesale Total:
+                                                            {t.wholesaleTotal}:
                                                           </span>
                                                           <span className="font-semibold text-pink-600">
                                                             {formatPrice(
@@ -1358,16 +1363,16 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                                         </div>
                                                         <div className="text-xs text-gray-500 text-right">
                                                           ({totalGroupQuantity}{" "}
-                                                          items ={" "}
+                                                          {t.items} ={" "}
                                                           {formatPrice(
                                                             wholesalePricePerItem,
-                                                          )}
-                                                          /item)
+                                                          )}{" "}
+                                                          {t.perItem})
                                                         </div>
                                                       </div>
                                                       <div className="flex justify-between mt-2 pt-2 border-t font-semibold text-green-600">
                                                         <span>
-                                                          Total Savings:
+                                                          {t.youSavedLabel}:
                                                         </span>
                                                         <span>
                                                           {formatPrice(savings)}
@@ -1377,27 +1382,31 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                                     <div className="flex gap-2 mt-2 pt-2">
                                                       <button
                                                         onClick={() =>
-                                                          toast.dismiss(t.id)
+                                                          toast.dismiss(
+                                                            toastItem.id,
+                                                          )
                                                         }
                                                         className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium rounded-md transition-colors"
                                                       >
-                                                        Cancel
+                                                        {t.cancel}
                                                       </button>
                                                       <button
                                                         onClick={() => {
-                                                          toast.dismiss(t.id);
+                                                          toast.dismiss(
+                                                            toastItem.id,
+                                                          );
                                                           applyWholesalePricing(
                                                             item.groupName,
                                                             wholesalePricePerItem,
                                                           );
                                                           toast.success(
-                                                            "Wholesale pricing applied",
+                                                            t.wholesalePricingApplied,
                                                             { duration: 2000 },
                                                           );
                                                         }}
                                                         className="flex-1 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-md transition-colors"
                                                       >
-                                                        Confirm
+                                                        {t.confirm}
                                                       </button>
                                                     </div>
                                                   </div>
@@ -1410,7 +1419,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                             }}
                                             className="ml-2 px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
                                           >
-                                            Apply
+                                            {t.apply}
                                           </button>
                                         )}
                                       </div>
@@ -1426,7 +1435,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Quantity Controls */}
                               <div className="flex items-center justify-end w-full gap-3">
                                 <span className="text-xs font-medium text-gray-700">
-                                  Quantity:
+                                  {t.quantity}:
                                 </span>
                                 <div className="flex items-center space-x-2 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg p-1.5 border border-pink-200 shadow-sm">
                                   <button
@@ -1437,7 +1446,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                       )
                                     }
                                     className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
-                                    title="Decrease quantity"
+                                    title={t.decreaseQuantity}
                                   >
                                     <Minus className="h-3 w-3" />
                                   </button>
@@ -1449,7 +1458,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                       updateQuantity(item.id, item.quantity + 1)
                                     }
                                     className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
-                                    title="Increase quantity"
+                                    title={t.increaseQuantity}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </button>
@@ -1459,7 +1468,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Item Subtotal */}
                               <div className="mt-2 p-2 bg-gradient-to-r from-rose-50 to-pink-100 rounded-lg border border-pink-200 shadow-sm">
                                 <div className="text-xs font-medium  text-gray-700 mb-1">
-                                  Item Total:
+                                  {t.itemTotal}:
                                 </div>
                                 {(() => {
                                   // Compute effective display unit and total including fixed group/variant discounts
@@ -1541,7 +1550,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     alt={
                       getSelectedCustomer()?.displayName ||
                       getSelectedCustomer()?.email ||
-                      "Customer"
+                      t.customer
                     }
                   />
                 ) : getSelectedCustomer() ? (
@@ -1558,10 +1567,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">
-                  {getSelectedCustomer()?.displayName || "Unknown Customer"}
+                  {getSelectedCustomer()?.displayName || t.unknownCustomer}
                 </p>
                 <p className="text-xs text-rose-600 font-medium">
-                  {getSelectedCustomer()?.email || "Walk-in customer"}
+                  {getSelectedCustomer()?.email || t.walkInCustomer}
                 </p>
                 {getSelectedCustomer()?.customerType && (
                   <p className="text-xs text-gray-500">
@@ -1572,7 +1581,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
               <button
                 onClick={() => setIsCustomerModalOpen(true)}
                 className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-full p-1.5 transition-all"
-                title="Select customer"
+                title={t.selectCustomer}
               >
                 <Users className="h-4 w-4" />
               </button>
@@ -1588,26 +1597,26 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         {cart.appliedCoupon.code}
                         <span className="ml-1.5 font-semibold text-purple-700">
                           {cart.appliedCoupon.discountType === "percentage"
-                            ? `${cart.appliedCoupon.discountValue}% off`
-                            : `${cart.appliedCoupon.discountValue} off`}
+                            ? `${cart.appliedCoupon.discountValue}% ${t.offSuffix}`
+                            : `${cart.appliedCoupon.discountValue} ${t.offSuffix}`}
                         </span>
                       </p>
                       <p className="text-[11px] text-purple-700 font-medium">
                         {typeof cart.appliedCoupon.pointsCost === "number"
-                          ? `Uses ${cart.appliedCoupon.pointsCost} point${cart.appliedCoupon.pointsCost === 1 ? "" : "s"} on checkout`
-                          : "Applied at checkout"}
+                          ? `${cart.appliedCoupon.pointsCost} ${t.usesPointsOnCheckoutSuffix}`
+                          : t.appliedAtCheckout}
                       </p>
                     </div>
                     <button
                       onClick={removeCoupon}
                       className="shrink-0 text-xs font-bold text-rose-600 underline hover:text-rose-800"
                     >
-                      Remove
+                      {t.remove}
                     </button>
                   </div>
                 ) : isLoadingCoupons ? (
                   <p className="text-xs text-purple-700 font-medium">
-                    Loading loyalty info...
+                    {t.loadingLoyaltyInfo}
                   </p>
                 ) : (
                   // Compact summary only. The full list lives in its own dialog
@@ -1616,21 +1625,19 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="min-w-0 text-xs">
                       <p className="font-bold text-purple-900 flex items-center gap-1">
                         <Gift className="h-3.5 w-3.5" />
-                        {redeemableRewardCount} reward
-                        {redeemableRewardCount === 1 ? "" : "s"} available
+                        {redeemableRewardCount} {t.rewardsAvailableSuffix}
                       </p>
                       <p className="text-purple-700 font-medium">
-                        {availablePoints} pt
-                        {availablePoints === 1 ? "" : "s"} to spend
+                        {availablePoints} {t.pointsToSpendSuffix}
                         {customerCoupons.length > 0 &&
-                          ` · ${customerCoupons.length} coupon${customerCoupons.length === 1 ? "" : "s"} ready`}
+                          ` · ${customerCoupons.length} ${t.couponsReadySuffix}`}
                       </p>
                     </div>
                     <button
                       onClick={() => setIsRewardModalOpen(true)}
                       className="shrink-0 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-bold hover:from-rose-600 hover:to-pink-600 shadow-sm"
                     >
-                      View Rewards
+                      {t.viewRewards}
                     </button>
                   </div>
                 )}
@@ -1642,8 +1649,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
           {cart.items.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 px-6 py-4">
               <ShoppingCart className="h-12 w-12 mb-4" />
-              <p className="text-lg font-medium">Your cart is empty</p>
-              <p className="text-sm">Add some items to get started</p>
+              <p className="text-lg font-medium">{t.cartEmpty}</p>
+              <p className="text-sm">{t.addItemsToGetStarted}</p>
             </div>
           ) : (
             <div className="flex-1 border-t border-gray-200 overflow-y-auto">
@@ -1655,7 +1662,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       <span className="text-sm font-bold text-white">%</span>
                     </div>
                     <span className="text-sm font-bold text-rose-800">
-                      Discount Management
+                      {t.discountManagement}
                     </span>
                   </div>
 
@@ -1669,7 +1676,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
-                      Cart
+                      {t.cartLabel}
                     </button>
                     <button
                       onClick={() => setDiscountMode("group")}
@@ -1679,7 +1686,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
-                      Group
+                      {t.groupLabel}
                     </button>
                     <button
                       onClick={() => setDiscountMode("variant")}
@@ -1689,7 +1696,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           : "bg-white text-pink-600 border border-pink-300"
                       }`}
                     >
-                      Variant
+                      {t.variantLabel}
                     </button>
                   </div>
 
@@ -1701,8 +1708,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           type="number"
                           placeholder={
                             discountType === "percentage"
-                              ? "Enter discount percentage (0-100)"
-                              : "Enter discount amount"
+                              ? t.enterDiscountPercent
+                              : t.enterDiscountAmount
                           }
                           value={discountAmount}
                           onChange={(e) => setDiscountAmount(e.target.value)}
@@ -1737,7 +1744,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={handleApplyDiscount}
                           className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
-                          Apply
+                          {t.apply}
                         </button>
                       </div>
                     </div>
@@ -1749,7 +1756,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       <div className="relative" ref={groupDropdownRef}>
                         <input
                           type="text"
-                          placeholder="Search group..."
+                          placeholder={t.searchGroupPlaceholder}
                           value={groupSearchTerm}
                           onChange={(e) => {
                             setGroupSearchTerm(e.target.value);
@@ -1781,8 +1788,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           type="number"
                           placeholder={
                             groupDiscountType === "percentage"
-                              ? "Discount %"
-                              : "Discount amount"
+                              ? t.discountPercentPlaceholder
+                              : t.discountAmountPlaceholder
                           }
                           value={groupDiscountAmount}
                           onChange={(e) =>
@@ -1821,7 +1828,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={handleApplyGroupDiscount}
                           className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
-                          Apply
+                          {t.apply}
                         </button>
                       </div>
                     </div>
@@ -1833,7 +1840,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       <div className="relative" ref={variantDropdownRef}>
                         <input
                           type="text"
-                          placeholder="Search variant..."
+                          placeholder={t.searchVariantPlaceholder}
                           value={variantSearchTerm}
                           onChange={(e) => {
                             setVariantSearchTerm(e.target.value);
@@ -1871,8 +1878,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           type="number"
                           placeholder={
                             variantDiscountType === "percentage"
-                              ? "Discount %"
-                              : "Discount amount"
+                              ? t.discountPercentPlaceholder
+                              : t.discountAmountPlaceholder
                           }
                           value={variantDiscountAmount}
                           onChange={(e) =>
@@ -1911,7 +1918,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onClick={handleApplyVariantDiscount}
                           className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
-                          Apply
+                          {t.apply}
                         </button>
                       </div>
                     </div>
@@ -1921,7 +1928,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 {/* Totals */}
                 <div className="border-t-2 border-pink-200 pt-4 space-y-2 bg-gradient-to-br from-rose-50 to-pink-50 p-4 rounded-xl shadow-sm">
                   <div className="flex justify-between text-sm font-medium text-gray-800">
-                    <span>Original Subtotal:</span>
+                    <span>{t.originalSubtotal}:</span>
                     <span className="font-bold text-gray-900">
                       {formatPrice(originalSubtotal)}
                     </span>
@@ -1931,9 +1938,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {displayWholesaleSavings > 0 && (
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
-                        <span>Wholesale Pricing:</span>
+                        <span>{t.wholesalePricingLabel}:</span>
                         <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
-                          WHOLESALE
+                          {t.wholeSale}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -1949,9 +1956,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {displayGroupPercentSavings > 0 && (
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
-                        <span>Group Discount:</span>
+                        <span>{t.groupDiscountLabel}:</span>
                         <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
-                          GROUP
+                          {t.groupLabel}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -1967,9 +1974,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {groupFixedTotal > 0 && (
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
-                        <span>Group Fixed Discount:</span>
+                        <span>{t.groupFixedDiscountLabel}:</span>
                         <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
-                          GROUP
+                          {t.groupLabel}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -1985,9 +1992,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {displayVariantPercentSavings > 0 && (
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
-                        <span>Variant Discount:</span>
+                        <span>{t.variantDiscountLabel}:</span>
                         <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
-                          VARIANT
+                          {t.variantLabel}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -2003,9 +2010,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {variantFixedTotal > 0 && (
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
-                        <span>Variant Fixed Discount:</span>
+                        <span>{t.variantFixedDiscountLabel}:</span>
                         <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
-                          VARIANT
+                          {t.variantLabel}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -2022,14 +2029,14 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>
-                          Cart Discount
+                          {t.cartDiscountLabel}
                           {cartDiscountPercent > 0
                             ? ` (${cartDiscountPercent}%)`
                             : ""}
                           :
                         </span>
                         <span className="text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 px-2 py-0.5 rounded-full font-semibold border border-green-200">
-                          CART
+                          {t.cartLabel}
                         </span>
                       </span>
                       <span className="font-bold text-red-600">
@@ -2043,7 +2050,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   )}
 
                   <div className="flex justify-between text-sm font-medium text-gray-800">
-                    <span>Subtotal After Discounts:</span>
+                    <span>{t.subtotalAfterDiscounts}:</span>
                     <span className="font-bold">
                       {SettingsService.formatPrice(
                         subtotalAfterAllDiscountsDisplay,
@@ -2055,7 +2062,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   {cart.appliedCoupon && couponDiscountDisplay > 0 && (
                     <div className="flex justify-between text-sm font-medium text-purple-700">
                       <span className="flex items-center gap-1.5">
-                        Coupon
+                        {t.couponLabel}
                         <span className="px-1.5 py-0.5 bg-purple-100 rounded text-xs font-bold">
                           {cart.appliedCoupon.code}
                         </span>
@@ -2071,7 +2078,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   )}
 
                   <div className="flex justify-between text-sm font-medium text-gray-800">
-                    <span>Tax ({taxRate}%):</span>
+                    <span>
+                      {t.tax} ({taxRate}%):
+                    </span>
                     <span className="font-bold">
                       {SettingsService.formatPrice(
                         taxDisplay,
@@ -2082,11 +2091,11 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   <div className="border-t-2 border-pink-300 pt-2 mt-2">
                     <div className="flex justify-between items-center bg-gradient-to-r from-rose-500 to-pink-500 p-3 rounded-xl shadow-md">
                       <span className="font-bold text-lg text-white">
-                        Grand Total:
+                        {t.grandTotal}:
                       </span>
                       <div className="text-right">
                         <div className="text-xs font-medium text-white/90">
-                          (Qty. {cart.totalItems})
+                          ({t.quantity} {cart.totalItems})
                         </div>
                         <div className="font-bold text-xl text-white">
                           {SettingsService.formatPrice(
@@ -2104,7 +2113,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   onClick={handleCheckout}
                   className="w-full bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium py-3 rounded-lg transition-colors border-0 shadow-md"
                 >
-                  Proceed to Checkout
+                  {t.proceedToCheckout}
                 </button>
               </div>
             </div>
@@ -2128,7 +2137,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         customerName={
           cart.selectedCustomer?.displayName ||
           cart.selectedCustomer?.email ||
-          "Customer"
+          t.customer
         }
         coupons={customerCoupons}
         packages={rewardPackages}

@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "react-hot-toast";
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -34,9 +34,19 @@ import { StockDisplayService } from "@/services/stockDisplayService";
 import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
 import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function InventoryStocksContent() {
   const router = useRouter();
+  const { t } = useLanguage();
+  /**
+   * The fetch effects below must not re-run when the language changes — that
+   * would refetch the catalogue on every switch. Reading the dictionary through
+   * a ref keeps their messages in the current language while leaving their
+   * dependency arrays alone.
+   */
+  const tRef = useRef(t);
+  tRef.current = t;
   const permissions = usePermissions();
   const { businessSettings } = useSettings();
   const [activeItem, setActiveItem] = useState("stocks");
@@ -145,11 +155,11 @@ function InventoryStocksContent() {
         ]);
 
         if (!stocksResponse.ok) {
-          throw new Error("Failed to fetch stocks");
+          throw new Error(tRef.current.failedToFetchStocks);
         }
 
         if (!shopsResponse.ok) {
-          throw new Error("Failed to fetch shops");
+          throw new Error(tRef.current.failedToFetchShops);
         }
 
         const [stocksData, shopsData] = await Promise.all([
@@ -158,11 +168,15 @@ function InventoryStocksContent() {
         ]);
 
         if (!stocksData.success || !stocksData.data) {
-          throw new Error(stocksData.error || "Invalid response format");
+          throw new Error(
+            stocksData.error || tRef.current.invalidResponseFormat,
+          );
         }
 
         if (!shopsData.success || !shopsData.data) {
-          throw new Error(shopsData.error || "Failed to fetch shops");
+          throw new Error(
+            shopsData.error || tRef.current.failedToFetchShops,
+          );
         }
 
         // Set shops data and create lookup map
@@ -184,7 +198,9 @@ function InventoryStocksContent() {
         );
         setStockGroups(transformedGroups);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch stocks");
+        setError(
+          err instanceof Error ? err.message : tRef.current.failedToFetchStocks,
+        );
         console.error("Error fetching stocks:", err);
       } finally {
         setIsLoading(false);
@@ -222,13 +238,15 @@ function InventoryStocksContent() {
           ]);
 
           if (!stocksResponse.ok) {
-            throw new Error("Failed to fetch stocks");
+            throw new Error(tRef.current.failedToFetchStocks);
           }
 
           const stocksData = await stocksResponse.json();
 
           if (!stocksData.success || !stocksData.data) {
-            throw new Error(stocksData.error || "Invalid response format");
+            throw new Error(
+              stocksData.error || tRef.current.invalidResponseFormat,
+            );
           }
 
           // Set currency from settings
@@ -242,7 +260,11 @@ function InventoryStocksContent() {
           );
           setStockGroups(transformedGroups);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to fetch stocks");
+          setError(
+            err instanceof Error
+              ? err.message
+              : tRef.current.failedToFetchStocks,
+          );
           console.error("Error fetching stocks:", err);
         } finally {
           setIsLoading(false);
@@ -345,7 +367,7 @@ function InventoryStocksContent() {
   const exportToCSV = () => {
     // Doc: "Export Data" - Owner + Manager only.
     if (!permissions.canExportStockData) {
-      toast.error("You do not have permission to export stock data.");
+      toast.error(t.noPermissionExportStock);
       return;
     }
 
@@ -429,7 +451,7 @@ function InventoryStocksContent() {
   const handleDeleteGroup = (group: StockGroupDisplay) => {
     // Doc: "Delete Products" - Owner only.
     if (!permissions.canDeleteProducts) {
-      toast.error("Only the owner can delete products.");
+      toast.error(t.onlyOwnerCanDeleteProducts);
       return;
     }
 
@@ -459,7 +481,7 @@ function InventoryStocksContent() {
       console.log("DELETE response:", response.status, result);
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to delete stock item");
+        throw new Error(result.error || t.failedToDeleteStockItem);
       }
 
       // Remove the deleted group from the state
@@ -469,7 +491,7 @@ function InventoryStocksContent() {
 
       // Show success message
       setSuccessMessage(
-        `Stock group "${deletingGroup.groupName}" has been deleted successfully.`,
+        `${t.stockGroup} "${deletingGroup.groupName}" ${t.hasBeenDeletedSuccessfully}`,
       );
 
       // Close modal
@@ -481,7 +503,7 @@ function InventoryStocksContent() {
     } catch (error) {
       console.error("Error deleting stock:", error);
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete stock item",
+        error instanceof Error ? error.message : t.failedToDeleteStockItem,
       );
     } finally {
       setIsDeleting(false);
@@ -519,12 +541,12 @@ function InventoryStocksContent() {
 
     // Doc: "Delete Products" - Owner only.
     if (!permissions.canDeleteProducts) {
-      toast.error("Only the owner can delete products.");
+      toast.error(t.onlyOwnerCanDeleteProducts);
       return;
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to permanently delete ${selectedStocks.length} stock item(s)?\n\nThis action cannot be undone.`,
+      `${selectedStocks.length} ${t.stockItemsPermanentDeleteConfirm}\n\n${t.cannotBeUndone}`,
     );
 
     if (!confirmed) return;
@@ -556,13 +578,13 @@ function InventoryStocksContent() {
       );
       setSelectedStocks([]);
       setSuccessMessage(
-        `Successfully deleted ${successCount} stock item(s).${
-          failCount > 0 ? ` Failed to delete ${failCount} item(s).` : ""
+        `${successCount} ${t.stockItemsDeletedSuccessfully}${
+          failCount > 0 ? ` ${failCount} ${t.itemsFailedToDelete}` : ""
         }`,
       );
       setTimeout(() => setSuccessMessage(null), 5000);
     } else {
-      toast.error("Failed to delete any stock items. Please try again.");
+      toast.error(`${t.failedToDeleteAnyStockItems} ${t.pleaseTryAgain}`);
     }
 
     setIsProcessingBulkDelete(false);
@@ -607,10 +629,10 @@ function InventoryStocksContent() {
             {/* Page Title */}
             <div className="mb-8">
               <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-                Inventory Stocks
+                {t.inventoryStocks}
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Manage and track all your product inventory
+                {t.inventoryStocksSubtitle}
               </p>
             </div>
             {/* Category Tabs */}
@@ -628,7 +650,7 @@ function InventoryStocksContent() {
                       : "bg-gray-100 text-gray-700 hover:bg-pink-50"
                   }`}
                 >
-                  All Categories
+                  {t.allCategories}
                 </button>
 
                 {/* Individual Category Tabs */}
@@ -659,7 +681,7 @@ function InventoryStocksContent() {
                     <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <input
                       type="text"
-                      placeholder="Search by Group Name or Barcode..."
+                      placeholder={t.searchByGroupNameOrBarcode}
                       value={searchTerm}
                       onChange={handleSearchChange}
                       className="w-full pl-12 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pink-400 focus:border-transparent shadow-sm"
@@ -674,7 +696,7 @@ function InventoryStocksContent() {
                       onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                     >
                       <Filter className="h-4 w-4" />
-                      Filter
+                      {t.filter}
                       {hasActiveFilters && (
                         <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded-full">
                           {
@@ -693,14 +715,14 @@ function InventoryStocksContent() {
                       <div className="absolute z-50 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-5 right-0">
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-semibold text-gray-900">
-                            Filters
+                            {t.filters}
                           </h3>
                           {hasActiveFilters && (
                             <button
                               onClick={clearFilters}
                               className="text-xs text-cyan-600 hover:text-blue-800 font-semibold hover:bg-cyan-50 px-2 py-1 rounded-lg transition-colors"
                             >
-                              Clear all
+                              {t.clearAll}
                             </button>
                           )}
                         </div>
@@ -708,7 +730,7 @@ function InventoryStocksContent() {
                         {/* Shop Filter */}
                         <div className="mb-4">
                           <label className="block text-xs font-semibold text-gray-700 mb-2.5">
-                            Shop
+                            {t.shop}
                           </label>
                           <select
                             title="selectedShop"
@@ -719,7 +741,7 @@ function InventoryStocksContent() {
                             }}
                             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
                           >
-                            <option value="all">All Shops</option>
+                            <option value="all">{t.allShops}</option>
                             {shops.map((shop) => (
                               <option key={shop.id} value={shop.id}>
                                 {shop.name}
@@ -731,7 +753,7 @@ function InventoryStocksContent() {
                         {/* Category Filter */}
                         <div className="mb-4">
                           <label className="block text-xs font-semibold text-gray-700 mb-2.5">
-                            Category
+                            {t.category}
                           </label>
                           <select
                             title="selectedCategory"
@@ -742,7 +764,7 @@ function InventoryStocksContent() {
                             }}
                             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
                           >
-                            <option value="all">All Categories</option>
+                            <option value="all">{t.allCategories}</option>
                             {categories.map((cat) => (
                               <option key={cat} value={cat}>
                                 {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -754,7 +776,7 @@ function InventoryStocksContent() {
                         {/* Stock Status Filter */}
                         <div className="mb-4">
                           <label className="block text-xs font-semibold text-gray-700 mb-2.5">
-                            Stock Status
+                            {t.stockStatus}
                           </label>
                           <select
                             title="selectedStockStatus"
@@ -765,22 +787,22 @@ function InventoryStocksContent() {
                             }}
                             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-400 focus:border-transparent bg-white text-gray-900 transition-all"
                           >
-                            <option value="all">All Status</option>
-                            <option value="in-stock">In Stock</option>
-                            <option value="low-stock">Low Stock (≤10)</option>
-                            <option value="out-of-stock">Out of Stock</option>
+                            <option value="all">{t.allStatus}</option>
+                            <option value="in-stock">{t.inStock}</option>
+                            <option value="low-stock">{t.lowStock} (≤10)</option>
+                            <option value="out-of-stock">{t.outOfStock}</option>
                           </select>
                         </div>
 
                         {/* Price Range Filter */}
                         <div className="mb-1">
                           <label className="block text-xs font-semibold text-gray-700 mb-2.5">
-                            Price Range ({defaultCurrency})
+                            {t.priceRange} ({defaultCurrency})
                           </label>
                           <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden transition-all focus-within:ring-2 focus-within:ring-pink-400 focus-within:border-transparent">
                             <input
                               type="number"
-                              placeholder="Min"
+                              placeholder={t.minShort}
                               value={priceRange.min}
                               onChange={(e) => {
                                 setPriceRange({
@@ -794,7 +816,7 @@ function InventoryStocksContent() {
                             <span className="h-4 w-px bg-gray-200" />
                             <input
                               type="number"
-                              placeholder="Max"
+                              placeholder={t.maxShort}
                               value={priceRange.max}
                               onChange={(e) => {
                                 setPriceRange({
@@ -821,7 +843,7 @@ function InventoryStocksContent() {
                       onClick={exportToCSV}
                     >
                       <Download className="h-4 w-4" />
-                      Export
+                      {t.exportLabel}
                     </Button>
                   )}
                   {/* Doc: "Add New Products" - Owner + Manager only. */}
@@ -833,7 +855,7 @@ function InventoryStocksContent() {
                       }
                     >
                       <Plus className="h-4 w-4" />
-                      New Stock
+                      {t.newStock}
                     </Button>
                   )}
                 </div>
@@ -848,7 +870,7 @@ function InventoryStocksContent() {
                     <Package className="h-5 w-5 text-pink-700" />
                   </div>
                   <span className="text-sm font-semibold text-pink-900">
-                    {selectedStocks.length} stock item(s) selected
+                    {selectedStocks.length} {t.stockItemsSelected}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -862,12 +884,12 @@ function InventoryStocksContent() {
                       {isProcessingBulkDelete ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          Deleting...
+                          {t.deleting}
                         </>
                       ) : (
                         <>
                           <Trash2 className="h-4 w-4" />
-                          Delete Selected
+                          {t.deleteSelected}
                         </>
                       )}
                     </button>
@@ -876,7 +898,7 @@ function InventoryStocksContent() {
                     onClick={() => setSelectedStocks([])}
                     className="px-4 py-2.5 bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors text-sm font-semibold rounded-lg shadow-sm"
                   >
-                    Clear
+                    {t.clear}
                   </button>
                 </div>
               </div>
@@ -889,7 +911,7 @@ function InventoryStocksContent() {
                   <div className="flex flex-col items-center justify-center gap-3">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
                     <span className="text-gray-600 font-medium">
-                      Loading stocks...
+                      {t.loadingStocks}
                     </span>
                   </div>
                 </div>
@@ -901,7 +923,7 @@ function InventoryStocksContent() {
                     </div>
                     <div>
                       <p className="font-semibold text-red-900">
-                        Error loading stocks
+                        {t.errorLoadingStocks}
                       </p>
                       <p className="text-sm text-red-600 mt-1">{error}</p>
                     </div>
@@ -915,12 +937,12 @@ function InventoryStocksContent() {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">
-                        No stocks found
+                        {t.noStocksFound}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
                         {searchTerm
-                          ? "Try adjusting your search criteria"
-                          : "Start by adding your first stock item"}
+                          ? t.tryAdjustingSearchCriteria
+                          : t.startByAddingFirstStock}
                       </p>
                     </div>
                   </div>
@@ -942,7 +964,7 @@ function InventoryStocksContent() {
                               }
                               onChange={toggleSelectAll}
                               className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
-                              aria-label="Select all stocks"
+                              aria-label={t.selectAllStocks}
                             />
                           </th>
                         )}
@@ -950,49 +972,49 @@ function InventoryStocksContent() {
                           scope="col"
                           className="py-4 pl-4 pr-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wide sm:pl-6"
                         >
-                          Product
+                          {t.product}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Shop
+                          {t.shop}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Category
+                          {t.category}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Stock Info
+                          {t.stockInfo}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Unit Price
+                          {t.unitPrice}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Original Price
+                          {t.originalPrice}
                         </th>
                         <th
                           scope="col"
                           className="px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wide"
                         >
-                          Date
+                          {t.date}
                         </th>
                         <th
                           scope="col"
                           className="relative py-4 pl-3 pr-4 sm:pr-6"
                         >
-                          <span className="sr-only">Actions</span>
+                          <span className="sr-only">{t.actions}</span>
                         </th>
                       </tr>
                     </thead>
@@ -1010,7 +1032,7 @@ function InventoryStocksContent() {
                                     toggleSelectStock(group.groupId)
                                   }
                                   className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
-                                  aria-label={`Select ${group.groupName}`}
+                                  aria-label={`${group.groupName} ${t.selectSuffix}`}
                                 />
                               </td>
                             )}
@@ -1063,12 +1085,14 @@ function InventoryStocksContent() {
                                   <Package className="h-3.5 w-3.5 text-gray-400" />
                                   <span>{group.totalQuantity}</span>
                                   <span className="text-gray-500 font-normal">
-                                    items
+                                    {t.items}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-gray-600">
                                   <Palette className="h-3 w-3 text-gray-400" />
-                                  <span>{group.variants.length} colors</span>
+                                  <span>
+                                    {group.variants.length} {t.colorsSuffix}
+                                  </span>
                                   <span className="text-gray-400">•</span>
                                   <Ruler className="h-3 w-3 text-gray-400" />
                                   <span>{group.sizeSummary}</span>
@@ -1105,7 +1129,7 @@ function InventoryStocksContent() {
                                   <button
                                     onClick={() => handleEditGroup(group)}
                                     className="p-2 text-cyan-600 hover:text-blue-900 hover:bg-cyan-50 rounded-lg transition-colors"
-                                    title="Edit"
+                                    title={t.edit}
                                   >
                                     <Edit className="h-4 w-4" />
                                   </button>
@@ -1115,7 +1139,7 @@ function InventoryStocksContent() {
                                   <button
                                     onClick={() => handleDeleteGroup(group)}
                                     className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Delete"
+                                    title={t.delete}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
@@ -1127,8 +1151,8 @@ function InventoryStocksContent() {
                                   className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                   title={
                                     expandedGroups.has(group.groupId)
-                                      ? "Collapse"
-                                      : "Expand"
+                                      ? t.collapse
+                                      : t.expand
                                   }
                                 >
                                   {expandedGroups.has(group.groupId) ? (
@@ -1155,7 +1179,7 @@ function InventoryStocksContent() {
                                   <div>
                                     <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
                                       <Palette className="h-4 w-4" />
-                                      Color Variants
+                                      {t.colorVariants}
                                     </h4>
                                     <div className="grid grid-cols-4 gap-4">
                                       {group.variants.map(
@@ -1229,7 +1253,7 @@ function InventoryStocksContent() {
                                   {/* Wholesale Pricing */}
                                   <WholesalePricingTiers
                                     wholesaleTiers={group.wholesaleTiers}
-                                    title="Wholesale Pricing Tiers"
+                                    title={t.wholesalePricingTiers}
                                     defaultExpanded={false}
                                   />
                                 </div>
@@ -1251,7 +1275,7 @@ function InventoryStocksContent() {
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
                   >
-                    Previous
+                    {t.previous}
                   </button>
                   <button
                     onClick={() =>
@@ -1260,16 +1284,16 @@ function InventoryStocksContent() {
                     disabled={currentPage === totalPages}
                     className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
                   >
-                    Next
+                    {t.next}
                   </button>
                 </div>
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-700">
-                      Rows per page:
+                      {t.rowsPerPage}:
                     </p>
                     <select
-                      title="Select number of rows per page"
+                      title={t.selectRowsPerPage}
                       value={rowsPerPage}
                       onChange={(e) => {
                         setRowsPerPage(Number(e.target.value));
@@ -1283,18 +1307,19 @@ function InventoryStocksContent() {
                       <option value={100}>100</option>
                     </select>
                     <p className="text-sm font-medium text-gray-700">
-                      Showing {startIndex + 1}–
-                      {Math.min(endIndex, filteredGroups.length)} of{" "}
-                      {filteredGroups.length} stock groups
+                      {filteredGroups.length} {t.stockGroupsTotalSuffix}{" "}
+                      {startIndex + 1}–
+                      {Math.min(endIndex, filteredGroups.length)}{" "}
+                      {t.isShowingSuffix}
                     </p>
                   </div>
                   <div>
                     <nav
                       className="relative z-0 inline-flex rounded-lg shadow-sm -space-x-px border border-gray-300"
-                      aria-label="Pagination"
+                      aria-label={t.pagination}
                     >
                       <button
-                        title="Go to previous page"
+                        title={t.goToPreviousPage}
                         onClick={() =>
                           setCurrentPage(Math.max(1, currentPage - 1))
                         }
@@ -1304,7 +1329,7 @@ function InventoryStocksContent() {
                         <ChevronLeft className="h-5 w-5" />
                       </button>
                       <button
-                        title="Go to next page"
+                        title={t.goToNextPage}
                         onClick={() =>
                           setCurrentPage(Math.min(totalPages, currentPage + 1))
                         }
@@ -1348,7 +1373,7 @@ function InventoryStocksContent() {
             </div>
             <div className="ml-auto pl-3">
               <button
-                title="Close success message"
+                title={t.closeSuccessMessage}
                 onClick={() => setSuccessMessage(null)}
                 className="text-green-400 hover:text-green-600"
               >
@@ -1378,15 +1403,15 @@ function InventoryStocksContent() {
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      Delete Stock Group
+                      {t.deleteStockGroup}
                     </h3>
                     <div className="mt-2">
                       <p className="text-sm text-gray-500">
-                        Are you sure you want to delete the stock group &quot;
-                        {deletingGroup.groupName}&quot;? This action cannot be
-                        undone and will remove all {deletingGroup.totalQuantity}{" "}
-                        items across {deletingGroup.variants.length} color
-                        variants.
+                        &quot;{deletingGroup.groupName}&quot;{" "}
+                        {t.confirmDeleteStockGroupSuffix}{" "}
+                        {deletingGroup.totalQuantity} {t.items},{" "}
+                        {deletingGroup.variants.length} {t.colorVariants}{" "}
+                        {t.willBeRemoved} {t.cannotBeUndone}
                       </p>
                     </div>
                     {deleteError && (
@@ -1404,7 +1429,7 @@ function InventoryStocksContent() {
                   disabled={isDeleting}
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isDeleting ? "Deleting..." : "Delete"}
+                  {isDeleting ? t.deleting : t.delete}
                 </button>
                 <button
                   type="button"
@@ -1412,7 +1437,7 @@ function InventoryStocksContent() {
                   disabled={isDeleting}
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
               </div>
             </div>
