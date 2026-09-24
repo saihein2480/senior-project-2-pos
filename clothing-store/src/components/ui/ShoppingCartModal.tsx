@@ -12,6 +12,10 @@ import { detectColorName } from "@/lib/colorUtils";
 import { CustomerSelectionModal } from "@/components/cart/CustomerSelectionModal";
 import { RewardRedemptionModal } from "@/components/cart/RewardRedemptionModal";
 import { PaymentClearanceModal } from "@/components/payment/PaymentClearanceModal";
+import type {
+  ReceiptBreakdown,
+  ReceiptLineDetail,
+} from "@/types/receipt";
 import { toast } from "react-hot-toast";
 
 interface ShoppingCartModalProps {
@@ -814,32 +818,126 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     defaultCurrency as "THB" | "MMK",
   );
 
+  // Fixed discounts are typed by the cashier in the *display* currency, so they
+  // have to come back to base currency before they can sit alongside the item
+  // prices. Percentage savings are already derived from base prices.
+  const toBaseCurrency = (displayAmount: number) =>
+    SettingsService.convertPrice(
+      displayAmount,
+      selectedCurrency as "THB" | "MMK",
+      defaultCurrency as "THB" | "MMK",
+      currencyRate,
+      defaultCurrency as "THB" | "MMK",
+    );
+
+  const groupFixedTotalBase = toBaseCurrency(groupFixedTotal);
+  const variantFixedTotalBase = toBaseCurrency(variantFixedTotal);
+  const cartDiscountBase = toBaseCurrency(displayCartDiscount);
+
   const discountBreakdownForPayment = {
     wholesaleSavings,
     groupPercentSavings: groupDiscountSavings,
-    groupFixedTotal: SettingsService.convertPrice(
-      groupFixedTotal,
-      selectedCurrency as "THB" | "MMK",
-      defaultCurrency as "THB" | "MMK",
-      currencyRate,
-      defaultCurrency as "THB" | "MMK",
-    ),
+    groupFixedTotal: groupFixedTotalBase,
     variantPercentSavings: variantDiscountSavings,
-    variantFixedTotal: SettingsService.convertPrice(
-      variantFixedTotal,
-      selectedCurrency as "THB" | "MMK",
-      defaultCurrency as "THB" | "MMK",
-      currencyRate,
-      defaultCurrency as "THB" | "MMK",
-    ),
-    cartDiscount: SettingsService.convertPrice(
-      displayCartDiscount,
-      selectedCurrency as "THB" | "MMK",
-      defaultCurrency as "THB" | "MMK",
-      currencyRate,
-      defaultCurrency as "THB" | "MMK",
-    ),
+    variantFixedTotal: variantFixedTotalBase,
+    cartDiscount: cartDiscountBase,
     cartDiscountPercent,
+  };
+
+  /**
+   * The un-collapsed money story for the receipt.
+   *
+   * `subtotal` above is already net of wholesale and percentage discounts
+   * (they are baked into `item.discountedPrice`), while `originalSubtotal` is
+   * the pure catalogue total. Starting the receipt from `originalSubtotal` and
+   * listing each saving is what lets the printed figures add up line by line —
+   * the collapsed `subtotal`/`discount` pair sent to the transaction cannot.
+   */
+  const receiptLineDetails: ReceiptLineDetail[] = cart.items.map((item) => {
+    const originalUnitPrice = item.unitPrice;
+
+    // Unit price after wholesale + group% + variant%, all of which CartContext
+    // folds into `discountedPrice`.
+    const unitAfterPercent =
+      item.discountedPrice !== undefined
+        ? item.discountedPrice
+        : item.unitPrice;
+
+    const variantFixedPerUnit = toBaseCurrency(
+      variantFixedDiscounts[item.id] || 0,
+    );
+    const groupFixedPerUnit = toBaseCurrency(
+      getGroupFixedPerUnit(item.groupName),
+    );
+
+    const finalUnitPrice = Math.max(
+      0,
+      unitAfterPercent - variantFixedPerUnit - groupFixedPerUnit,
+    );
+
+    const lineOriginalTotal = originalUnitPrice * item.quantity;
+    const lineFinalTotal = finalUnitPrice * item.quantity;
+
+    const discountLabels: string[] = [];
+    if (item.isWholesalePricing) discountLabels.push("Wholesale price");
+    if (item.groupDiscount && item.groupDiscount > 0) {
+      discountLabels.push(`Group -${item.groupDiscount}%`);
+    }
+    if (item.variantDiscount && item.variantDiscount > 0) {
+      discountLabels.push(`Variant -${item.variantDiscount}%`);
+    }
+    if (groupFixedPerUnit > 0) discountLabels.push("Group offer");
+    if (variantFixedPerUnit > 0) discountLabels.push("Variant offer");
+
+    return {
+      itemId: item.id,
+      originalUnitPrice,
+      finalUnitPrice,
+      lineOriginalTotal,
+      lineFinalTotal,
+      lineSavings: Math.max(0, lineOriginalTotal - lineFinalTotal),
+      discountLabels,
+    };
+  });
+
+  // What the printed lines add up to after their own discounts. Equal to the sum
+  // of `lineFinalTotal` above, so the item lines reconcile with this figure.
+  const itemsTotalBase =
+    originalSubtotal -
+    (wholesaleSavings +
+      groupDiscountSavings +
+      groupFixedTotalBase +
+      variantDiscountSavings +
+      variantFixedTotalBase);
+
+  const subtotalAfterDiscountsBase = itemsTotalBase - cartDiscountBase;
+
+  const receiptBreakdown: ReceiptBreakdown = {
+    grossSubtotal: originalSubtotal,
+    wholesaleSavings,
+    groupPercentSavings: groupDiscountSavings,
+    groupFixedTotal: groupFixedTotalBase,
+    variantPercentSavings: variantDiscountSavings,
+    variantFixedTotal: variantFixedTotalBase,
+    cartDiscount: cartDiscountBase,
+    cartDiscountPercent,
+    itemsTotal: itemsTotalBase,
+    subtotalAfterDiscounts: subtotalAfterDiscountsBase,
+    couponCode: cart.appliedCoupon?.code,
+    couponDiscount: couponDiscountForPayment,
+    taxableBase: subtotalAfterDiscountsBase - couponDiscountForPayment,
+    taxRate,
+    tax: taxForPayment,
+    total: grandTotalForPayment,
+    totalSavings:
+      wholesaleSavings +
+      groupDiscountSavings +
+      groupFixedTotalBase +
+      variantDiscountSavings +
+      variantFixedTotalBase +
+      cartDiscountBase +
+      couponDiscountForPayment,
+    lines: receiptLineDetails,
   };
 
   return createPortal(
@@ -2069,6 +2167,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         tax={taxForPayment}
         total={grandTotalForPayment}
         discountBreakdown={discountBreakdownForPayment}
+        receiptBreakdown={receiptBreakdown}
         couponId={cart.appliedCoupon?.id}
         couponCode={cart.appliedCoupon?.code}
         couponDiscount={couponDiscountForPayment}

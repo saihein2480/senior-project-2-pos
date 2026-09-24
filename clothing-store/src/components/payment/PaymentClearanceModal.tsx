@@ -12,6 +12,7 @@ import { transactionService } from "@/services/transactionService";
 import type { DiscountBreakdown } from "@/services/transactionService";
 import { SettingsService } from "@/services/settingsService";
 import { detectColorName } from "@/lib/colorUtils";
+import type { ReceiptBreakdown } from "@/types/receipt";
 
 type ReceiptPaperSize =
   | "44mm"
@@ -42,6 +43,14 @@ interface PaymentClearanceModalProps {
   tax: number;
   total: number;
   discountBreakdown?: DiscountBreakdown;
+  /**
+   * The un-collapsed money story from the cart: gross subtotal, every discount
+   * component, the coupon, tax and the per-line detail. The receipt prints this
+   * so the customer can check the total instead of trusting one "Discount" line.
+   *
+   * Optional only so the component degrades gracefully; the cart always sends it.
+   */
+  receiptBreakdown?: ReceiptBreakdown;
   /** Loyalty coupon applied at the till, recorded and consumed with the sale. */
   couponId?: string;
   couponCode?: string;
@@ -49,6 +58,26 @@ interface PaymentClearanceModalProps {
 }
 
 type PaymentMethod = "cash" | "scan" | "wallet" | "cod";
+
+/** Trim floating point noise so a label reads "7%" instead of "7.000000001%". */
+function formatRatePercent(percent: number): string {
+  return String(Math.round(Number(percent || 0) * 100) / 100);
+}
+
+/**
+ * Escape values interpolated into the print window's HTML.
+ *
+ * The receipt now carries free-text customer details (name, address), so they
+ * must not be written into the document as markup.
+ */
+function escapeHtml(value: string): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 export function PaymentClearanceModal({
   isOpen,
@@ -61,6 +90,7 @@ export function PaymentClearanceModal({
   tax,
   total,
   discountBreakdown,
+  receiptBreakdown,
   couponId,
   couponCode,
   couponDiscount,
@@ -99,6 +129,9 @@ export function PaymentClearanceModal({
     exchangeRate: number;
     sellingTotal: number;
     cashierRole: string;
+    cashierName: string;
+    /** Full discount/promotion breakdown, printed line by line. */
+    breakdown: ReceiptBreakdown;
   } | null>(null);
   const [receiptSize, setReceiptSize] = useState<ReceiptPaperSize>("80mm");
   const amountInputRef = useRef<HTMLInputElement | null>(null);
@@ -176,6 +209,48 @@ export function PaymentClearanceModal({
           defaultCurrency,
         );
   const change = amountPaid - totalInSellingCurrency;
+
+  /**
+   * The cart computes the full breakdown and passes it down. This fallback only
+   * exists so the receipt still balances if it ever arrives without one: the
+   * whole saving is reported as a cart discount, because the till's collapsed
+   * `discount` already has the coupon folded into it and counting the coupon
+   * again here would double it.
+   */
+  const effectiveBreakdown: ReceiptBreakdown = receiptBreakdown ?? {
+    grossSubtotal: subtotal,
+    wholesaleSavings: 0,
+    groupPercentSavings: 0,
+    groupFixedTotal: 0,
+    variantPercentSavings: 0,
+    variantFixedTotal: 0,
+    cartDiscount: discount,
+    cartDiscountPercent: 0,
+    itemsTotal: subtotal,
+    subtotalAfterDiscounts: subtotal - discount,
+    couponCode: undefined,
+    couponDiscount: 0,
+    taxableBase: subtotal - discount,
+    taxRate:
+      subtotal - discount > 0 && tax > 0
+        ? (tax / (subtotal - discount)) * 100
+        : 0,
+    tax,
+    total,
+    totalSavings: discount,
+    lines: items.map((item) => {
+      const lineTotal = item.unitPrice * item.quantity;
+      return {
+        itemId: item.id,
+        originalUnitPrice: item.unitPrice,
+        finalUnitPrice: item.unitPrice,
+        lineOriginalTotal: lineTotal,
+        lineFinalTotal: lineTotal,
+        lineSavings: 0,
+        discountLabels: [],
+      };
+    }),
+  };
 
   const handleCalculatorInput = (value: string) => {
     if (value === "Clear") {
@@ -305,6 +380,9 @@ export function PaymentClearanceModal({
         cashierRole: user?.role
           ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
           : "Staff",
+        cashierName:
+          user?.displayName?.trim() || user?.email?.split("@")[0] || "",
+        breakdown: effectiveBreakdown,
       });
       setShowReceipt(true);
       setIsProcessing(false);
@@ -364,6 +442,13 @@ export function PaymentClearanceModal({
         exchangeRate: receiptData.exchangeRate,
         sellingTotal: receiptData.sellingTotal,
         discountBreakdown,
+        // Receipt-grade figures, recorded additively so a reprint or a report
+        // can show the same itemised breakdown the customer was handed.
+        // `subtotal` and `discount` above keep their existing meaning, so
+        // nothing that already reads them changes behaviour.
+        grossSubtotal: receiptData.breakdown.grossSubtotal,
+        totalSavings: receiptData.breakdown.totalSavings,
+        taxRate: receiptData.breakdown.taxRate,
         ...(couponId
           ? {
               couponId,
@@ -417,6 +502,227 @@ export function PaymentClearanceModal({
       hour12: true,
     };
     return now.toLocaleDateString("en-US", options);
+  };
+
+  /** One line of the items section, already formatted for the selling currency. */
+  type ReceiptItemRow = {
+    name: string;
+    /** "2 x ฿100.00" at the catalogue price. */
+    quantityLine: string;
+    /** Line total at the catalogue price, so the lines sum to the gross subtotal. */
+    amount: string;
+    /** Why it was discounted, e.g. "Group -10%". Empty when nothing applied. */
+    discountLabels: string[];
+    /** What this line saved, only when non-zero. */
+    savedLine?: string;
+    /** Line total actually charged, only shown when a discount applied. */
+    netLine?: string;
+  };
+
+  /** One line of the totals section. */
+  type ReceiptTotalRow = {
+    label: string;
+    value: string;
+    /**
+     * How to present it: a saving (shown negative), a running subtotal, the
+     * grand total, the savings summary, or a plain payment fact.
+     */
+    tone: "discount" | "subtotal" | "grand" | "savings" | "plain";
+  };
+
+  /**
+   * Build the printable item lines.
+   *
+   * Each line is quoted at the catalogue price and then shows its own discount
+   * and what was actually charged. That way the line amounts sum to the gross
+   * subtotal and the "you pay" amounts sum to the discounted subtotal, so the
+   * customer can check the receipt at either level. The old receipt printed the
+   * catalogue price as though it were the charged price, with no discount shown
+   * on the line at all, so the items never reconciled with the total beneath them.
+   */
+  const buildItemRows = (
+    data: NonNullable<typeof receiptData>,
+  ): ReceiptItemRow[] => {
+    const detailById = new Map(
+      data.breakdown.lines.map((line) => [line.itemId, line]),
+    );
+
+    return data.items.map((item) => {
+      const detail = detailById.get(item.id);
+      const originalUnitPrice = detail?.originalUnitPrice ?? item.unitPrice;
+      const lineOriginalTotal =
+        detail?.lineOriginalTotal ?? originalUnitPrice * item.quantity;
+      const savings = detail?.lineSavings ?? 0;
+      const lineFinalTotal = detail?.lineFinalTotal ?? lineOriginalTotal;
+
+      const colorName = item.selectedColor
+        ? detectColorName(item.selectedColor) || item.selectedColor
+        : "";
+      const variant = [colorName, item.selectedSize].filter(Boolean).join(" - ");
+
+      return {
+        name: variant ? `${item.groupName} ${variant}` : item.groupName,
+        quantityLine: `${item.quantity} x ${formatPrice(originalUnitPrice)}`,
+        amount: formatPrice(lineOriginalTotal),
+        discountLabels: detail?.discountLabels ?? [],
+        savedLine: savings > 0 ? `-${formatPrice(savings)}` : undefined,
+        netLine: savings > 0 ? formatPrice(lineFinalTotal) : undefined,
+      };
+    });
+  };
+
+  /**
+   * Build the printable totals lines.
+   *
+   * The order mirrors how the price was actually reached: the catalogue subtotal,
+   * each item-level discount, the subtotal those leave, then the order-level cart
+   * discount and coupon, then tax and the total. Zero-value discounts and the
+   * running subtotals they would explain are omitted, so a plain sale with no
+   * promotion still prints a short receipt.
+   */
+  const buildTotalRows = (
+    data: NonNullable<typeof receiptData>,
+  ): ReceiptTotalRow[] => {
+    const b = data.breakdown;
+    const rows: ReceiptTotalRow[] = [];
+    const sellingCurrency = data.sellingCurrency as "THB" | "MMK";
+
+    const itemDiscountRows: Array<[string, number]> = [
+      ["Wholesale price saving", b.wholesaleSavings],
+      ["Group discount", b.groupPercentSavings],
+      ["Group offer", b.groupFixedTotal],
+      ["Variant discount", b.variantPercentSavings],
+      ["Variant offer", b.variantFixedTotal],
+    ];
+
+    const hasItemDiscount = itemDiscountRows.some(([, amount]) => amount > 0);
+
+    rows.push({
+      label: hasItemDiscount ? "Subtotal (before discount)" : "Subtotal",
+      value: formatPrice(b.grossSubtotal),
+      tone: "plain",
+    });
+
+    itemDiscountRows.forEach(([label, amount]) => {
+      if (amount > 0) {
+        rows.push({
+          label,
+          value: `-${formatPrice(amount)}`,
+          tone: "discount",
+        });
+      }
+    });
+
+    if (hasItemDiscount) {
+      rows.push({
+        label: "Subtotal after item discount",
+        value: formatPrice(b.itemsTotal),
+        tone: "subtotal",
+      });
+    }
+
+    if (b.cartDiscount > 0) {
+      rows.push({
+        label:
+          b.cartDiscountPercent > 0
+            ? `Cart discount (${b.cartDiscountPercent}%)`
+            : "Cart discount",
+        value: `-${formatPrice(b.cartDiscount)}`,
+        tone: "discount",
+      });
+
+      // Only worth stating when there is also a coupon to take off it; otherwise
+      // the next line is tax and the total already shows the result.
+      if (b.couponDiscount > 0) {
+        rows.push({
+          label: "Subtotal after discount",
+          value: formatPrice(b.subtotalAfterDiscounts),
+          tone: "subtotal",
+        });
+      }
+    }
+
+    if (b.couponDiscount > 0) {
+      rows.push({
+        label: b.couponCode ? `Coupon (${b.couponCode})` : "Coupon",
+        value: `-${formatPrice(b.couponDiscount)}`,
+        tone: "discount",
+      });
+    }
+
+    rows.push({
+      label: `Tax (${formatRatePercent(b.taxRate)}%)`,
+      value: formatPrice(b.tax),
+      tone: "plain",
+    });
+
+    rows.push({ label: "TOTAL", value: formatPrice(b.total), tone: "grand" });
+
+    if (b.totalSavings > 0) {
+      rows.push({
+        label: "You saved",
+        value: formatPrice(b.totalSavings),
+        tone: "savings",
+      });
+    }
+
+    // Amounts below are already in the selling currency, so they are formatted
+    // with it explicitly rather than being converted a second time.
+    if (data.sellingCurrency !== defaultCurrency) {
+      rows.push({
+        label: `Total (${data.sellingCurrency})`,
+        value: formatPrice(data.sellingTotal, sellingCurrency),
+        tone: "plain",
+      });
+    }
+
+    if (data.paymentMethod === "cash") {
+      rows.push({
+        label: "Paid",
+        value: formatPrice(data.amountPaid, sellingCurrency),
+        tone: "plain",
+      });
+      rows.push({
+        label: "Change",
+        value: formatPrice(data.change, sellingCurrency),
+        tone: "plain",
+      });
+    }
+
+    rows.push({
+      label: "Payment",
+      value: data.paymentMethod.toUpperCase(),
+      tone: "plain",
+    });
+
+    return rows;
+  };
+
+  /**
+   * Customer and cashier facts printed above the items. Only what exists is
+   * printed, so a quick anonymous cash sale still gets a clean receipt.
+   */
+  const buildInfoRows = (
+    data: NonNullable<typeof receiptData>,
+  ): Array<[string, string]> => {
+    const rows: Array<[string, string]> = [];
+    const c = data.customer;
+
+    if (c) {
+      rows.push(["Customer", c.displayName || c.email || "-"]);
+      if (c.phone) rows.push(["Phone", c.phone]);
+      if (c.address) rows.push(["Address", c.address]);
+      if (c.email && c.displayName) rows.push(["Account", c.email]);
+    }
+
+    rows.push([
+      "Cashier",
+      data.cashierName
+        ? `${data.cashierName} (${data.cashierRole || "Staff"})`
+        : data.cashierRole || "Staff",
+    ]);
+
+    return rows;
   };
 
   const handlePrintReceipt = async () => {
@@ -581,6 +887,17 @@ export function PaymentClearanceModal({
               justify-content: space-between;
               margin-top: 2px;
             }
+            .item-note {
+              font-size: ${detailSize};
+              color: #333;
+              margin-top: 1px;
+            }
+            .item-saving {
+              display: flex;
+              justify-content: space-between;
+              font-size: ${detailSize};
+              margin-top: 1px;
+            }
             .totals {
               margin-top: 10px;
             }
@@ -588,6 +905,26 @@ export function PaymentClearanceModal({
               display: flex;
               justify-content: space-between;
               margin: 4px 0;
+              gap: 6px;
+            }
+            .total-line span:last-child {
+              text-align: right;
+              white-space: nowrap;
+            }
+            .discount-line {
+              font-size: ${detailSize};
+              padding-left: 6px;
+            }
+            .subtotal-line {
+              font-weight: bold;
+              border-top: 1px dotted #000;
+              padding-top: 4px;
+            }
+            .savings-line {
+              font-weight: bold;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 4px;
+              margin-bottom: 4px;
             }
             .grand-total {
               font-weight: bold;
@@ -622,32 +959,37 @@ export function PaymentClearanceModal({
             <div style="margin-top: 4px;">Trans: ${receiptData.transactionId}</div>
           </div>
 
-          ${
-            receiptData.customer
-              ? `
+          ${buildInfoRows(receiptData)
+            .map(
+              ([label, value]) => `
           <div class="info-row">
-            <span>Customer:</span>
-            <span>${receiptData.customer.displayName || receiptData.customer.email}</span>
-          </div>
-          `
-              : ""
-          }
-
-          <div class="info-row">
-            <span>Cashier:</span>
-            <span>${receiptData.cashierRole || "Staff"}</span>
-          </div>
+            <span>${escapeHtml(label)}:</span>
+            <span>${escapeHtml(value)}</span>
+          </div>`,
+            )
+            .join("")}
 
           <div class="items">
-            ${receiptData.items
+            ${buildItemRows(receiptData)
               .map(
-                (item) => `
+                (row) => `
               <div class="item">
-                <div class="item-name">${item.groupName} ${item.selectedColor ? detectColorName(item.selectedColor) || item.selectedColor : ""} - ${item.selectedSize || ""}</div>
+                <div class="item-name">${escapeHtml(row.name)}</div>
                 <div class="item-line">
-                  <span>${item.quantity} x ${formatPrice(item.unitPrice)}</span>
-                  <span>${formatPrice(item.unitPrice * item.quantity)}</span>
+                  <span>${escapeHtml(row.quantityLine)}</span>
+                  <span>${escapeHtml(row.amount)}</span>
                 </div>
+                ${row.discountLabels.length > 0 ? `<div class="item-note">${escapeHtml(row.discountLabels.join(" · "))}</div>` : ""}
+                ${
+                  row.savedLine
+                    ? `<div class="item-saving"><span>Discount</span><span>${escapeHtml(row.savedLine)}</span></div>`
+                    : ""
+                }
+                ${
+                  row.netLine
+                    ? `<div class="item-line"><span>You pay</span><span>${escapeHtml(row.netLine)}</span></div>`
+                    : ""
+                }
               </div>
             `,
               )
@@ -655,56 +997,26 @@ export function PaymentClearanceModal({
           </div>
 
           <div class="totals">
-            <div class="total-line">
-              <span>Subtotal:</span>
-              <span>${formatPrice(receiptData.subtotal)}</span>
-            </div>
-            ${
-              receiptData.discount > 0
-                ? `
-            <div class="total-line">
-              <span>Discount:</span>
-              <span>-${formatPrice(receiptData.discount)}</span>
-            </div>
-            `
-                : ""
-            }
-            <div class="total-line">
-              <span>Tax:</span>
-              <span>${formatPrice(receiptData.tax)}</span>
-            </div>
-            <div class="total-line grand-total">
-              <span>TOTAL:</span>
-              <span>${formatPrice(receiptData.total)}</span>
-            </div>
-            ${
-              receiptData.sellingCurrency !== defaultCurrency
-                ? `
-            <div class="total-line">
-              <span>Paid (${receiptData.sellingCurrency}):</span>
-              <span>${formatPrice(receiptData.sellingTotal)}</span>
-            </div>
-            `
-                : ""
-            }
-            ${
-              receiptData.paymentMethod === "cash"
-                ? `
-            <div class="total-line">
-              <span>Paid:</span>
-              <span>${formatPrice(receiptData.amountPaid)}</span>
-            </div>
-            <div class="total-line">
-              <span>Change:</span>
-              <span>${formatPrice(receiptData.change)}</span>
-            </div>
-            `
-                : ""
-            }
-            <div class="total-line">
-              <span>Payment:</span>
-              <span>${receiptData.paymentMethod.toUpperCase()}</span>
-            </div>
+            ${buildTotalRows(receiptData)
+              .map((row) => {
+                const toneClass =
+                  row.tone === "grand"
+                    ? "grand-total"
+                    : row.tone === "discount"
+                      ? "discount-line"
+                      : row.tone === "subtotal"
+                        ? "subtotal-line"
+                        : row.tone === "savings"
+                          ? "savings-line"
+                          : "";
+
+                return `
+            <div class="total-line ${toneClass}">
+              <span>${escapeHtml(row.label)}:</span>
+              <span>${escapeHtml(row.value)}</span>
+            </div>`;
+              })
+              .join("")}
           </div>
 
           <div class="footer">
@@ -760,6 +1072,25 @@ export function PaymentClearanceModal({
 
   // Show receipt modal if receipt data is available
   if (showReceipt && receiptData) {
+    // The preview mirrors the printed receipt exactly by rendering the same
+    // rows, so the two can't drift apart.
+    const infoRows = buildInfoRows(receiptData);
+    const itemRows = buildItemRows(receiptData);
+    const totalRows = buildTotalRows(receiptData);
+
+    const bodyText =
+      receiptSize === "58mm"
+        ? "text-[10px] lg:text-xs xl:text-sm"
+        : "text-xs lg:text-sm xl:text-base";
+    const noteText =
+      receiptSize === "58mm"
+        ? "text-[9px] lg:text-[10px] xl:text-xs"
+        : "text-[10px] lg:text-xs xl:text-sm";
+    const grandText =
+      receiptSize === "58mm"
+        ? "text-xs lg:text-sm xl:text-base"
+        : "text-sm lg:text-base xl:text-lg";
+
     return (
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6">
         <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col border-2 border-pink-200">
@@ -825,114 +1156,81 @@ export function PaymentClearanceModal({
                   </div>
                 </div>
 
-                {/* Customer Info */}
-                {receiptData.customer && (
-                  <>
+                {/* Customer / cashier info */}
+                <div className="mb-2">
+                  {infoRows.map(([label, value]) => (
                     <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
+                      key={label}
+                      className={`flex justify-between gap-2 text-black ${bodyText}`}
                     >
-                      <span>Customer:</span>
-                      <span>
-                        {receiptData.customer.displayName ||
-                          receiptData.customer.email}
-                      </span>
-                    </div>
-                  </>
-                )}
-
-                <div
-                  className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-2`}
-                >
-                  <span>Cashier:</span>
-                  <span>{receiptData.cashierRole || "Staff"}</span>
-                </div>
-
-                {/* Items */}
-                <div className="border-t border-b border-dashed border-black py-2 my-2">
-                  {receiptData.items.map((item, index: number) => (
-                    <div key={index} className="mb-2">
-                      <div
-                        className={`font-bold text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
-                      >
-                        {item.groupName}{" "}
-                        {item.selectedColor
-                          ? detectColorName(item.selectedColor) ||
-                            item.selectedColor
-                          : ""}{" "}
-                        - {item.selectedSize}
-                      </div>
-                      <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
-                      >
-                        <span>
-                          {item.quantity} x {formatPrice(item.unitPrice)}
-                        </span>
-                        <span>
-                          {formatPrice(item.unitPrice * item.quantity)}
-                        </span>
-                      </div>
+                      <span className="shrink-0">{label}:</span>
+                      <span className="text-right break-words">{value}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Totals */}
+                {/* Items */}
+                <div className="border-t border-b border-dashed border-black py-2 my-2">
+                  {itemRows.map((row, index: number) => (
+                    <div key={index} className="mb-2">
+                      <div className={`font-bold text-black ${bodyText}`}>
+                        {row.name}
+                      </div>
+                      <div
+                        className={`flex justify-between text-black ${bodyText} mt-1`}
+                      >
+                        <span>{row.quantityLine}</span>
+                        <span>{row.amount}</span>
+                      </div>
+                      {row.discountLabels.length > 0 && (
+                        <div className={`text-black ${noteText}`}>
+                          {row.discountLabels.join(" · ")}
+                        </div>
+                      )}
+                      {row.savedLine && (
+                        <div
+                          className={`flex justify-between text-black ${noteText}`}
+                        >
+                          <span>Discount</span>
+                          <span>{row.savedLine}</span>
+                        </div>
+                      )}
+                      {row.netLine && (
+                        <div
+                          className={`flex justify-between text-black ${bodyText}`}
+                        >
+                          <span>You pay</span>
+                          <span>{row.netLine}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals: gross subtotal, each discount, coupon, tax, total */}
                 <div className="mt-2">
-                  <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
-                  >
-                    <span>Subtotal:</span>
-                    <span>{formatPrice(receiptData.subtotal)}</span>
-                  </div>
-                  {receiptData.discount > 0 && (
-                    <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
-                    >
-                      <span>Discount:</span>
-                      <span>-{formatPrice(receiptData.discount)}</span>
-                    </div>
-                  )}
-                  <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
-                  >
-                    <span>Tax:</span>
-                    <span>{formatPrice(receiptData.tax)}</span>
-                  </div>
-                  <div
-                    className={`flex justify-between font-bold text-black border-t border-b border-black py-2 my-2 ${receiptSize === "58mm" ? "text-xs lg:text-sm xl:text-base" : "text-sm lg:text-base xl:text-lg"}`}
-                  >
-                    <span>TOTAL:</span>
-                    <span>{formatPrice(receiptData.total)}</span>
-                  </div>
-                  {receiptData.sellingCurrency !== defaultCurrency && (
-                    <div
-                      className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
-                    >
-                      <span>Paid ({receiptData.sellingCurrency}):</span>
-                      <span>{formatPrice(receiptData.sellingTotal)}</span>
-                    </div>
-                  )}
-                  {receiptData.paymentMethod === "cash" && (
-                    <>
+                  {totalRows.map((row, index) => {
+                    const toneClass =
+                      row.tone === "grand"
+                        ? `font-bold border-t border-b border-black py-2 my-2 ${grandText}`
+                        : row.tone === "discount"
+                          ? `pl-1.5 ${noteText} mb-1`
+                          : row.tone === "subtotal"
+                            ? `font-bold border-t border-dotted border-black pt-1 mt-1 mb-1 ${bodyText}`
+                            : row.tone === "savings"
+                              ? `font-bold border-b border-dashed border-black pb-1 mb-2 ${bodyText}`
+                              : `${bodyText} mb-1`;
+
+                    return (
                       <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
+                        key={`${row.label}-${index}`}
+                        className={`flex justify-between gap-2 text-black ${toneClass}`}
                       >
-                        <span>Paid:</span>
-                        <span>{formatPrice(receiptData.amountPaid)}</span>
+                        <span>{row.label}:</span>
+                        <span className="whitespace-nowrap">{row.value}</span>
                       </div>
-                      <div
-                        className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mb-1`}
-                      >
-                        <span>Change:</span>
-                        <span>{formatPrice(receiptData.change)}</span>
-                      </div>
-                    </>
-                  )}
-                  <div
-                    className={`flex justify-between text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"}`}
-                  >
-                    <span>Payment:</span>
-                    <span>{receiptData.paymentMethod.toUpperCase()}</span>
-                  </div>
+                    );
+                  })}
                 </div>
 
                 {/* Footer */}
@@ -1020,9 +1318,19 @@ export function PaymentClearanceModal({
           </button>
         </div>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
+        {/*
+          One scroll container on narrow screens, two independent panes from md up.
+
+          The panes used to own the scrolling at every width. Stacked in a column
+          on a phone that produced two separate short scroll areas, so the wheel
+          or a swipe only did anything while the pointer happened to be inside the
+          right one. Scrolling the wrapper instead means a swipe anywhere in the
+          body moves the whole thing; `overscroll-contain` stops the gesture
+          continuing into the page behind once it reaches the end.
+        */}
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-y-auto md:overflow-hidden overscroll-contain">
           {/* Left Side - Customer Info & Payment Summary */}
-          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 overflow-y-auto bg-white/50">
+          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 md:overflow-y-auto md:overscroll-contain bg-white/50">
             {/* Customer Information */}
             <div className="flex items-center space-x-2 md:space-x-3 mb-3 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
               <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
@@ -1276,23 +1584,43 @@ export function PaymentClearanceModal({
             </div>
           </div>
 
-          {/* Right Side - Calculator */}
-          <div className="w-2/5 p-3 overflow-y-auto bg-white/50">
+          {/* Right Side - Calculator. `w-2/5` had no breakpoint, so on a phone the
+              keypad was squeezed to 40% of the modal width even though the panes
+              stack vertically there. */}
+          <div className="w-full md:w-2/5 p-3 md:overflow-y-auto md:overscroll-contain bg-white/50">
             {/* Amount Display */}
             <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl p-3 mb-3 shadow-sm">
+              {/*
+                A text field with a decimal keypad rather than type="number".
+
+                A focused number input treats the mouse wheel as increment /
+                decrement, and this field is focused automatically when the modal
+                opens. That had two consequences at the till: scrolling with the
+                pointer over the field silently changed the cash taken, and the
+                wheel never reached the scroll container, so the modal looked
+                frozen until the cashier clicked elsewhere to blur the field.
+                inputMode="decimal" keeps the numeric keypad on touch devices.
+              */}
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={calculatorDisplay === "0" ? "" : calculatorDisplay}
                 ref={amountInputRef}
                 onChange={(e) => {
-                  const value = e.target.value;
+                  // Keep digits and at most one decimal point, which is the only
+                  // validation type="number" was providing here.
+                  const cleaned = e.target.value.replace(/[^\d.]/g, "");
+                  const [whole, ...rest] = cleaned.split(".");
+                  const value =
+                    rest.length > 0 ? `${whole}.${rest.join("")}` : whole;
+
                   setCalculatorDisplay(value);
-                  setAmountPaid(value === "" ? 0 : parseFloat(value));
+                  setAmountPaid(value === "" ? 0 : parseFloat(value) || 0);
                 }}
                 placeholder="0"
+                aria-label="Amount received"
                 className="w-full text-xl font-bold text-gray-900 bg-transparent text-right border-none outline-none"
-                min="0"
-                step="0.01"
               />
             </div>
 

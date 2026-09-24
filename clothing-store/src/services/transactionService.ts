@@ -37,6 +37,29 @@ export interface Transaction {
   tax: number;
   discount: number;
   total: number;
+  /**
+   * Receipt-grade figures, recorded alongside the collapsed pair above rather
+   * than replacing it.
+   *
+   * `subtotal` is net of wholesale and percentage discounts and `discount`
+   * lumps every remaining saving together, which is enough for accounting but
+   * cannot be printed as a breakdown a customer can check. These three fields
+   * let a reprint or a report rebuild what was handed over at the till:
+   *
+   *   grossSubtotal - totalSavings + tax = total
+   *
+   * Absent on sales recorded before the itemised receipt was introduced, and on
+   * storefront orders, which persist their own equivalents.
+   */
+  grossSubtotal?: number;
+  totalSavings?: number;
+  /**
+   * Tax rate as a percentage (e.g. 7 for 7%) as actually applied.
+   *
+   * The storefront paths have always written this; the till did not, which left
+   * receipts and reports deriving the rate by dividing tax by an assumed base.
+   */
+  taxRate?: number;
   // Loyalty coupon applied at the till, if any
   couponId?: string;
   couponCode?: string;

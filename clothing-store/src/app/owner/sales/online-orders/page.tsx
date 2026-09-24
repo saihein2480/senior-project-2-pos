@@ -218,6 +218,41 @@ function getOrderSummary(row: OnlineOrder) {
     subtotal - promotionDiscount - couponDiscount,
   );
 
+  /**
+   * Named promotions behind `promotionDiscount`.
+   *
+   * The order-level list written at checkout is preferred. Orders placed before
+   * it existed can still be described from the per-line promotion names, so those
+   * are folded together as a fallback.
+   */
+  const promotionsFromOrder = (row.appliedPromotions || [])
+    .map((promo) => ({
+      name: (promo.name || "").trim(),
+      discountTHB: Math.max(0, Number(promo.discountTHB || 0)),
+    }))
+    .filter((promo) => promo.name || promo.discountTHB > 0);
+
+  const promotionsFromLines = Object.values(
+    cartItems.reduce<Record<string, { name: string; discountTHB: number }>>(
+      (acc, item) => {
+        const name = (item.promotionName || "").trim();
+        const lineDiscount = Math.max(0, Number(item.lineDiscountTHB || 0));
+        if (!name || lineDiscount <= 0) return acc;
+
+        if (acc[name]) {
+          acc[name].discountTHB += lineDiscount;
+        } else {
+          acc[name] = { name, discountTHB: lineDiscount };
+        }
+        return acc;
+      },
+      {},
+    ),
+  );
+
+  const promotions =
+    promotionsFromOrder.length > 0 ? promotionsFromOrder : promotionsFromLines;
+
   const tax = Math.max(0, Number(row.tax || 0));
 
   // Prefer the rate stored with the order. Older orders predate that field, so
@@ -248,6 +283,8 @@ function getOrderSummary(row: OnlineOrder) {
     subtotal,
     promotionDiscount,
     couponDiscount,
+    promotions,
+    totalSavings: promotionDiscount + couponDiscount,
     taxableBase,
     tax,
     taxPercent,
@@ -288,6 +325,8 @@ function OrderDetailsModal({
     subtotal,
     promotionDiscount,
     couponDiscount,
+    promotions: namedPromotions,
+    totalSavings,
     tax,
     taxPercent,
     total: grandTotal,
@@ -311,7 +350,17 @@ function OrderDetailsModal({
           ) : (
             ""
           )}
+          {ci.promotionName ? (
+            <div className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+              🏷️ {ci.promotionName}
+            </div>
+          ) : null}
           <div className="text-xs text-gray-500 mt-1">
+            {Number(ci.originalPriceTHB || 0) > Number(ci.priceTHB || 0) && (
+              <span className="mr-1 text-gray-400 line-through">
+                ฿{Number(ci.originalPriceTHB || 0).toFixed(2)}
+              </span>
+            )}
             ฿{Number(ci.priceTHB || 0).toFixed(2)} × {ci.quantity || 1}
           </div>
         </div>
@@ -319,6 +368,11 @@ function OrderDetailsModal({
           <div className="font-medium text-gray-900">
             ฿{(Number(ci.priceTHB || 0) * Number(ci.quantity || 1)).toFixed(2)}
           </div>
+          {Number(ci.lineDiscountTHB || 0) > 0 && (
+            <div className="text-xs font-semibold text-emerald-700">
+              Saved ฿{Number(ci.lineDiscountTHB || 0).toFixed(2)}
+            </div>
+          )}
         </div>
       </div>
     ));
@@ -440,12 +494,28 @@ function OrderDetailsModal({
                 <span>฿{subtotal.toFixed(2)}</span>
               </div>
 
-              {promotionDiscount > 0 && (
-                <div className="flex justify-between text-emerald-700">
-                  <span>Promotion Discount:</span>
-                  <span>-฿{promotionDiscount.toFixed(2)}</span>
-                </div>
-              )}
+              {/* Name each promotion when the order recorded which ones
+                  applied; older orders only stored the aggregate. */}
+              {namedPromotions.length > 0
+                ? namedPromotions.map((promo, idx) => (
+                    <div
+                      key={`${promo.name}-${idx}`}
+                      className="flex justify-between gap-3 text-emerald-700"
+                    >
+                      <span className="truncate">
+                        {promo.name || "Promotion"}:
+                      </span>
+                      <span className="shrink-0">
+                        -฿{promo.discountTHB.toFixed(2)}
+                      </span>
+                    </div>
+                  ))
+                : promotionDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Promotion Discount:</span>
+                      <span>-฿{promotionDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
 
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-purple-700">
@@ -475,6 +545,13 @@ function OrderDetailsModal({
                 <span>MMK Equivalent:</span>
                 <span>Ks {amountMmk.toLocaleString()}</span>
               </div>
+
+              {totalSavings > 0 && (
+                <div className="flex justify-between border-t border-dashed border-emerald-200 pt-1.5 font-semibold text-emerald-700">
+                  <span>Customer saved:</span>
+                  <span>฿{totalSavings.toFixed(2)}</span>
+                </div>
+              )}
 
               {summary.isInconsistent && (
                 <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
@@ -761,6 +838,21 @@ function OnlineOrdersContent() {
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
   const hasRealtimeInitializedRef = useRef(false);
 
+  /**
+   * Whether the table is currently backed by a live Firestore listener.
+   *
+   * Worth showing. A dropped listener used to be invisible: the error callback
+   * only cleared the loading flag, so the table sat there with stale rows and no
+   * hint that it had stopped following the database, and the only cure was a
+   * refresh the owner had no reason to attempt.
+   */
+  const [realtimeState, setRealtimeState] = useState<
+    "connecting" | "live" | "offline"
+  >("connecting");
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  /** Bumped to force the subscription effect to tear down and retry. */
+  const [resubscribeToken, setResubscribeToken] = useState(0);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SEEN_NEW_ORDERS_KEY);
@@ -804,18 +896,34 @@ function OnlineOrdersContent() {
 
   useEffect(() => {
     if (!db) {
+      // No Firestore client means no live updates are possible. Poll instead of
+      // fetching once, so the table still moves, and say so in the header.
+      let cancelled = false;
+
       const load = async () => {
         try {
           const data = await onlineOrderService.getOnlineOrders();
+          if (cancelled) return;
           setRows(data);
+          setLastSyncedAt(new Date());
         } finally {
-          setLoading(false);
+          if (!cancelled) setLoading(false);
         }
       };
 
+      setRealtimeState("offline");
       void load();
-      return;
+      const pollId = setInterval(load, 20000);
+
+      return () => {
+        cancelled = true;
+        clearInterval(pollId);
+      };
     }
+
+    setRealtimeState("connecting");
+
+    let retryId: ReturnType<typeof setTimeout> | undefined;
 
     const q = query(
       collection(db, "onlineOrders"),
@@ -834,6 +942,9 @@ function OnlineOrdersContent() {
             updatedAt: normalizeDateInput(data.updatedAt),
           } as OnlineOrder;
         });
+
+        setRealtimeState("live");
+        setLastSyncedAt(new Date());
 
         if (!hasRealtimeInitializedRef.current) {
           knownOrderIdsRef.current = new Set(incomingRows.map((row) => row.id));
@@ -860,13 +971,23 @@ function OnlineOrdersContent() {
         setRows(incomingRows);
         setLoading(false);
       },
-      () => {
+      (error) => {
+        // Firestore does not retry a listener it has given up on, so without an
+        // explicit resubscribe the table stays frozen for the rest of the
+        // session.
+        console.error("Online orders listener failed:", error);
+        setRealtimeState("offline");
         setLoading(false);
+
+        retryId = setTimeout(() => setResubscribeToken((n) => n + 1), 5000);
       },
     );
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      if (retryId) clearTimeout(retryId);
+      unsubscribe();
+    };
+  }, [resubscribeToken]);
 
   const markOrderSeen = (id: string) => {
     setNewOrderIds((prev) => {
@@ -1159,72 +1280,97 @@ function OnlineOrdersContent() {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
 
-  const getInvoiceItems = (row: OnlineOrder) => {
-    const orderTotalMmk = Math.max(0, Number(row.amountMmk || 0));
+  /** One printable line of an online order, priced as the customer was charged. */
+  type InvoiceItem = {
+    name: string;
+    variant: string;
+    quantity: number;
+    /** Unit price charged, in `currency`. */
+    unitPrice: number;
+    /** Catalogue unit price, when the line recorded one that was higher. */
+    originalUnitPrice?: number;
+    /** What this line saved. */
+    lineDiscount: number;
+    /** Promotion responsible for the saving. */
+    promotionName?: string;
+    lineTotal: number;
+    currency: "THB" | "MMK";
+  };
+
+  /**
+   * Build the printable lines for an online order.
+   *
+   * Lines are reported in THB, the currency the storefront prices in and the
+   * currency the totals block below uses. They used to be prorated into MMK
+   * against the order total, which meant the printed lines never reconciled with
+   * the THB subtotal, promotion and tax figures sitting directly beneath them.
+   */
+  const getInvoiceItems = (row: OnlineOrder): InvoiceItem[] => {
+    const describe = (item: {
+      productName?: string;
+      color?: string;
+      size?: string;
+      quantity?: number;
+      priceTHB?: number;
+      originalPriceTHB?: number;
+      lineDiscountTHB?: number;
+      promotionName?: string;
+    }): InvoiceItem => {
+      const quantity = Math.max(1, Number(item.quantity || 1));
+      const unitPrice = Number(item.priceTHB || 0);
+      const originalUnitPrice = Number(item.originalPriceTHB || 0);
+      const recordedDiscount = Math.max(0, Number(item.lineDiscountTHB || 0));
+
+      // Prefer the saving recorded at checkout; otherwise infer it from a higher
+      // catalogue price. Orders that stored neither simply show no saving rather
+      // than one invented here.
+      const lineDiscount =
+        recordedDiscount > 0
+          ? recordedDiscount
+          : originalUnitPrice > unitPrice
+            ? (originalUnitPrice - unitPrice) * quantity
+            : 0;
+
+      return {
+        name: item.productName || "-",
+        variant: [item.color, item.size].filter(Boolean).join(", "),
+        quantity,
+        unitPrice,
+        originalUnitPrice:
+          originalUnitPrice > unitPrice ? originalUnitPrice : undefined,
+        lineDiscount,
+        promotionName: item.promotionName || undefined,
+        lineTotal: unitPrice * quantity,
+        currency: "THB",
+      };
+    };
 
     if (row.cartItems && row.cartItems.length > 0) {
-      const totalThb = row.cartItems.reduce(
-        (sum, item) =>
-          sum +
-          Number(item.priceTHB || 0) * Math.max(1, Number(item.quantity || 1)),
-        0,
-      );
-      const totalQty = row.cartItems.reduce(
-        (sum, item) => sum + Math.max(1, Number(item.quantity || 1)),
-        0,
-      );
-
-      return row.cartItems.map((item) => {
-        const quantity = Math.max(1, Number(item.quantity || 1));
-        const itemThbTotal = Number(item.priceTHB || 0) * quantity;
-        const lineTotalMmk =
-          totalThb > 0
-            ? (itemThbTotal / totalThb) * orderTotalMmk
-            : totalQty > 0
-              ? (quantity / totalQty) * orderTotalMmk
-              : 0;
-
-        return {
-          name: item.productName || "-",
-          variant: [item.color, item.size].filter(Boolean).join(", "),
-          quantity,
-          unitPrice: quantity > 0 ? lineTotalMmk / quantity : lineTotalMmk,
-          lineTotal: lineTotalMmk,
-          currency: "MMK" as const,
-        };
-      });
+      return row.cartItems.map(describe);
     }
 
     if (row.product) {
-      const quantity = Math.max(1, Number(row.product.quantity || 1));
-      const lineTotalMmk = orderTotalMmk;
-
-      return [
-        {
-          name: row.product.productName || "-",
-          variant: [row.product.color, row.product.size]
-            .filter(Boolean)
-            .join(", "),
-          quantity,
-          unitPrice: quantity > 0 ? lineTotalMmk / quantity : lineTotalMmk,
-          lineTotal: lineTotalMmk,
-          currency: "MMK" as const,
-        },
-      ];
+      return [describe(row.product)];
     }
 
+    // Last resort for orders that predate `cartItems`: the flattened payment
+    // itemisation. Its `amount` is a line total in the order's own currency, so
+    // it is reported in MMK alongside the MMK total.
     if (row.items && row.items.length > 0) {
-      return row.items.map((item) => ({
-        name: item.name || "-",
-        variant: "",
-        quantity: item.quantity || 1,
-        unitPrice:
-          Math.max(1, Number(item.quantity || 1)) > 0
-            ? Number(item.amount || 0) / Math.max(1, Number(item.quantity || 1))
-            : Number(item.amount || 0),
-        lineTotal: Number(item.amount || 0),
-        currency: "MMK" as const,
-      }));
+      return row.items.map((item) => {
+        const quantity = Math.max(1, Number(item.quantity || 1));
+        const lineTotal = Number(item.amount || 0);
+
+        return {
+          name: item.name || "-",
+          variant: "",
+          quantity,
+          unitPrice: lineTotal / quantity,
+          lineDiscount: 0,
+          lineTotal,
+          currency: "MMK" as const,
+        };
+      });
     }
 
     return [];
@@ -1318,6 +1464,8 @@ function OnlineOrdersContent() {
       subtotal,
       promotionDiscount,
       couponDiscount,
+      promotions: namedPromotions,
+      totalSavings,
       tax,
       taxPercent,
       total: grandTotal,
@@ -1328,6 +1476,9 @@ function OnlineOrdersContent() {
     const customerEmail = escapeHtml(row.customer?.email || "-");
     const customerPhone = escapeHtml(getCustomerPhone(row));
     const customerAddress = escapeHtml(getCustomerAddress(row));
+    // The storefront account behind the order, so support can match an invoice
+    // back to the customer record.
+    const customerAccount = escapeHtml(row.customer?.uid || "");
     const updatedAt = escapeHtml(
       row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "-",
     );
@@ -1390,15 +1541,35 @@ function OnlineOrdersContent() {
               const variantText = item.variant
                 ? ` - ${escapeHtml(item.variant)}`
                 : "";
-              const lineAmountText = formatPrice(item.lineTotal, item.currency);
+
+              const notes: string[] = [];
+              if (item.originalUnitPrice) {
+                notes.push(
+                  `Was ${formatPrice(item.originalUnitPrice, item.currency)} each`,
+                );
+              }
+              if (item.promotionName) {
+                notes.push(`Promotion: ${item.promotionName}`);
+              }
 
               return `
                 <div class="item">
                   <div class="item-name">${escapeHtml(item.name)}${variantText}</div>
                   <div class="item-line">
-                    <span>${escapeHtml(String(item.quantity))} item${item.quantity > 1 ? "s" : ""}</span>
-                    <span>${escapeHtml(lineAmountText)}</span>
+                    <span>${escapeHtml(String(item.quantity))} x ${escapeHtml(formatPrice(item.unitPrice, item.currency))}</span>
+                    <span>${escapeHtml(formatPrice(item.lineTotal, item.currency))}</span>
                   </div>
+                  ${notes
+                    .map(
+                      (note) =>
+                        `<div class="item-note">${escapeHtml(note)}</div>`,
+                    )
+                    .join("")}
+                  ${
+                    item.lineDiscount > 0
+                      ? `<div class="item-line"><span>Saved</span><span>-${escapeHtml(formatPrice(item.lineDiscount, item.currency))}</span></div>`
+                      : ""
+                  }
                 </div>
               `;
             })
@@ -1476,6 +1647,11 @@ function OnlineOrdersContent() {
               justify-content: space-between;
               margin-top: 2px;
             }
+            .item-note {
+              font-size: ${printSize.detailSize};
+              color: #333;
+              margin-top: 1px;
+            }
             .totals {
               margin-top: 10px;
             }
@@ -1483,6 +1659,13 @@ function OnlineOrdersContent() {
               display: flex;
               justify-content: space-between;
               margin: 4px 0;
+            }
+            .discount-line {
+              display: flex;
+              justify-content: space-between;
+              margin: 4px 0;
+              font-size: ${printSize.detailSize};
+              padding-left: 6px;
             }
             .coupon-line {
               display: flex;
@@ -1535,6 +1718,14 @@ function OnlineOrdersContent() {
             <span>Address:</span>
             <span>${customerAddress}</span>
           </div>
+          ${
+            customerAccount
+              ? `<div class="info-row">
+            <span>Account:</span>
+            <span>${customerAccount}</span>
+          </div>`
+              : ""
+          }
           <div class="info-row">
             <span>Status:</span>
             <span>${status}</span>
@@ -1553,12 +1744,28 @@ function OnlineOrdersContent() {
               <span>Subtotal:</span>
               <span>${formatThb(subtotal)}</span>
             </div>
-            ${promotionDiscount > 0 ? `
+            ${
+              // Name each promotion when the order recorded which ones applied;
+              // older orders only stored the aggregate, so they get one line.
+              namedPromotions.length > 0
+                ? namedPromotions
+                    .map(
+                      (promo) => `
+            <div class="discount-line">
+              <span>Promotion${promo.name ? ` - ${escapeHtml(promo.name)}` : ""}:</span>
+              <span>-${formatThb(promo.discountTHB)}</span>
+            </div>`,
+                    )
+                    .join("")
+                : promotionDiscount > 0
+                  ? `
             <div class="total-line">
               <span>Promotion:</span>
               <span>-${formatThb(promotionDiscount)}</span>
             </div>
-            ` : ''}
+            `
+                  : ""
+            }
             ${couponDiscount > 0 ? `
             <div class="coupon-line">
               <span>Coupon (${escapeHtml(row.couponCode || 'DISCOUNT')}):</span>
@@ -1577,6 +1784,14 @@ function OnlineOrdersContent() {
               <span>TOTAL (MMK):</span>
               <span>${formatMmk(amount)}</span>
             </div>
+            ${
+              totalSavings > 0
+                ? `<div class="total-line" style="font-weight:bold;">
+              <span>Customer saved:</span>
+              <span>${formatThb(totalSavings)}</span>
+            </div>`
+                : ""
+            }
           </div>
 
           <div class="footer">
@@ -1678,12 +1893,61 @@ function OnlineOrdersContent() {
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-screen-2xl mx-auto">
-            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-              Online Orders
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                Online Orders
+              </h1>
+
+              {/* Connection state. Without this a dropped listener looks
+                  identical to "no new orders". */}
+              {realtimeState === "live" && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
+                  title={
+                    lastSyncedAt
+                      ? `Last update ${lastSyncedAt.toLocaleTimeString()}`
+                      : undefined
+                  }
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
+                  Live
+                </span>
+              )}
+
+              {realtimeState === "connecting" && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
+                  <span className="h-2 w-2 rounded-full bg-gray-400" />
+                  Connecting...
+                </span>
+              )}
+
+              {realtimeState === "offline" && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  Not live
+                  <button
+                    type="button"
+                    onClick={() => setResubscribeToken((n) => n + 1)}
+                    className="font-semibold underline underline-offset-2 hover:text-amber-900"
+                  >
+                    Reconnect
+                  </button>
+                </span>
+              )}
+            </div>
+
             <p className="text-sm text-gray-600 mt-1">
               Orders created by frontstore checkout and MyanMyanPay payment
               flow.
+              {lastSyncedAt && (
+                <span className="text-gray-500">
+                  {" "}
+                  Updated {lastSyncedAt.toLocaleTimeString()}.
+                </span>
+              )}
             </p>
 
             <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

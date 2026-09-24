@@ -48,6 +48,20 @@ export interface OnlineOrder {
   appliedCouponCode?: string;
   couponId?: string;
   couponDiscountTHB?: number;
+  /**
+   * Promotions that reduced this order, named.
+   *
+   * Recorded with the order because promotion documents are edited and
+   * deactivated over time, so they cannot be looked up afterwards to explain an
+   * old invoice. Absent on orders placed before this was captured.
+   */
+  appliedPromotions?: Array<{
+    promotionId?: string;
+    name?: string;
+    discountType?: string;
+    discountValue?: number;
+    discountTHB?: number;
+  }>;
   customer?: {
     uid?: string;
     email?: string;
@@ -67,6 +81,10 @@ export interface OnlineOrder {
     size?: string;
     quantity?: number;
     priceTHB?: number;
+    originalPriceTHB?: number;
+    lineDiscountTHB?: number;
+    promotionId?: string;
+    promotionName?: string;
   };
   cartItems?: Array<{
     productId?: string;
@@ -75,7 +93,15 @@ export interface OnlineOrder {
     color?: string;
     size?: string;
     image?: string;
+    /** Unit price actually charged, after the winning promotion. */
     priceTHB?: number;
+    /** Catalogue unit price before any promotion. */
+    originalPriceTHB?: number;
+    /** What this line saved. */
+    lineDiscountTHB?: number;
+    promotionId?: string;
+    /** Name of the promotion that won for this line. */
+    promotionName?: string;
     quantity?: number;
   }>;
   items?: Array<{
