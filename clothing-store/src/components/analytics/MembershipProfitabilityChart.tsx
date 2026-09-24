@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -22,13 +21,12 @@ interface MembershipProfitabilityChartProps {
 }
 
 /**
- * Member versus non-member economics, and whether the programme pays for itself.
+ * Do members spend more than non-members, and does the programme pay for itself?
  *
- * Two panels because the question has two halves: the bars compare what each
- * cohort is worth per order, and the table underneath shows the loyalty cost
- * being subtracted so net margin is visible next to gross. A programme where
- * member net margin sits below non-member gross margin is giving away more than
- * the behaviour it buys is worth.
+ * Deliberately narrow. An earlier version reported nine rows including gross and
+ * net margin rates and orders per customer, which buried the only two questions
+ * an owner actually asks. What is left is the basket comparison, the four figures
+ * needed to trust it, and the loyalty cost stated once underneath.
  */
 export function MembershipProfitabilityChart({
   data,
@@ -46,10 +44,6 @@ export function MembershipProfitabilityChart({
   const hasBoth = member.orders > 0 && nonMember.orders > 0;
   const isEmpty = member.orders === 0 && nonMember.orders === 0;
 
-  // The verdict: does the member cohort still out-earn non-members once the
-  // discounts handed to them are deducted?
-  const verdictPositive = member.netMarginRate >= nonMember.grossMarginRate;
-
   const rows: Array<{ label: string; member: string; nonMember: string }> = [
     {
       label: t.customers,
@@ -62,39 +56,14 @@ export function MembershipProfitabilityChart({
       nonMember: String(nonMember.orders),
     },
     {
-      label: t.ordersPerCustomer,
-      member: member.ordersPerCustomer.toFixed(2),
-      nonMember: nonMember.ordersPerCustomer.toFixed(2),
-    },
-    {
       label: t.averageBasket,
       member: formatPrice(member.averageBasket),
       nonMember: formatPrice(nonMember.averageBasket),
     },
     {
-      label: t.grossProfit,
-      member: formatPrice(member.grossProfit),
-      nonMember: formatPrice(nonMember.grossProfit),
-    },
-    {
-      label: t.loyaltyCost,
-      member: `-${formatPrice(member.loyaltyCost)}`,
-      nonMember: "—",
-    },
-    {
       label: t.netProfitAfterLoyalty,
       member: formatPrice(member.netProfit),
       nonMember: formatPrice(nonMember.netProfit),
-    },
-    {
-      label: t.grossMarginRate,
-      member: `${member.grossMarginRate.toFixed(1)}%`,
-      nonMember: `${nonMember.grossMarginRate.toFixed(1)}%`,
-    },
-    {
-      label: t.netMarginRate,
-      member: `${member.netMarginRate.toFixed(1)}%`,
-      nonMember: `${nonMember.grossMarginRate.toFixed(1)}%`,
     },
   ];
 
@@ -106,7 +75,7 @@ export function MembershipProfitabilityChart({
         hasBoth ? (
           <span
             className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-              verdictPositive
+              data.basketUplift >= 0
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-amber-50 text-amber-700"
             }`}
@@ -121,10 +90,14 @@ export function MembershipProfitabilityChart({
       emptyMessage={t.noMembershipData}
       footnote={t.membershipProfitabilityFootnote}
     >
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={basketData} layout="vertical">
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart
+          data={basketData}
+          layout="vertical"
+          margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="#6b7280" />
+          <XAxis type="number" tick={{ fontSize: 11 }} stroke="#6b7280" />
           <YAxis
             type="category"
             dataKey="name"
@@ -138,16 +111,18 @@ export function MembershipProfitabilityChart({
               border: "1px solid #e5e7eb",
               borderRadius: "8px",
             }}
-            formatter={(value: number | undefined) =>
-              value !== undefined ? formatPrice(value) : "N/A"
-            }
+            formatter={(value: number | undefined) => [
+              value !== undefined ? formatPrice(value) : "N/A",
+              t.averageBasket,
+            ]}
           />
-          <Legend />
+          {/* No legend: there is one measure and the axis already names both
+              cohorts, so a legend would only repeat itself. */}
           <Bar
             dataKey="value"
             name={t.averageBasket}
             radius={[0, 4, 4, 0]}
-            barSize={36}
+            barSize={30}
           >
             {basketData.map((row) => (
               <Cell key={row.name} fill={row.fill} />
@@ -170,16 +145,11 @@ export function MembershipProfitabilityChart({
           <tbody className="divide-y divide-gray-100">
             {rows.map((row) => {
               const isNet = row.label === t.netProfitAfterLoyalty;
-              const isCost = row.label === t.loyaltyCost;
               return (
                 <tr
                   key={row.label}
                   className={
-                    isNet
-                      ? "font-semibold text-gray-900"
-                      : isCost
-                        ? "text-red-600"
-                        : "text-gray-700"
+                    isNet ? "font-semibold text-gray-900" : "text-gray-700"
                   }
                 >
                   <td className="py-2 pr-4">{row.label}</td>
@@ -191,6 +161,19 @@ export function MembershipProfitabilityChart({
           </tbody>
         </table>
       </div>
+
+      {/* Stated once rather than as a table row, because it applies to members
+          only and a "—" in the non-member column invited the question every
+          time. */}
+      {member.loyaltyCost > 0 && (
+        <p className="text-[11px] text-gray-600 mt-2">
+          {t.loyaltyCost}:{" "}
+          <span className="font-medium text-red-600">
+            -{formatPrice(member.loyaltyCost)}
+          </span>{" "}
+          {t.alreadyDeductedFromNetProfit}
+        </p>
+      )}
 
       {data.unattributedOrders > 0 && (
         <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mt-3">

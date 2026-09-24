@@ -817,7 +817,7 @@ function ReportsPageContent() {
       originalPriceMMK: v.originalPriceMMK,
       netTHB: v.profitTHB - v.expenseTHB,
       netMMK: v.profitMMK - v.expenseMMK,
-      // Net Sales = Total Sales - Expense
+      // Total Net Sale = Total Sales - Expense (shown in the daily status table)
       netSalesTHB: v.totalSalesTHB - v.expenseTHB,
       netSalesMMK: v.totalSalesMMK - v.expenseMMK,
     }));
@@ -1880,7 +1880,7 @@ function ReportsPageContent() {
                         {t.expenses}
                       </th>
                       <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
-                        {t.netSales}
+                        {t.totalNetSales}
                       </th>
                       <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.totalNetProfit}
@@ -1963,7 +1963,7 @@ function ReportsPageContent() {
                                 onMouseEnter={() =>
                                   setCellTooltip({
                                     key: `${row.date}-netsales`,
-                                    text: "Net Sales = Total Sales - Expense",
+                                    text: "Total Net Sale = Total Sales - Expense",
                                   })
                                 }
                                 onMouseLeave={() => setCellTooltip(null)}
@@ -1974,7 +1974,7 @@ function ReportsPageContent() {
                                     );
                                   setCellTooltip({
                                     key: `${row.date}-netsales`,
-                                    text: "Net Sales = Total Sales - Expense",
+                                    text: "Total Net Sale = Total Sales - Expense",
                                   });
                                   tooltipTimeoutRef.current = window.setTimeout(
                                     () => {
@@ -1984,7 +1984,7 @@ function ReportsPageContent() {
                                   );
                                 }}
                                 className="cursor-help"
-                                aria-label="Net Sales formula: Net Sales = Total Sales - Expense"
+                                aria-label="Total Net Sale formula: Total Net Sale = Total Sales - Expense"
                               >
                                 <div>{formatPrice(row.netSalesTHB || 0)}</div>
                                 <div className="text-xs text-gray-500">

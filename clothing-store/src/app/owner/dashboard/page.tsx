@@ -22,7 +22,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Tag,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -30,7 +29,6 @@ import {
   Area,
   BarChart,
   Bar,
-  ComposedChart,
   Cell,
   LineChart,
   Line,
@@ -45,53 +43,32 @@ import { transactionService, Transaction } from "@/services/transactionService";
 import {
   calculateChannelSplit,
   calculateDailyNetMargin,
-  calculateLoyaltyCostTrend,
-  calculateLoyaltyEconomics,
-  calculatePointsLiability,
-  calculatePromotionCorrelation,
-  calculatePromotionSeries,
-  calculateRedemptionFunnel,
+  calculatePromotedProducts,
   calculateReturnRateBySize,
   calculateRevenueSeries,
   calculateSellThroughBySize,
   calculateStaffPerformance,
-  calculateStockAging,
   chooseTimeGrain,
   grainLabel,
-  summariseStockAging,
   type ChannelSplitPoint,
   type DailyNetMargin,
-  type LoyaltyCostPoint,
-  type LoyaltyCustomer,
-  type LoyaltyEconomics,
-  type PointsLiability,
-  type PromotionSeriesPoint,
-  type RedemptionFunnel,
+  type PromotedProduct,
   type RevenueSeriesPoint,
   type SizeReturnRate,
   type SizeSellThrough,
   type StaffPerformance,
-  type StockAging,
-  type StockAgingSummary,
   type TimeGrain,
 } from "@/lib/analytics/retailAnalytics";
-import { barSize, timeAxisProps } from "@/components/analytics/timeAxis";
+import { timeAxisProps } from "@/components/analytics/timeAxis";
 import { SellThroughBySizeChart } from "@/components/analytics/SellThroughBySizeChart";
 import { NetMarginChart } from "@/components/analytics/NetMarginChart";
-import { StockAgingChart } from "@/components/analytics/StockAgingChart";
 import { ReturnRateBySizeChart } from "@/components/analytics/ReturnRateBySizeChart";
 import { StaffPerformanceChart } from "@/components/analytics/StaffPerformanceChart";
 import { ChannelSplitChart } from "@/components/analytics/ChannelSplitChart";
-import { MembershipProfitabilityChart } from "@/components/analytics/MembershipProfitabilityChart";
-import { LoyaltyCostTrendChart } from "@/components/analytics/LoyaltyCostTrendChart";
-import { LoyaltyLiabilityPanel } from "@/components/analytics/LoyaltyLiabilityPanel";
+import { PromotionRevenueByProductChart } from "@/components/analytics/PromotionRevenueByProductChart";
 import { StockService } from "@/services/stockService";
 import { CustomerService } from "@/services/customerService";
 import { ShopService } from "@/services/shopService";
-import {
-  SettingsService,
-  resolveCouponPackages,
-} from "@/services/settingsService";
 import { StockItem } from "@/types/stock";
 import { Customer } from "@/types/customer";
 
@@ -150,11 +127,43 @@ interface RecentActivity {
   status?: string;
 }
 
+type OrderStatusKey =
+  | "completed"
+  | "pending"
+  | "cancelled"
+  | "partially_refunded"
+  | "refunded";
+
+/**
+ * One bar of the order status chart.
+ *
+ * Holds the Firestore status `key` and the raw counts only — the axis label is
+ * resolved at render time. Two reasons: the colour map used to be keyed on the
+ * English display text, so renaming or translating a label silently dropped that
+ * bar to the fallback grey; and the data is built inside the loader, which does
+ * not re-run when the user switches language, so a label baked in here would go
+ * stale until the next refresh.
+ */
 interface OrderStatusChart {
-  name: string;
+  key: OrderStatusKey;
   value: number;
   percentage: number;
 }
+
+/**
+ * Bar colour per status, keyed on the Firestore value rather than the label.
+ *
+ * Green reads as money earned, amber as waiting on someone, red as lost, and the
+ * two refund states share a purple family so they group visually while staying
+ * distinguishable.
+ */
+const STATUS_COLORS: Record<OrderStatusKey, string> = {
+  completed: "#10b981",
+  pending: "#f59e0b",
+  cancelled: "#ef4444",
+  partially_refunded: "#a78bfa",
+  refunded: "#7c3aed",
+};
 
 interface Expense {
   date: string;
@@ -220,9 +229,17 @@ function OwnerDashboardContent() {
   const [dailyRevenueData, setDailyRevenueData] = useState<RevenueSeriesPoint[]>(
     [],
   );
-  const [promotionRevenueData, setPromotionRevenueData] = useState<
-    PromotionSeriesPoint[]
-  >([]);
+  /**
+   * Promoted products, ranked by the revenue they actually earned.
+   *
+   * Replaces the previous promotion-versus-revenue time series, which could only
+   * show that discounting and revenue moved together in the same period. That
+   * told the owner nothing about *which* promotion to repeat, because a single
+   * strong product and twenty weak ones produce the same line.
+   */
+  const [promotedProducts, setPromotedProducts] = useState<PromotedProduct[]>(
+    [],
+  );
   /**
    * Bucket size the time-series charts are currently aggregated to.
    *
@@ -231,9 +248,6 @@ function OwnerDashboardContent() {
    * magnitude.
    */
   const [timeGrain, setTimeGrain] = useState<TimeGrain>("day");
-  const [promotionCorrelation, setPromotionCorrelation] = useState<
-    number | null
-  >(null);
   const [orderStatusChartData, setOrderStatusChartData] = useState<
     OrderStatusChart[]
   >([]);
@@ -241,9 +255,6 @@ function OwnerDashboardContent() {
   // Retail analytics series (see src/lib/analytics/retailAnalytics.ts)
   const [sizeSellThrough, setSizeSellThrough] = useState<SizeSellThrough[]>([]);
   const [netMarginData, setNetMarginData] = useState<DailyNetMargin[]>([]);
-  const [stockAging, setStockAging] = useState<StockAging[]>([]);
-  const [stockAgingSummary, setStockAgingSummary] =
-    useState<StockAgingSummary | null>(null);
   const [returnRateBySize, setReturnRateBySize] = useState<SizeReturnRate[]>(
     [],
   );
@@ -251,26 +262,6 @@ function OwnerDashboardContent() {
     [],
   );
   const [channelSplit, setChannelSplit] = useState<ChannelSplitPoint[]>([]);
-
-  /**
-   * Loyalty programme economics.
-   *
-   * `economics` and `costTrend` follow the dashboard's date range and branch
-   * filter like every other series here. `funnel` and `liability` deliberately
-   * do not: they are derived from the current state of customer points and
-   * coupons, which is a point-in-time balance rather than something that happens
-   * inside a date window. The section header says so, otherwise the numbers look
-   * like they are ignoring the filters by mistake.
-   */
-  const [loyaltyEconomics, setLoyaltyEconomics] =
-    useState<LoyaltyEconomics | null>(null);
-  const [loyaltyCostTrend, setLoyaltyCostTrend] = useState<LoyaltyCostPoint[]>(
-    [],
-  );
-  const [redemptionFunnel, setRedemptionFunnel] =
-    useState<RedemptionFunnel | null>(null);
-  const [pointsLiability, setPointsLiability] =
-    useState<PointsLiability | null>(null);
 
   // Load shops and set initial branch filter
   useEffect(() => {
@@ -304,38 +295,48 @@ function OwnerDashboardContent() {
   }, [startDate, endDate]);
 
 
-  // Calculate order status chart data
+  /**
+   * Counts for the five transaction statuses, in lifecycle order.
+   *
+   * Every status is always returned, including the ones sitting at zero. A
+   * previous version filtered empty statuses out, which made the chart change
+   * shape between date ranges and — worse — made "no cancellations" and "we do
+   * not track cancellations" look identical. A zero-height bar with a label is
+   * information; a missing bar is not.
+   */
   const calculateOrderStatusChart = (
     stats: DashboardStats,
   ): OrderStatusChart[] => {
     const total = stats.totalOrders;
+    const share = (value: number) => (total > 0 ? (value / total) * 100 : 0);
+
     return [
       {
-        name: "Completed",
+        key: "completed",
         value: stats.completedOrders,
-        percentage: total > 0 ? (stats.completedOrders / total) * 100 : 0,
+        percentage: share(stats.completedOrders),
       },
       {
-        name: "Pending",
+        key: "pending",
         value: stats.pendingOrders,
-        percentage: total > 0 ? (stats.pendingOrders / total) * 100 : 0,
+        percentage: share(stats.pendingOrders),
       },
       {
-        name: "Cancelled",
+        key: "cancelled",
         value: stats.cancelledOrders,
-        percentage: total > 0 ? (stats.cancelledOrders / total) * 100 : 0,
+        percentage: share(stats.cancelledOrders),
       },
       {
-        name: "Refund Payments",
-        value: stats.refundPayments,
-        percentage: total > 0 ? (stats.refundPayments / total) * 100 : 0,
-      },
-      {
-        name: "Partial Refunds",
+        key: "partially_refunded",
         value: stats.partialRefunds,
-        percentage: total > 0 ? (stats.partialRefunds / total) * 100 : 0,
+        percentage: share(stats.partialRefunds),
       },
-    ].filter((item) => item.value > 0);
+      {
+        key: "refunded",
+        value: stats.refundPayments,
+        percentage: share(stats.refundPayments),
+      },
+    ];
   };
 
   // Load dashboard data
@@ -488,22 +489,13 @@ function OwnerDashboardContent() {
         rangeEndDate,
         grain,
       );
-      const promotionRevenue = calculatePromotionSeries(
-        filteredTransactions,
-        rangeStartDate,
-        rangeEndDate,
-        grain,
-      );
+      // Promoted products are ranked, not bucketed by time, so this needs no grain.
+      const promoted = calculatePromotedProducts(filteredTransactions);
       const statusChart = calculateOrderStatusChart(dashboardStats);
 
       // Retail analytics. Stock-based series use the branch-filtered stock list
-      // so sell-through and aging match the branch the owner is looking at.
+      // so sell-through matches the branch the owner is looking at.
       const currencyRate = businessSettings?.currencyRate || 130;
-      const agingRows = calculateStockAging(
-        filteredTransactions,
-        stocksForStats,
-        rangeEndDate,
-      );
 
       setSizeSellThrough(
         calculateSellThroughBySize(filteredTransactions, stocksForStats),
@@ -518,8 +510,6 @@ function OwnerDashboardContent() {
           grain,
         ),
       );
-      setStockAging(agingRows);
-      setStockAgingSummary(summariseStockAging(agingRows));
       setReturnRateBySize(calculateReturnRateBySize(filteredTransactions));
       setStaffPerformance(calculateStaffPerformance(filteredTransactions));
       setChannelSplit(
@@ -531,50 +521,12 @@ function OwnerDashboardContent() {
         ),
       );
 
-      // Loyalty programme economics.
-      //
-      // Member spend is aggregated from transactions rather than read off
-      // `customers.totalSpent`, because no POS code path ever increments that
-      // field — it is seeded to zero at creation and only ever displayed, so
-      // using it would report almost every member as having spent nothing.
-      const loyaltyCustomers = customers as LoyaltyCustomer[];
-      const nextLoyaltyEconomics = calculateLoyaltyEconomics(
-        filteredTransactions,
-        loyaltyCustomers,
-      );
-
-      // Percentage-based rewards only have a cost once they meet a basket, so
-      // the liability estimate is anchored to what members actually spend.
-      const basketForLiability =
-        nextLoyaltyEconomics.member.averageBasket ||
-        nextLoyaltyEconomics.nonMember.averageBasket;
-
-      setLoyaltyEconomics(nextLoyaltyEconomics);
-      setRedemptionFunnel(calculateRedemptionFunnel(loyaltyCustomers));
-      setPointsLiability(
-        calculatePointsLiability(
-          loyaltyCustomers,
-          resolveCouponPackages(businessSettings?.loyaltySettings),
-          basketForLiability,
-        ),
-      );
-      setLoyaltyCostTrend(
-        calculateLoyaltyCostTrend(
-          filteredTransactions,
-          loyaltyCustomers,
-          rangeStartDate,
-          rangeEndDate,
-          grain,
-        ),
-      );
-
       setStats(dashboardStats);
       setRevenueByMethod(paymentMethods);
       setTopProducts(products);
       setRecentActivity(activities);
       setDailyRevenueData(dailyRevenue);
-      setPromotionRevenueData(promotionRevenue);
-      setPromotionCorrelation(calculatePromotionCorrelation(promotionRevenue));
+      setPromotedProducts(promoted);
       setOrderStatusChartData(statusChart);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -597,10 +549,22 @@ function OwnerDashboardContent() {
     setRefreshing(false);
   };
 
-  // Only show the promotion chart when there is at least one promoted sale
-  const hasPromotionData = promotionRevenueData.some(
-    (point) => point.promotionDiscount > 0,
-  );
+  /**
+   * Status bars with their axis labels attached, resolved on every render so a
+   * language switch takes effect immediately rather than waiting for a refetch.
+   */
+  const statusLabels: Record<OrderStatusKey, string> = {
+    completed: t.completed,
+    pending: t.pending,
+    cancelled: t.cancelled,
+    partially_refunded: t.partiallyRefunded,
+    refunded: t.fullyRefunded,
+  };
+
+  const orderStatusChartRows = orderStatusChartData.map((row) => ({
+    ...row,
+    name: statusLabels[row.key],
+  }));
 
   // Calculate dashboard statistics
   const calculateStats = (
@@ -1798,106 +1762,8 @@ function OwnerDashboardContent() {
                     )}
                   </div>
 
-                  {/* Promotion & Revenue Relationship Chart */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {t.promotionRevenueRelationship}
-                      </h2>
-                      {promotionCorrelation !== null && (
-                        <span
-                          className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                            promotionCorrelation > 0.3
-                              ? "bg-emerald-50 text-emerald-700"
-                              : promotionCorrelation < -0.3
-                                ? "bg-red-50 text-red-700"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          r = {promotionCorrelation.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    {hasPromotionData ? (
-                      <ResponsiveContainer width="100%" height={320}>
-                        <ComposedChart
-                          data={promotionRevenueData}
-                          margin={{ top: 8, right: 8, bottom: 8 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e5e7eb"
-                          />
-                          <XAxis
-                            dataKey="date"
-                            {...timeAxisProps(promotionRevenueData.length)}
-                          />
-                          <YAxis
-                            yAxisId="left"
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
-                          />
-                          <YAxis
-                            yAxisId="right"
-                            orientation="right"
-                            tick={{ fontSize: 12 }}
-                            stroke="#f59e0b"
-                            tickFormatter={(value: number) => `${value}%`}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#fff",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "8px",
-                            }}
-                            formatter={(
-                              value: number | undefined,
-                              name?: string,
-                            ) => {
-                              if (value === undefined) return "N/A";
-                              if (name === t.discountRate) {
-                                return [`${value.toFixed(1)}%`, name];
-                              }
-                              return [formatPrice(value), name ?? ""];
-                            }}
-                          />
-                          <Legend />
-                          <Bar
-                            yAxisId="left"
-                            dataKey="promotionDiscount"
-                            fill="#8b5cf6"
-                            name={t.promotionDiscount}
-                            barSize={barSize(promotionRevenueData.length, 18)}
-                            radius={[4, 4, 0, 0]}
-                          />
-                          <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="revenue"
-                            stroke="#3b82f6"
-                            strokeWidth={2}
-                            dot={false}
-                            name={t.totalSales}
-                          />
-                          <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="discountRate"
-                            stroke="#f59e0b"
-                            strokeWidth={2}
-                            strokeDasharray="4 4"
-                            dot={false}
-                            name={t.discountRate}
-                          />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-16">
-                        <Tag className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noPromotionData}</p>
-                      </div>
-                    )}
-                  </div>
+                  {/* Revenue earned per promoted product */}
+                  <PromotionRevenueByProductChart data={promotedProducts} />
                 </div>
 
                 {/* Additional Charts */}
@@ -1907,52 +1773,66 @@ function OwnerDashboardContent() {
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">
                       {t.orderStatusDistribution}
                     </h2>
-                    {orderStatusChartData.length > 0 ? (
+                    {stats.totalOrders > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={orderStatusChartData}>
+                        <BarChart
+                          data={orderStatusChartRows}
+                          margin={{ top: 8, right: 8, bottom: 8 }}
+                        >
                           <CartesianGrid
                             strokeDasharray="3 3"
                             stroke="#e5e7eb"
                           />
                           <XAxis
                             dataKey="name"
+                            interval={0}
+                            angle={-20}
+                            height={60}
+                            textAnchor="end"
+                            tick={{ fontSize: 11 }}
+                            stroke="#6b7280"
+                          />
+                          {/* Counts are whole orders, so a fractional tick like
+                              1.5 would be meaningless. */}
+                          <YAxis
+                            allowDecimals={false}
                             tick={{ fontSize: 12 }}
                             stroke="#6b7280"
                           />
-                          <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
                           <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#fff",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "8px",
-                            }}
-                            formatter={(value?: number, name?: string) => {
-                              if (value === undefined) return "N/A";
-                              if (name === "value") {
-                                return [`${value} ${t.orders}`, "Count"];
-                              }
-                              return value;
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const row = payload[0].payload as OrderStatusChart & {
+                                name: string;
+                              };
+                              return (
+                                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 text-xs">
+                                  <p className="font-semibold text-gray-900 mb-1">
+                                    {row.name}
+                                  </p>
+                                  <p className="text-gray-700">
+                                    {row.value} {t.orders}
+                                  </p>
+                                  <p className="text-gray-500">
+                                    {row.percentage.toFixed(1)}%
+                                  </p>
+                                </div>
+                              );
                             }}
                           />
                           <Legend />
-                          <Bar dataKey="value" name={t.orders}>
-                            {orderStatusChartData.map((entry, index) => {
-                              const COLORS = {
-                                Completed: "#10b981",
-                                Pending: "#f59e0b",
-                                Cancelled: "#ef4444",
-                                Refunded: "#8b5cf6",
-                              };
-                              return (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={
-                                    COLORS[entry.name as keyof typeof COLORS] ||
-                                    "#6b7280"
-                                  }
-                                />
-                              );
-                            })}
+                          <Bar
+                            dataKey="value"
+                            name={t.orders}
+                            radius={[4, 4, 0, 0]}
+                            barSize={38}
+                          >
+                            {orderStatusChartRows.map((entry) => (
+                              <Cell
+                                key={entry.key}
+                                fill={STATUS_COLORS[entry.key]}
+                              />
+                            ))}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
@@ -2035,56 +1915,9 @@ function OwnerDashboardContent() {
                   <ReturnRateBySizeChart data={returnRateBySize} />
                 </div>
 
-                {/* Retail analytics: inventory aging needs the full width for
-                    the scatter plus its bucket summary */}
-                {stockAgingSummary && (
-                  <div className="mb-8">
-                    <StockAgingChart
-                      data={stockAging}
-                      summary={stockAgingSummary}
-                    />
-                  </div>
-                )}
-
                 {/* Retail analytics: staff attribution */}
                 <div className="mb-8">
                   <StaffPerformanceChart data={staffPerformance} />
-                </div>
-
-                {/* Loyalty programme economics — does membership earn more than
-                    it gives away? */}
-                <div className="mb-8">
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        Programme Economics
-                      </h2>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Whether the loyalty programme earns more than it costs.
-                        Outstanding points and coupons are a current balance, so
-                        they ignore the date range and branch filter.
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-full px-2.5 py-1">
-                      {grainLabel(timeGrain)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {loyaltyEconomics && (
-                      <MembershipProfitabilityChart data={loyaltyEconomics} />
-                    )}
-                    <LoyaltyCostTrendChart data={loyaltyCostTrend} />
-                  </div>
-
-                  {redemptionFunnel && pointsLiability && (
-                    <div className="mt-6">
-                      <LoyaltyLiabilityPanel
-                        funnel={redemptionFunnel}
-                        liability={pointsLiability}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {/* Charts and Tables */}

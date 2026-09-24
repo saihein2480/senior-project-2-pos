@@ -274,6 +274,12 @@ export interface Translations {
   cod: string;
   totalSaleProfitTrend: string;
   promotionRevenueRelationship: string;
+  promotionRevenueByProduct: string;
+  promotionRevenueByProductHint: string;
+  promotionRevenueByProductFootnote: string;
+  revenueEarned: string;
+  promotedProducts: string;
+  promotion: string;
   promotionDiscount: string;
   discountRate: string;
   orderStatusDistribution: string;
@@ -350,6 +356,8 @@ export interface Translations {
   nonMembers: string;
   ordersPerCustomer: string;
   loyaltyCost: string;
+  /** Trailing clause after the loyalty cost figure, so it is not double-counted. */
+  alreadyDeductedFromNetProfit: string;
   netProfitAfterLoyalty: string;
   grossMarginRate: string;
   basketUplift: string;
@@ -381,6 +389,7 @@ export interface Translations {
   totalTransactions: string;
   allStatus: string;
   partiallyRefunded: string;
+  fullyRefunded: string;
   allPaymentMethods: string;
   scanPayment: string;
   allTime: string;
@@ -417,6 +426,13 @@ export interface Translations {
   soldBy: string;
   dateTime: string;
   netSales: string;
+  /**
+   * Daily status column on the sales report: Total Sales minus expenses.
+   *
+   * Separate from `netSales`, which the staff performance chart uses for net
+   * revenue. Same words, different figure, so they cannot share a key.
+   */
+  totalNetSales: string;
   types: string;
 
   // Auth
@@ -1260,6 +1276,14 @@ export const translations: Record<Language, Translations> = {
     cod: "COD",
     totalSaleProfitTrend: "Total Sale & Profit Trend",
     promotionRevenueRelationship: "Promotion & Revenue Relationship",
+    promotionRevenueByProduct: "Revenue from Promoted Products",
+    promotionRevenueByProductHint:
+      "Only products sold with a discount. Compares what each one earned against what was given away, so you can see which promotions are worth repeating.",
+    promotionRevenueByProductFootnote:
+      "Item-level figures: excludes tax and any whole-basket discount, so these will not add up to Total Sales. Refunded units are removed.",
+    revenueEarned: "Revenue Earned",
+    promotedProducts: "promoted products",
+    promotion: "Promotion",
     promotionDiscount: "Promotion Discount",
     discountRate: "Discount Rate",
     orderStatusDistribution: "Order Status Distribution",
@@ -1285,11 +1309,11 @@ export const translations: Record<Language, Translations> = {
     unitsRemaining: "Units On Hand",
     fastestSize: "Fastest",
     noSizeData: "No size data available",
-    netMarginTrend: "Net Margin: Profit vs Expenses",
+    netMarginTrend: "Daily Status: Profit, Expenses & Net",
     netMarginTrendHint:
-      "Gross profit against operating expenses. What is actually left over after running costs.",
+      "The same four figures as the Daily Status table on the sales report. Total Net Sale = Total Sales − Expenses. Total Net Profit = Profit − Expenses.",
     netMarginTrendFootnote:
-      "Gross profit uses the price the customer paid, net of refunds. MMK expenses are converted to THB at your configured rate. Net margin is net result ÷ net revenue.",
+      "Profit uses the price the customer actually paid, net of refunds, and excludes tax. MMK expenses are converted to THB at your configured rate.",
     netMarginRate: "Net Margin %",
     grossProfit: "Gross Profit",
     operatingExpenses: "Expenses",
@@ -1351,6 +1375,7 @@ export const translations: Record<Language, Translations> = {
     nonMembers: "Non-Members",
     ordersPerCustomer: "Orders / Customer",
     loyaltyCost: "Loyalty Cost",
+    alreadyDeductedFromNetProfit: "(already deducted from Net Profit above)",
     netProfitAfterLoyalty: "Net Profit After Loyalty",
     grossMarginRate: "Gross Margin %",
     basketUplift: "Basket uplift",
@@ -1387,6 +1412,7 @@ export const translations: Record<Language, Translations> = {
     totalTransactions: "Total Transactions",
     allStatus: "All Status",
     partiallyRefunded: "Partially Refunded",
+    fullyRefunded: "Fully Refunded",
     allPaymentMethods: "All Payment Methods",
     scanPayment: "Scan Payment",
     allTime: "All Time",
@@ -1423,6 +1449,7 @@ export const translations: Record<Language, Translations> = {
     soldBy: "Sold By",
     dateTime: "Date & Time",
     netSales: "Net Sales",
+    totalNetSales: "Total Net Sale",
     types: "type(s)",
 
     // Auth
@@ -2263,6 +2290,14 @@ export const translations: Record<Language, Translations> = {
     cod: "ပေးပို့သောအခါငွေပေးရန်",
     totalSaleProfitTrend: "စုစုပေါင်းရောင်းချမှုနှင့်အမြတ်ခြေရာ",
     promotionRevenueRelationship: "ပရိုမိုးရှင်းနှင့် ဝင်ငွေ ဆက်နွှယ်မှု",
+    promotionRevenueByProduct: "ပရိုမိုးရှင်းပစ္စည်းများမှ ဝင်ငွေ",
+    promotionRevenueByProductHint:
+      "လျှော့ငွေဖြင့် ရောင်းချသော ပစ္စည်းများသာ ပြသည်။ ပစ္စည်းတစ်ခုစီ ရရှိသော ဝင်ငွေနှင့် စွန့်လွှတ်လိုက်သော လျှော့ငွေကို နှိုင်းယှဉ်ပြသည်။",
+    promotionRevenueByProductFootnote:
+      "ပစ္စည်းအလိုက် တန်ဖိုးများဖြစ်သည်။ အခွန်နှင့် စုစုပေါင်းလျှော့ငွေ မပါဝင်သဖြင့် စုစုပေါင်းရောင်းချမှုနှင့် တူမည်မဟုတ်ပါ။",
+    revenueEarned: "ရရှိသော ဝင်ငွေ",
+    promotedProducts: "ပရိုမိုးရှင်းပစ္စည်းများ",
+    promotion: "ပရိုမိုးရှင်း",
     promotionDiscount: "ပရိုမိုးရှင်းလျှော့ငွေ",
     discountRate: "လျှော့ငွေနှုန်း",
     orderStatusDistribution: "မှာယူမှုအခြေအနေဖြန့်ဝေမှု",
@@ -2288,11 +2323,11 @@ export const translations: Record<Language, Translations> = {
     unitsRemaining: "လက်ကျန်",
     fastestSize: "အမြန်ဆုံး",
     noSizeData: "ဆိုက်ဒေတာမရှိပါ",
-    netMarginTrend: "အသားတင်အမြတ်: အမြတ်နှင့် အသုံးစရိတ်",
+    netMarginTrend: "နေ့စဉ်အခြေအနေ: အမြတ်, အသုံးစရိတ်နှင့် အသားတင်",
     netMarginTrendHint:
-      "စုစုပေါင်းအမြတ်နှင့် လုပ်ငန်းအသုံးစရိတ် နှိုင်းယှဉ်မှု။ စရိတ်ကျခံပြီးနောက် ကျန်ရှိသောပမာဏ။",
+      "ရောင်းချမှုအစီရင်ခံစာ၏ နေ့စဉ်အခြေအနေဇယားနှင့် အတူတူပင်။ စုစုပေါင်း သန့်ရောင်းချမှု = စုစုပေါင်းရောင်းချမှု − အသုံးစရိတ်။ စုစုပေါင်းသန့်အမြတ် = အမြတ် − အသုံးစရိတ်။",
     netMarginTrendFootnote:
-      "စုစုပေါင်းအမြတ်ကို ဖောက်သည်ပေးချေသည့်နှုန်းဖြင့် တွက်ချက်ပြီး ပြန်အမ်းငွေများ ခုနှိမ်ထားသည်။ MMK အသုံးစရိတ်များကို သတ်မှတ်နှုန်းဖြင့် THB သို့ ပြောင်းသည်။",
+      "အမြတ်ကို ဖောက်သည်ပေးချေသည့်နှုန်းဖြင့် တွက်ချက်ပြီး ပြန်အမ်းငွေများ ခုနှိမ်ထားသည်။ အခွန် မပါဝင်ပါ။ MMK အသုံးစရိတ်များကို သတ်မှတ်နှုန်းဖြင့် THB သို့ ပြောင်းသည်။",
     netMarginRate: "အသားတင်အမြတ် %",
     grossProfit: "စုစုပေါင်းအမြတ်",
     operatingExpenses: "အသုံးစရိတ်",
@@ -2354,6 +2389,7 @@ export const translations: Record<Language, Translations> = {
     nonMembers: "အသင်းမဝင်သူများ",
     ordersPerCustomer: "ဖောက်သည်တစ်ဦးလျှင် မှာယူမှု",
     loyaltyCost: "အသင်းဝင်စရိတ်",
+    alreadyDeductedFromNetProfit: "(အထက်ပါ အသားတင်အမြတ်မှ ခုနှိမ်ထားပြီး)",
     netProfitAfterLoyalty: "အသင်းဝင်စရိတ်ပြီးနောက် အသားတင်အမြတ်",
     grossMarginRate: "စုစုပေါင်းအမြတ် %",
     basketUplift: "ဝယ်ယူမှုတိုးတက်မှု",
@@ -2390,6 +2426,7 @@ export const translations: Record<Language, Translations> = {
     totalTransactions: "စုစုပေါင်းငွေလွှဲပြောင်းမှုများ",
     allStatus: "အခြေအနေအားလုံး",
     partiallyRefunded: "တစ်စိတ်တစ်ပိုင်းပြန်အမ်းမှုများ",
+    fullyRefunded: "အပြည့်အဝပြန်အမ်းပြီး",
     allPaymentMethods: "ငွေပေးချေနည်းအားလုံး",
     allTime: "အချိန်မှုအားလုံး",
     searchTransactions: "ငွေလွှဲရှာဖွေရန်...",
@@ -2425,6 +2462,7 @@ export const translations: Record<Language, Translations> = {
     soldBy: "ရောင်းချသူ",
     dateTime: "ရက်စွဲနှင့်အချိန်",
     netSales: "သန့်ရောင်းချမှု",
+    totalNetSales: "စုစုပေါင်း သန့်ရောင်းချမှု",
     types: "အမျိုးအစား",
 
     // Auth

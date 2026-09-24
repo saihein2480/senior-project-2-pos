@@ -738,10 +738,29 @@ export interface DailyNetMargin {
   dateKey: string;
   profit: number;
   expense: number;
+  /** Profit minus expenses. Labelled "Total Net Profit" in the UI. */
   net: number;
   /** Net as a percentage of revenue — the number that decides solvency. */
   netMarginRate: number;
+  /**
+   * Basket-level takings, net of refunds and inclusive of tax.
+   *
+   * Kept for `netMarginRate`, which has to divide by the money that actually
+   * came in. Do not display it next to `sales` below — they are different
+   * questions and the two numbers will not agree.
+   */
   revenue: number;
+  /**
+   * Item-level sales: what was charged for the goods themselves, net of refunds
+   * and excluding tax.
+   *
+   * Separate from `revenue` so this chart can line up with the Daily Status table
+   * on the sales report, which is also built from line items. Mixing the two
+   * bases is what made the dashboard and the reports page disagree before.
+   */
+  sales: number;
+  /** Sales minus expenses. Labelled "Total Net Sale" in the UI. */
+  netSales: number;
 }
 
 function normaliseCurrency(value?: string): "THB" | "MMK" {
@@ -768,18 +787,29 @@ export function calculateDailyNetMargin(
 ): DailyNetMargin[] {
   const buckets = new Map<
     string,
-    { profit: number; expense: number; revenue: number }
+    { profit: number; expense: number; revenue: number; sales: number }
   >();
 
   enumerateBucketKeys(startDate, endDate, grain).forEach((key) => {
-    buckets.set(key, { profit: 0, expense: 0, revenue: 0 });
+    buckets.set(key, { profit: 0, expense: 0, revenue: 0, sales: 0 });
   });
 
   transactions.filter(isRevenueTransaction).forEach((transaction) => {
     const entry = buckets.get(bucketKey(transaction.timestamp, grain));
     if (!entry) return;
+
     entry.profit += getNetProfit(transaction);
     entry.revenue += getNetRevenue(transaction);
+
+    // Line-item takings, so this matches the sales report's Daily Status table.
+    const refunded = getRefundedQuantities(transaction);
+    entry.sales += transaction.items.reduce((sum, item, index) => {
+      const netQuantity = Math.max(
+        0,
+        item.quantity - (refunded.get(index) || 0),
+      );
+      return sum + getSellingPrice(item) * netQuantity;
+    }, 0);
   });
 
   const safeRate = currencyRate > 0 ? currencyRate : 1;
@@ -805,6 +835,8 @@ export function calculateDailyNetMargin(
         expense: data.expense,
         net,
         revenue: data.revenue,
+        sales: data.sales,
+        netSales: data.sales - data.expense,
         netMarginRate: data.revenue > 0 ? (net / data.revenue) * 100 : 0,
       };
     });
@@ -1549,4 +1581,167 @@ export function calculatePromotionCorrelation(
   if (varianceX === 0 || varianceY === 0) return null;
 
   return covariance / Math.sqrt(varianceX * varianceY);
+}
+
+// ---------------------------------------------------------------------------
+// Promotion performance per product
+// ---------------------------------------------------------------------------
+
+/** Label used for a till discount that carries no named promotion. */
+export const IN_STORE_DISCOUNT_LABEL = "In-store discount";
+
+/** Label used when the line was sold at a wholesale tier price. */
+export const WHOLESALE_PRICE_LABEL = "Wholesale price";
+
+export interface PromotedProduct {
+  /** Grouping key, also the display name. */
+  product: string;
+  /** Promotions that reduced this product, best-effort and de-duplicated. */
+  promotions: string[];
+  unitsSold: number;
+  /** Money actually received for this product, net of refunds. */
+  revenue: number;
+  /** Money given away on this product, net of refunds. */
+  discountGiven: number;
+  /** What the product would have earned at ticket price. */
+  grossSales: number;
+  /** Share of the ticket value given away, as a percentage. */
+  discountRate: number;
+}
+
+/**
+ * Line fields the storefront writes but the POS `CartItem` type does not
+ * declare, because only web orders carry a named promotion.
+ *
+ * `lineDiscount` is a LINE total (not per unit): the checkout divides
+ * `finalSubtotalTHB` by quantity to get the unit price, so the discount it
+ * persists covers the whole line. See the web app's checkout `checkoutLines`.
+ */
+type PromotedLine = CartItem & {
+  lineDiscount?: number;
+  promotionName?: string;
+  promotionId?: string;
+};
+
+/**
+ * How much was given away on one line, scaled to the units still sold.
+ *
+ * The two channels record a discount differently and cannot be handled the
+ * same way:
+ *
+ * - The **storefront** sets `unitPrice` to the price already charged and
+ *   records the saving separately in `lineDiscount`, so `unitPrice` minus the
+ *   selling price is always zero there and would report every online promotion
+ *   as free.
+ * - The **till** leaves `unitPrice` as the ticket price and writes the reduced
+ *   price to `discountedPrice`, so the difference between them *is* the saving.
+ *
+ * Checking `lineDiscount` first and falling back to the price difference covers
+ * both without double counting, because the two are never both populated.
+ */
+function getLineDiscount(item: PromotedLine, netQuantity: number): number {
+  const recorded = Number(item.lineDiscount || 0);
+
+  if (recorded > 0) {
+    // Refunded units gave their discount back too, so scale by what is left.
+    return item.quantity > 0 ? (recorded * netQuantity) / item.quantity : 0;
+  }
+
+  const perUnit = Math.max(0, item.unitPrice - getSellingPrice(item));
+  return perUnit * netQuantity;
+}
+
+/** Best available name for whatever reduced this line. */
+function getLinePromotionLabel(item: PromotedLine): string {
+  const named = (item.promotionName || "").trim();
+  if (named) return named;
+  if (item.isWholesalePricing) return WHOLESALE_PRICE_LABEL;
+  return IN_STORE_DISCOUNT_LABEL;
+}
+
+/**
+ * Revenue earned per promoted product.
+ *
+ * Answers the question the time-series version could not: *which* promoted
+ * products actually brought money in. A promotion chart plotted against time
+ * shows only that discounting and revenue moved together in the same week; it
+ * cannot say whether that came from one strong product or twenty weak ones, so
+ * it gives no guidance on which promotion to repeat.
+ *
+ * Only products with a discount on at least one sold line appear, which is what
+ * makes this "promoted products only" rather than the whole catalogue.
+ *
+ * Deliberately **item-level**: revenue here is what was charged for the product
+ * itself, so it excludes tax and any whole-basket discount and will not match
+ * the Total Sales card. Attributing basket-level figures to a single product
+ * would require splitting them proportionally, which invents precision the data
+ * does not have.
+ */
+export function calculatePromotedProducts(
+  transactions: Transaction[],
+  limit = 10,
+): PromotedProduct[] {
+  const byProduct = new Map<
+    string,
+    {
+      promotions: Set<string>;
+      unitsSold: number;
+      revenue: number;
+      discountGiven: number;
+      grossSales: number;
+    }
+  >();
+
+  transactions.filter(isRevenueTransaction).forEach((transaction) => {
+    const refunded = getRefundedQuantities(transaction);
+
+    transaction.items.forEach((rawItem, index) => {
+      const item = rawItem as PromotedLine;
+      const product = (item.groupName || "").trim();
+      if (!product) return;
+
+      const netQuantity = Math.max(
+        0,
+        item.quantity - (refunded.get(index) || 0),
+      );
+      if (netQuantity === 0) return;
+
+      const discountGiven = getLineDiscount(item, netQuantity);
+      if (discountGiven <= 0) return;
+
+      const entry =
+        byProduct.get(product) ||
+        {
+          promotions: new Set<string>(),
+          unitsSold: 0,
+          revenue: 0,
+          discountGiven: 0,
+          grossSales: 0,
+        };
+
+      entry.promotions.add(getLinePromotionLabel(item));
+      entry.unitsSold += netQuantity;
+      entry.revenue += getSellingPrice(item) * netQuantity;
+      entry.discountGiven += discountGiven;
+      entry.grossSales += getSellingPrice(item) * netQuantity + discountGiven;
+
+      byProduct.set(product, entry);
+    });
+  });
+
+  return Array.from(byProduct.entries())
+    .map(([product, data]) => ({
+      product,
+      promotions: Array.from(data.promotions).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+      unitsSold: data.unitsSold,
+      revenue: data.revenue,
+      discountGiven: data.discountGiven,
+      grossSales: data.grossSales,
+      discountRate:
+        data.grossSales > 0 ? (data.discountGiven / data.grossSales) * 100 : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit);
 }
