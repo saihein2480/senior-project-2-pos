@@ -162,6 +162,16 @@ function sanitizeCouponPackages(input: unknown): CouponPackage[] {
     .filter((pkg) => pkg.pointsRequired > 0 && pkg.discountValue > 0);
 }
 
+/**
+ * Validate the storefront delivery fee (THB). Rounded to satang so the stored
+ * value matches what the storefront shows to two decimals.
+ */
+function sanitizeDeliveryFee(input: unknown): number {
+  const fee = Number(input);
+  if (!Number.isFinite(fee) || fee <= 0) return 0;
+  return Math.round(fee * 100) / 100;
+}
+
 // GET /api/settings - Get business settings
 export async function GET(request: NextRequest) {
   try {
@@ -187,6 +197,7 @@ export async function GET(request: NextRequest) {
           enableDarkMode: false,
           enableSoundEffects: false,
           currencyRate: 0,
+          deliveryFee: 0,
           currentBranch: "Main Branch",
         },
       };
@@ -257,6 +268,10 @@ export async function POST(request: NextRequest) {
           : false,
       currencyRate:
         typeof body.currencyRate === "number" ? body.currencyRate : 0,
+      // Flat THB fee the storefront adds to every order. Anything that is not
+      // a finite, non-negative number is stored as 0 (free delivery) rather
+      // than letting NaN or a negative charge reach checkout.
+      deliveryFee: sanitizeDeliveryFee(body.deliveryFee),
       currentBranch: body.currentBranch || "Main Branch",
       // Owner-only workspace preference; hides Home + cart for the owner.
       hidePosForOwner:

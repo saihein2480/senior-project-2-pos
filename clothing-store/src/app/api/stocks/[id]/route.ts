@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StockService } from "@/services/stockService";
 import { StockResponse } from "@/types/stock";
+import { isStockAdjustmentError, type EditedVariant } from "@/lib/stockMath";
 
 // GET /api/stocks/[id] - Get a specific stock item
 export async function GET(
@@ -76,6 +77,65 @@ export async function PUT(
       updateData.category = body.category;
     }
 
+    // The edit page sends the variants it was loaded from. With that we can
+    // merge quantities as changes against the live document, so a sale made
+    // while the form was open is not overwritten by the form's stale numbers.
+    if (Array.isArray(body.baseColorVariants)) {
+      const { colorVariants: _ignored, ...otherFields } = updateData;
+      void _ignored;
+
+      const editedVariants: EditedVariant[] = (
+        Array.isArray(body.colorVariants) ? body.colorVariants : []
+      ).map((variant: Record<string, unknown>) => ({
+        sourceIndex:
+          typeof variant.sourceIndex === "number" ? variant.sourceIndex : null,
+        color: String(variant.color ?? ""),
+        colorCode: String(variant.colorCode ?? ""),
+        barcode: String(variant.barcode ?? ""),
+        ...(typeof variant.image === "string" ? { image: variant.image } : {}),
+        sizeQuantities: Array.isArray(variant.sizeQuantities)
+          ? (variant.sizeQuantities as Array<Record<string, unknown>>).map(
+              (sq) => ({
+                size: String(sq.size ?? ""),
+                quantity: Number(sq.quantity ?? 0),
+              }),
+            )
+          : [],
+      }));
+
+      try {
+        await StockService.updateStockWithMerge(
+          id,
+          otherFields,
+          editedVariants,
+          body.baseColorVariants,
+        );
+      } catch (error) {
+        if (isStockAdjustmentError(error)) {
+          const response: StockResponse = {
+            success: false,
+            error: error.message,
+          };
+          const status = error.code === "stock_not_found" ? 404 : 409;
+          return NextResponse.json(
+            { ...response, code: error.code, details: error.details },
+            { status },
+          );
+        }
+        throw error;
+      }
+
+      const response: StockResponse = {
+        success: true,
+        message: "Stock item updated successfully",
+      };
+      return NextResponse.json(response);
+    }
+
+    // Legacy callers that do not send a base snapshot: whole-array overwrite.
+    console.warn(
+      `PUT /api/stocks/${id} without baseColorVariants: quantities overwritten as sent`,
+    );
     await StockService.updateStock(id, updateData);
 
     const response: StockResponse = {

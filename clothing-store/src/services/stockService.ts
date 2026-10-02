@@ -12,6 +12,9 @@ import {
   serverTimestamp,
   Timestamp,
   getDoc,
+  runTransaction,
+  type DocumentReference,
+  type DocumentData,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import {
@@ -20,6 +23,27 @@ import {
   WholesaleTier,
   ColorVariant,
 } from "@/types/stock";
+import {
+  applyAdjustments,
+  isStockAdjustmentError,
+  mergeOwnerEdit,
+  planOrderLineReturns,
+  StockAdjustmentError,
+  type ApplyAdjustmentsResult,
+  type EditedVariant,
+  type OrderLineReturn,
+  type ReturnLedgerSource,
+  type StockAdjustment,
+} from "@/lib/stockMath";
+
+/** A line to put back on the shelf (refund, cancellation, rejected order). */
+export interface StockRestoreItem {
+  stockId: string;
+  colorName: string;
+  size: string;
+  quantity: number;
+  variantHint?: string;
+}
 
 const COLLECTION_NAME = "stocks";
 
@@ -376,6 +400,239 @@ export class StockService {
   }
 
   /**
+   * Change quantities on one stock document atomically.
+   *
+   * Reads the document inside a transaction, applies the deltas to whatever
+   * is stored *now* and writes the result. If another writer commits in
+   * between, Firestore retries the whole function against the newer data, so
+   * concurrent sales, restocks and restores all add up instead of the last
+   * writer erasing the others.
+   *
+   * Throws `StockAdjustmentError` with code `insufficient_stock` when a
+   * negative delta would take a size below zero.
+   */
+  static async adjustStock(
+    stockId: string,
+    adjustments: StockAdjustment[],
+    options: { allowAddSize?: boolean; skipUnresolvable?: boolean } = {},
+  ): Promise<ApplyAdjustmentsResult> {
+    if (!db || !isFirebaseConfigured) {
+      throw new Error("Firebase is not configured");
+    }
+
+    const firestore = db;
+    const stockRef = doc(firestore, COLLECTION_NAME, stockId);
+
+    return runTransaction(firestore, async (tx) => {
+      const snap = await tx.get(stockRef);
+      if (!snap.exists()) {
+        throw new StockAdjustmentError(
+          "stock_not_found",
+          `Stock item ${stockId} not found`,
+          { stockId },
+        );
+      }
+
+      const data = snap.data() as Partial<StockItem>;
+      const result = applyAdjustments(
+        data.colorVariants,
+        stockId,
+        adjustments,
+        options,
+      );
+
+      if (result.applied.length > 0) {
+        tx.update(stockRef, {
+          colorVariants: result.colorVariants,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      return result;
+    });
+  }
+
+  /**
+   * Save the owner's edit form without undoing sales made while it was open.
+   *
+   * `baseVariants` is the `colorVariants` array the form was loaded from.
+   * Quantities are merged as deltas against the current document (see
+   * `mergeOwnerEdit`); everything else on the product is written as given.
+   */
+  static async updateStockWithMerge(
+    id: string,
+    updates: Partial<Omit<StockItem, "colorVariants">>,
+    editedVariants: EditedVariant[],
+    baseVariants: ColorVariant[],
+  ): Promise<ColorVariant[]> {
+    if (!db || !isFirebaseConfigured) {
+      throw new Error("Firebase is not configured");
+    }
+
+    const firestore = db;
+    const stockRef = doc(firestore, COLLECTION_NAME, id);
+
+    return runTransaction(firestore, async (tx) => {
+      const snap = await tx.get(stockRef);
+      if (!snap.exists()) {
+        throw new StockAdjustmentError(
+          "stock_not_found",
+          "This product no longer exists. It may have been deleted.",
+          { stockId: id },
+        );
+      }
+
+      const current = (snap.data() as Partial<StockItem>).colorVariants;
+      const merged = mergeOwnerEdit(
+        current,
+        baseVariants,
+        editedVariants,
+        generateId,
+      ).map((variant) => ({
+        ...variant,
+        barcode:
+          variant.barcode && variant.barcode.trim() !== ""
+            ? variant.barcode
+            : generateEAN13(),
+      }));
+
+      tx.update(stockRef, {
+        ...updates,
+        colorVariants: merged,
+        updatedAt: serverTimestamp(),
+      });
+
+      return merged;
+    });
+  }
+
+  /**
+   * Put an order's stock back through its returns ledger.
+   *
+   * The ledger (`stockReturnLedger` on the order document) records how many
+   * units of each line have already come back. It is read, checked and
+   * updated in the same transaction as the stock writes, so refunds,
+   * cancellations and online-order status changes can be used in any
+   * combination — or by two people at once — and an order is never restocked
+   * beyond what was sold.
+   *
+   * `requireField` (normally `stockDeductedAt`) skips orders whose stock was
+   * never taken, such as COD orders placed before the storefront started
+   * deducting them.
+   */
+  static async returnOrderLines(
+    lines: OrderLineReturn[],
+    guard: {
+      collection: "onlineOrders" | "transactions";
+      docId: string;
+      source: ReturnLedgerSource;
+      requireField?: string;
+      /** Extra fields to write once every line is fully back. */
+      extraUpdatesWhenComplete?: (
+        guardData: DocumentData,
+      ) => Record<string, unknown>;
+    },
+  ): Promise<{ restocked: number; accounted: number; skippedReason?: string }> {
+    if (!db || !isFirebaseConfigured) {
+      console.warn("Firebase not configured, skipping inventory restoration");
+      return { restocked: 0, accounted: 0, skippedReason: "not_configured" };
+    }
+
+    const firestore = db;
+    const guardRef = doc(firestore, guard.collection, guard.docId);
+
+    return runTransaction(firestore, async (tx) => {
+      const guardSnap = await tx.get(guardRef);
+      if (!guardSnap.exists()) {
+        return { restocked: 0, accounted: 0, skippedReason: "order_not_found" };
+      }
+
+      const guardData = guardSnap.data();
+      if (guard.requireField && !guardData[guard.requireField]) {
+        return {
+          restocked: 0,
+          accounted: 0,
+          skippedReason: "stock_never_deducted",
+        };
+      }
+
+      const plan = planOrderLineReturns(guardData, guard.source, lines);
+      if (plan.skippedReason) {
+        return { restocked: 0, accounted: 0, skippedReason: plan.skippedReason };
+      }
+      if (plan.accounted === 0) {
+        return {
+          restocked: 0,
+          accounted: 0,
+          skippedReason: "nothing_left_to_return",
+        };
+      }
+
+      // Firestore transactions need every read before the first write.
+      const stockSnaps = await Promise.all(
+        Array.from(plan.adjustmentsByStock.keys()).map(async (stockId) => {
+          const ref = doc(firestore, COLLECTION_NAME, stockId);
+          return { stockId, ref, snap: await tx.get(ref) };
+        }),
+      );
+
+      const writes: Array<{
+        ref: DocumentReference;
+        colorVariants: ColorVariant[];
+      }> = [];
+
+      for (const { stockId, ref, snap } of stockSnaps) {
+        if (!snap.exists()) {
+          console.error(`Stock item ${stockId} not found; skipping restore`);
+          continue;
+        }
+
+        const result = applyAdjustments(
+          (snap.data() as Partial<StockItem>).colorVariants,
+          stockId,
+          plan.adjustmentsByStock.get(stockId) || [],
+          { allowAddSize: true, skipUnresolvable: true },
+        );
+
+        if (result.skipped.length > 0) {
+          console.error(
+            `Could not match ${result.skipped.length} line(s) to a variant of stock ${stockId}; they were not restored`,
+            result.skipped.map((s) => s.adjustment),
+          );
+        }
+        if (result.applied.length > 0) {
+          writes.push({ ref, colorVariants: result.colorVariants });
+        }
+      }
+
+      for (const write of writes) {
+        tx.update(write.ref, {
+          colorVariants: write.colorVariants,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // `stockRestoredAt` keeps its old meaning — the whole order is back —
+      // because the storefront reads it to decide whether a paid-late order
+      // still holds its stock.
+      const completesNow = plan.complete && !guardData.stockRestoredAt;
+      tx.update(guardRef, {
+        stockReturnLedger: plan.ledger,
+        ...(completesNow
+          ? {
+              stockRestoredAt: new Date().toISOString(),
+              ...(guard.extraUpdatesWhenComplete
+                ? guard.extraUpdatesWhenComplete(guardData)
+                : {}),
+            }
+          : {}),
+      });
+
+      return { restocked: plan.restocked, accounted: plan.accounted };
+    });
+  }
+
+  /**
    * Restore inventory for a specific item, color, and size
    */
   static async restoreInventory(
@@ -390,157 +647,32 @@ export class StockService {
       return;
     }
 
+    if (!stockId || !(quantity > 0)) return;
+
     try {
-      console.log(
-        `Attempting to restore inventory: stockId=${stockId}, color=${colorName}, size=${size}, quantity=${quantity}`,
+      // Runs as a transaction on the latest document, so a sale or restock
+      // landing at the same moment is kept rather than overwritten.
+      const result = await this.adjustStock(
+        stockId,
+        [{ variantId: variantHint, color: colorName, size, delta: quantity }],
+        { allowAddSize: true, skipUnresolvable: true },
       );
 
-      // Get the current stock item
-      const stockRef = doc(db, COLLECTION_NAME, stockId);
-      const stockDoc = await getDoc(stockRef);
+      if (result.skipped.length > 0) {
+        console.error(
+          `Color variant "${colorName}" not found in stock item ${stockId}; nothing restored`,
+        );
+        return;
+      }
 
-      if (!stockDoc.exists()) {
+      console.log(
+        `✓ Restored ${quantity} units of ${stockId} (${colorName}, ${size})`,
+      );
+    } catch (error) {
+      if (isStockAdjustmentError(error) && error.code === "stock_not_found") {
         console.error(`Stock item ${stockId} not found`);
         return;
       }
-
-      const stockData = stockDoc.data() as StockItem;
-      console.log(
-        `Found stock item: ${stockData.groupName}, variants:`,
-        stockData.colorVariants?.map((v) => ({ id: v.id, color: v.color })),
-      );
-
-      // Try to find variant by several strategies in order of likelihood:
-      // 1) exact id match, 2) id contains colorName, 3) exact color name match (case-insensitive),
-      // 4) barcode match, 5) colorCode match, 6) size match, 7) fallback single variant.
-      const variants = stockData.colorVariants || [];
-      const normalizedColorName = (colorName || "").trim();
-      const normalizedVariantHint = (variantHint || "").trim();
-
-      let targetVariant = normalizedVariantHint
-        ? variants.find((v) => v.id === normalizedVariantHint)
-        : undefined;
-
-      if (!targetVariant && normalizedColorName) {
-        // id contains (covers cases where ids were prefixed/suffixed)
-        targetVariant = variants.find(
-          (v) => v.id && v.id.includes(normalizedColorName),
-        );
-      }
-
-      if (!targetVariant && normalizedColorName) {
-        targetVariant = variants.find(
-          (v) =>
-            (v.color || "").toLowerCase() === normalizedColorName.toLowerCase(),
-        );
-      }
-
-      if (!targetVariant && normalizedColorName) {
-        targetVariant = variants.find(
-          (v) => (v.barcode || "") === normalizedColorName,
-        );
-      }
-
-      if (!targetVariant && normalizedColorName) {
-        targetVariant = variants.find(
-          (v) => (v.colorCode || "") === normalizedColorName,
-        );
-      }
-
-      // If still not found, try to find a variant that has the requested size
-      if (!targetVariant && size) {
-        targetVariant = variants.find((v) =>
-          v.sizeQuantities?.some((sq) => sq.size === size),
-        );
-      }
-
-      // If no color specified and only one variant exists, pick it
-      if (!targetVariant && !normalizedColorName && variants.length === 1) {
-        targetVariant = variants[0];
-      }
-
-      if (!targetVariant) {
-        console.error(
-          `Color variant "${colorName}" not found in stock item ${stockId}. Available variants:`,
-          variants.map((v) => ({
-            id: v.id,
-            color: v.color,
-            barcode: v.barcode,
-            colorCode: v.colorCode,
-          })),
-        );
-        return;
-      }
-
-      console.log(
-        `Found color variant: ${targetVariant.id} (${targetVariant.color})`,
-      );
-
-      // Log current inventory state before restoration
-      const currentSizeQty = targetVariant.sizeQuantities.find(
-        (sq) => sq.size === size,
-      );
-      console.log(
-        `BEFORE RESTORATION - ${stockId} (${targetVariant.id || targetVariant.color}, ${size}): current quantity = ${
-          currentSizeQty?.quantity || 0
-        }`,
-      );
-
-      // Find and update the specific color variant and size
-      const updatedColorVariants =
-        stockData.colorVariants?.map((variant) => {
-          if (variant.id === targetVariant.id) {
-            let foundSize = false;
-            const updatedSizeQuantities = variant.sizeQuantities.map(
-              (sizeQty) => {
-                if (sizeQty.size === size) {
-                  foundSize = true;
-                  const newQuantity = sizeQty.quantity + quantity;
-                  console.log(
-                    `DURING RESTORATION - ${stockId} (${targetVariant.id || targetVariant.color}, ${size}): ${sizeQty.quantity} + ${quantity} = ${newQuantity}`,
-                  );
-                  return {
-                    ...sizeQty,
-                    quantity: newQuantity,
-                  };
-                }
-                return sizeQty;
-              },
-            );
-
-            // If the size did not exist, add it with the restored quantity
-            const finalSizeQuantities = foundSize
-              ? updatedSizeQuantities
-              : [...updatedSizeQuantities, { size, quantity }];
-
-            return {
-              ...variant,
-              sizeQuantities: updatedSizeQuantities,
-            };
-          }
-          return variant;
-        }) || [];
-
-      // Update the stock in the database
-      await updateDoc(stockRef, {
-        colorVariants: updatedColorVariants,
-        updatedAt: serverTimestamp(),
-      });
-
-      // Verify the update by checking the final state
-      const updatedVariant = updatedColorVariants.find(
-        (v) => v.id === targetVariant.id,
-      );
-      const finalSizeQty = updatedVariant?.sizeQuantities.find(
-        (sq) => sq.size === size,
-      );
-      console.log(
-        `AFTER RESTORATION - ${stockId} (${colorName}, ${size}): final quantity = ${finalSizeQty?.quantity || 0}`,
-      );
-      console.log(
-        `✓ Successfully restored ${quantity} units of ${stockId} (${colorName}, ${size})`,
-      );
-    } catch (error) {
       console.error("Error restoring inventory:", error);
       throw new Error("Failed to restore inventory");
     }
@@ -586,7 +718,8 @@ export class StockService {
         })),
       );
 
-      // Process each stock group sequentially to avoid race conditions
+      // One transaction per stock document: every line for that product is
+      // applied together to the latest data.
       const restorationResults: Array<{
         success: boolean;
         item: {
@@ -599,35 +732,47 @@ export class StockService {
       }> = [];
 
       for (const [stockId, stockItems] of Object.entries(itemsByStockId)) {
-        console.log(
-          `Processing ${stockItems.length} items for stock ${stockId}`,
-        );
+        const restorable = stockItems.filter((item) => item.quantity > 0);
+        if (restorable.length === 0) continue;
 
-        // Process items for this stock sequentially
-        for (let i = 0; i < stockItems.length; i++) {
-          const item = stockItems[i];
-          try {
-            console.log(
-              `Restoring item ${i + 1}/${stockItems.length} for stock ${stockId}: (${item.colorName}, ${item.size}) x${item.quantity}`,
-            );
-            await this.restoreInventory(
-              item.stockId,
-              item.colorName,
-              item.size,
-              item.quantity,
-              item.variantHint, // Pass variantHint to restoreInventory
-            );
-            console.log(
-              `✓ Successfully restored item ${i + 1} for stock ${stockId}`,
-            );
-            restorationResults.push({ success: true, item });
-          } catch (error) {
+        try {
+          const result = await this.adjustStock(
+            stockId,
+            restorable.map((item) => ({
+              variantId: item.variantHint,
+              color: item.colorName,
+              size: item.size,
+              delta: item.quantity,
+            })),
+            { allowAddSize: true, skipUnresolvable: true },
+          );
+
+          if (result.skipped.length > 0) {
             console.error(
-              `✗ Failed to restore item ${i + 1} for stock ${stockId}:`,
-              error,
+              `Could not match ${result.skipped.length} line(s) to a variant of stock ${stockId}; they were not restored`,
+              result.skipped.map((s) => s.adjustment),
             );
-            restorationResults.push({ success: false, item, error });
           }
+          restorable.forEach((item) =>
+            restorationResults.push({ success: true, item }),
+          );
+        } catch (error) {
+          if (
+            isStockAdjustmentError(error) &&
+            error.code === "stock_not_found"
+          ) {
+            // Matches the old per-item behaviour: a deleted product is logged,
+            // not treated as a failed restoration.
+            console.error(`Stock item ${stockId} not found`);
+            restorable.forEach((item) =>
+              restorationResults.push({ success: true, item }),
+            );
+            continue;
+          }
+          console.error(`✗ Failed to restore stock ${stockId}:`, error);
+          restorable.forEach((item) =>
+            restorationResults.push({ success: false, item, error }),
+          );
         }
       }
 

@@ -16,6 +16,7 @@ import {
 import { db } from "@/lib/firebase";
 import { SelectedCustomer, CartItem } from "@/types/cart";
 import { StockService } from "@/services/stockService";
+import type { OrderLineReturn } from "@/lib/stockMath";
 
 export interface DiscountBreakdown {
   wholesaleSavings: number;
@@ -78,6 +79,11 @@ export interface Transaction {
    */
   couponDiscountTHB?: number;
   appliedCouponCode?: string;
+  /**
+   * Flat THB delivery fee on storefront orders (POS Settings → Delivery Fee).
+   * Already included in `total`; not taxed. Absent on walk-in sales.
+   */
+  deliveryFee?: number;
   amountPaid: number;
   change: number;
   paymentMethod: "cash" | "scan" | "wallet" | "cod";
@@ -615,6 +621,83 @@ class TransactionService {
   }
 
   /**
+   * Put a transaction's stock back through the shared returns ledger.
+   *
+   * Online orders keep their ledger on `onlineOrders/{onlineOrderId}`, which
+   * the online-orders page uses too, so the two screens cannot both restock
+   * one order. In-store sales keep it on the transaction itself.
+   *
+   * Stock is only returned if it was taken: in-store sales always take it at
+   * the till, online orders only once `stockDeductedAt` is set (COD orders
+   * placed before the storefront deducted stock never had any taken).
+   */
+  private async returnTransactionStock(
+    transactionId: string,
+    transaction: Transaction,
+    lines: Array<{ lineIndex: number; quantity: number; restock: boolean }>,
+  ): Promise<void> {
+    const returns: OrderLineReturn[] = lines
+      .filter((line) => line.quantity > 0)
+      .map((line) => {
+        const item = transaction.items[line.lineIndex];
+        return {
+          lineIndex: line.lineIndex,
+          quantity: line.quantity,
+          restock: line.restock,
+          stockId: item?.stockId || "",
+          colorName: item?.selectedColor || "",
+          size: item?.selectedSize || "",
+          variantHint: item?.id || "",
+        };
+      })
+      .filter((line) => !!line.stockId);
+
+    if (returns.length === 0) {
+      console.log(`No stock to return for transaction ${transactionId}`);
+      return;
+    }
+
+    const isOnline =
+      !!transaction.onlineOrderId ||
+      transaction.source === "online" ||
+      transaction.orderSource === "web_storefront";
+
+    let guard: Parameters<typeof StockService.returnOrderLines>[1] = {
+      collection: "transactions",
+      docId: transactionId,
+      source: "transaction",
+      requireField: isOnline ? "stockDeductedAt" : undefined,
+    };
+
+    if (transaction.onlineOrderId && db) {
+      const onlineSnap = await getDoc(
+        doc(db, "onlineOrders", transaction.onlineOrderId),
+      );
+      if (onlineSnap.exists()) {
+        guard = {
+          collection: "onlineOrders",
+          docId: transaction.onlineOrderId,
+          source: "onlineOrder",
+          requireField: "stockDeductedAt",
+          extraUpdatesWhenComplete: (current) =>
+            current.stockReservationStatus === "reserved"
+              ? {
+                  stockReservationStatus: "released",
+                  stockReleaseReason: "cancelled_in_pos",
+                }
+              : {},
+        };
+      }
+    }
+
+    const result = await StockService.returnOrderLines(returns, guard);
+    console.log(
+      `Stock return for transaction ${transactionId}: restocked ${result.restocked}, accounted ${result.accounted}` +
+        (result.skippedReason ? ` (${result.skippedReason})` : ""),
+    );
+  }
+
+  /**
    * Process a refund for a transaction
    */
   async processRefund(
@@ -791,47 +874,21 @@ class TransactionService {
       // Add refund to refunds collection
       const refundDocRef = await addDoc(collection(db!, "refunds"), refund);
 
-      // Restore inventory for refunded items (only accepted items if inspection was done)
+      // Restore inventory for refunded items (only accepted items if inspection
+      // was done). Damaged units are still recorded in the returns ledger, so
+      // a later cancellation of the same order does not shelve them.
       try {
-        const inventoryRestorations = processedRefundItems
-          .filter((refundItem) => {
-            // If inspection results exist, only restock accepted items
-            if (inspectionResults) {
-              return inspectionResults[refundItem.itemIndex] === "accepted";
-            }
-            // If no inspection (cancellation refunds), restock all
-            return true;
-          })
-          .map((refundItem) => {
-            const originalItem = transaction.items[refundItem.itemIndex];
-            return {
-              stockId: originalItem.stockId,
-              colorName: originalItem.selectedColor || "",
-              size: originalItem.selectedSize || "",
-              quantity: refundItem.quantity,
-              variantHint: originalItem.id || "",
-            };
-          });
-
-        if (inventoryRestorations.length > 0) {
-          console.log(
-            "Processing refund inventory restoration:",
-            inventoryRestorations,
-          );
-          await StockService.restoreMultipleItems(inventoryRestorations);
-          console.log("Inventory restored for refunded items");
-          
-          if (inspectionResults) {
-            const damagedCount = processedRefundItems.filter(
-              (item) => inspectionResults[item.itemIndex] === "damaged"
-            ).length;
-            if (damagedCount > 0) {
-              console.log(`${damagedCount} damaged item(s) not restocked`);
-            }
-          }
-        } else {
-          console.log("No items to restock (all items marked as damaged)");
-        }
+        await this.returnTransactionStock(
+          transactionId,
+          transaction,
+          processedRefundItems.map((refundItem) => ({
+            lineIndex: refundItem.itemIndex,
+            quantity: refundItem.quantity,
+            restock: inspectionResults
+              ? inspectionResults[refundItem.itemIndex] === "accepted"
+              : true,
+          })),
+        );
       } catch (inventoryError) {
         console.error("Error restoring inventory for refund:", inventoryError);
         // Continue with refund processing even if inventory restoration fails
@@ -1217,33 +1274,17 @@ class TransactionService {
         });
       }
 
-      // Restore inventory for remaining items
-      const inventoryRestorations: Array<{
-        stockId: string;
-        colorName: string;
-        size: string;
-        quantity: number;
-        variantHint?: string;
-      }> = [];
-
-      transaction.items.forEach((item, index) => {
-        const alreadyRefundedQty = alreadyRefunded[index] || 0;
-        const remainingQuantity = item.quantity - alreadyRefundedQty;
-
-        if (remainingQuantity > 0) {
-          inventoryRestorations.push({
-            stockId: item.stockId,
-            colorName: item.selectedColor || "",
-            size: item.selectedSize || "",
-            quantity: remainingQuantity,
-            variantHint: item.id || "",
-          });
-        }
-      });
-
-      if (inventoryRestorations.length > 0) {
-        await StockService.restoreMultipleItems(inventoryRestorations);
-      }
+      // Restore inventory for remaining items (through the shared returns
+      // ledger, so cancelling from another screen as well cannot double it)
+      await this.returnTransactionStock(
+        transactionId,
+        transaction,
+        transaction.items.map((item, index) => ({
+          lineIndex: index,
+          quantity: item.quantity - (alreadyRefunded[index] || 0),
+          restock: true,
+        })),
+      );
 
       // Calculate refund amount (total minus already refunded)
       const totalAlreadyRefunded = transaction.refunds?.reduce(
@@ -1492,59 +1533,19 @@ class TransactionService {
         });
       }
 
-      // Restore inventory only for remaining items (not already refunded)
-      const inventoryRestorations: Array<{
-        stockId: string;
-        colorName: string;
-        size: string;
-        quantity: number;
-        variantHint?: string;
-      }> = [];
-
-      transaction.items.forEach((item, index) => {
-        const alreadyRefundedQty = alreadyRefunded[index] || 0;
-        const remainingQuantity = item.quantity - alreadyRefundedQty;
-
-        console.log(
-          `Processing item ${index + 1}/${transaction.items.length}:`,
-          {
-            stockId: item.stockId,
-            colorName: item.selectedColor,
-            size: item.selectedSize,
-            originalQuantity: item.quantity,
-            alreadyRefunded: alreadyRefundedQty,
-            remainingToRestore: remainingQuantity,
-          },
-        );
-
-        if (remainingQuantity > 0) {
-          inventoryRestorations.push({
-            stockId: item.stockId,
-            colorName: item.selectedColor || "",
-            size: item.selectedSize || "",
-            quantity: remainingQuantity,
-            variantHint: item.id || "",
-          });
-        } else {
-          console.log(`Skipping item ${index + 1} - already fully refunded`);
-        }
-      });
-
-      console.log(
-        `Processing cancellation inventory restoration for ${inventoryRestorations.length} remaining items:`,
-        inventoryRestorations,
+      // Restore inventory only for remaining items (not already refunded).
+      // Goes through the shared returns ledger: an online order also
+      // cancelled from the online-orders page is not restocked twice, and a
+      // COD order whose stock was never taken is not restocked at all.
+      await this.returnTransactionStock(
+        transactionId,
+        transaction,
+        transaction.items.map((item, index) => ({
+          lineIndex: index,
+          quantity: item.quantity - (alreadyRefunded[index] || 0),
+          restock: true,
+        })),
       );
-
-      if (inventoryRestorations.length > 0) {
-        await StockService.restoreMultipleItems(inventoryRestorations);
-        console.log(
-          `Inventory restored for ${inventoryRestorations.length} remaining items in cancelled transaction`,
-        );
-      } else {
-        console.log(
-          "No inventory to restore - all items were already refunded",
-        );
-      }
 
       // Update transaction status to cancelled
       const transactionRef = doc(db, this.collectionName, transactionId);
@@ -1607,46 +1608,16 @@ class TransactionService {
         `Starting rejection for transaction ${transactionId} with ${transaction.items.length} items`,
       );
 
-      // Restore inventory for all items
-      const inventoryRestorations: Array<{
-        stockId: string;
-        colorName: string;
-        size: string;
-        quantity: number;
-        variantHint?: string;
-      }> = [];
-
-      transaction.items.forEach((item, index) => {
-        console.log(
-          `Processing item ${index + 1}/${transaction.items.length}:`,
-          {
-            stockId: item.stockId,
-            colorName: item.selectedColor,
-            size: item.selectedSize,
-            quantity: item.quantity,
-          },
-        );
-
-        inventoryRestorations.push({
-          stockId: item.stockId,
-          colorName: item.selectedColor || "",
-          size: item.selectedSize || "",
+      // Restore inventory for all items, through the shared returns ledger.
+      await this.returnTransactionStock(
+        transactionId,
+        transaction,
+        transaction.items.map((item, index) => ({
+          lineIndex: index,
           quantity: item.quantity,
-          variantHint: item.id || "",
-        });
-      });
-
-      console.log(
-        `Processing rejection inventory restoration for ${inventoryRestorations.length} items:`,
-        inventoryRestorations,
+          restock: true,
+        })),
       );
-
-      if (inventoryRestorations.length > 0) {
-        await StockService.restoreMultipleItems(inventoryRestorations);
-        console.log(
-          `Inventory restored for ${inventoryRestorations.length} items in rejected transaction`,
-        );
-      }
 
       // Update transaction status to cancelled
       const transactionRef = doc(db, this.collectionName, transactionId);

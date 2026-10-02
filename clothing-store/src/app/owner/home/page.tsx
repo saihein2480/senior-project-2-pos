@@ -13,8 +13,9 @@ import { toast } from "react-hot-toast";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { StockItem, WholesaleTier } from "@/types/stock";
+import { ColorVariant, StockItem, WholesaleTier } from "@/types/stock";
 import { StockService } from "@/services/stockService";
+import { isStockAdjustmentError } from "@/lib/stockMath";
 import { InventoryRealtimeService } from "@/services/inventoryRealtimeService";
 import { CategoryService } from "@/services/categoryService";
 
@@ -207,6 +208,52 @@ function OwnerHomeContent() {
     return shop?.name || "";
   };
 
+  // Replace one product's variants in local state with what the database now
+  // holds. This page loads stock once, so without this the numbers on screen
+  // drift away from the database as online orders and other tills sell.
+  const applyFreshVariants = useCallback(
+    (itemId: string, freshVariants: ColorVariant[] | undefined) => {
+      if (!Array.isArray(freshVariants)) return;
+
+      const colorVariants = freshVariants.map((variant, index) => ({
+        // Same id scheme as transformStockData, so selections stay valid.
+        id: variant.id || `cv${index + 1}-${itemId}`,
+        color: variant.color,
+        colorCode: variant.colorCode,
+        image: variant.image,
+        sizeQuantities: variant.sizeQuantities || [],
+      }));
+      const stock = colorVariants.reduce(
+        (total, variant) =>
+          total +
+          variant.sizeQuantities.reduce(
+            (sizeTotal, sizeQty) => sizeTotal + (Number(sizeQty.quantity) || 0),
+            0,
+          ),
+        0,
+      );
+
+      setClothingInventory((prevInventory) =>
+        prevInventory.map((item) =>
+          item.id === itemId ? { ...item, colorVariants, stock } : item,
+        ),
+      );
+    },
+    [],
+  );
+
+  const refreshItemFromDatabase = useCallback(
+    async (itemId: string) => {
+      try {
+        const fresh = await StockService.getStockById(itemId);
+        if (fresh) applyFreshVariants(itemId, fresh.colorVariants);
+      } catch (error) {
+        console.error("Failed to refresh stock item:", error);
+      }
+    },
+    [applyFreshVariants],
+  );
+
   // Function to reduce inventory stock when item is added to cart
   const reduceInventoryStock = useCallback(
     async (
@@ -245,64 +292,48 @@ function OwnerHomeContent() {
         });
       });
 
-      // Persist changes to database
+      // Persist as a change, not a snapshot. The transaction subtracts from
+      // whatever the database holds right now, so an online sale or an owner
+      // restock made since this page loaded is kept. It refuses to go below
+      // zero, which is how we find out somebody else got the last one.
+      const item = clothingInventory.find((entry) => entry.id === itemId);
+      const variant = item?.colorVariants?.find((v) => v.id === colorId);
+
       try {
-        const item = clothingInventory.find((item) => item.id === itemId);
-        if (item) {
-          const updatedColorVariants =
-            item.colorVariants?.map((variant) => {
-              if (variant.id === colorId) {
-                return {
-                  ...variant,
-                  sizeQuantities: variant.sizeQuantities.map((sizeQty) => {
-                    if (sizeQty.size === size) {
-                      return {
-                        ...sizeQty,
-                        quantity: Math.max(0, sizeQty.quantity - quantity),
-                      };
-                    }
-                    return sizeQty;
-                  }),
-                };
-              }
-              return variant;
-            }) || [];
-
-          // Filter out undefined values to avoid Firebase errors
-          const cleanedColorVariants = updatedColorVariants.map((variant) => {
-            const cleaned: {
-              id: string;
-              color: string;
-              colorCode: string;
-              barcode: string;
-              sizeQuantities: { size: string; quantity: number }[];
-              image?: string;
-            } = {
-              id: variant.id,
-              color: variant.color,
-              colorCode: variant.colorCode,
-              barcode: (variant as { barcode?: string }).barcode || "",
-              sizeQuantities: variant.sizeQuantities,
-            };
-            // Only include image if it's defined
-            const variantImage = (variant as { image?: string }).image;
-            if (variantImage !== undefined) {
-              cleaned.image = variantImage;
-            }
-            return cleaned;
-          });
-
-          await StockService.updateStock(itemId, {
-            colorVariants: cleanedColorVariants,
-          });
-        }
+        const result = await StockService.adjustStock(itemId, [
+          {
+            variantId: colorId,
+            color: variant?.color,
+            size,
+            delta: -quantity,
+            label: item?.name,
+          },
+        ]);
+        applyFreshVariants(itemId, result.colorVariants);
+        return true;
       } catch (error) {
+        if (isStockAdjustmentError(error) && error.code === "insufficient_stock") {
+          const available = Number(error.details.available ?? 0);
+          toast.error(
+            `Only ${available} left of ${item?.name || "this item"} (${[
+              variant?.color,
+              size,
+            ]
+              .filter(Boolean)
+              .join(" / ")}). It may have just sold online or at another till.`,
+            { duration: 5000 },
+          );
+          await refreshItemFromDatabase(itemId);
+          return false;
+        }
+
+        // Anything else (network, permissions, mock mode) keeps the previous
+        // behaviour: log it and leave the optimistic update in place.
         console.error("Error updating stock in database:", error);
-        // Optionally revert local state on error
-        // For now, we'll keep the optimistic update
+        return true;
       }
     },
-    [clothingInventory],
+    [clothingInventory, applyFreshVariants, refreshItemFromDatabase],
   );
 
   // Function to restore inventory stock when item is removed from cart
@@ -343,64 +374,31 @@ function OwnerHomeContent() {
         });
       });
 
-      // Persist changes to database
+      // Persist as a change against the live document (see reduceInventoryStock).
+      const item = clothingInventory.find((entry) => entry.id === itemId);
+      const variant = item?.colorVariants?.find((v) => v.id === colorId);
+
       try {
-        const item = clothingInventory.find((item) => item.id === itemId);
-        if (item) {
-          const updatedColorVariants =
-            item.colorVariants?.map((variant) => {
-              if (variant.id === colorId) {
-                return {
-                  ...variant,
-                  sizeQuantities: variant.sizeQuantities.map((sizeQty) => {
-                    if (sizeQty.size === size) {
-                      return {
-                        ...sizeQty,
-                        quantity: sizeQty.quantity + quantity,
-                      };
-                    }
-                    return sizeQty;
-                  }),
-                };
-              }
-              return variant;
-            }) || [];
-
-          // Filter out undefined values to avoid Firebase errors
-          const cleanedColorVariants = updatedColorVariants.map((variant) => {
-            const cleaned: {
-              id: string;
-              color: string;
-              colorCode: string;
-              barcode: string;
-              sizeQuantities: { size: string; quantity: number }[];
-              image?: string;
-            } = {
-              id: variant.id,
-              color: variant.color,
-              colorCode: variant.colorCode,
-              barcode: (variant as { barcode?: string }).barcode || "",
-              sizeQuantities: variant.sizeQuantities,
-            };
-            // Only include image if it's defined
-            const variantImage = (variant as { image?: string }).image;
-            if (variantImage !== undefined) {
-              cleaned.image = variantImage;
-            }
-            return cleaned;
-          });
-
-          await StockService.updateStock(itemId, {
-            colorVariants: cleanedColorVariants,
-          });
-        }
+        const result = await StockService.adjustStock(
+          itemId,
+          [
+            {
+              variantId: colorId,
+              color: variant?.color,
+              size,
+              delta: quantity,
+              label: item?.name,
+            },
+          ],
+          { allowAddSize: true },
+        );
+        applyFreshVariants(itemId, result.colorVariants);
       } catch (error) {
         console.error("Error updating stock in database:", error);
-        // Optionally revert local state on error
-        // For now, we'll keep the optimistic update
+        // Keep the optimistic update, as before.
       }
     },
-    [clothingInventory],
+    [clothingInventory, applyFreshVariants],
   );
 
   // Function to check available stock for a specific item, color, and size
@@ -724,7 +722,9 @@ function OwnerHomeContent() {
               colorVariantId: colorVariant.id,
               colorVariantName: colorVariant.color,
             });
-            reduceInventoryStock(stockId, colorVariant.id, size, quantity);
+            // Resolves to false when the database had too few left; the cart
+            // then takes the line back out.
+            return reduceInventoryStock(stockId, colorVariant.id, size, quantity);
           } else {
             console.warn("Color variant not found:", {
               stockId,
@@ -764,7 +764,7 @@ function OwnerHomeContent() {
               colorVariantId: colorVariant.id,
               colorVariantName: colorVariant.color,
             });
-            restoreInventoryStock(stockId, colorVariant.id, size, quantity);
+            return restoreInventoryStock(stockId, colorVariant.id, size, quantity);
           } else {
             console.warn("Color variant not found:", {
               stockId,

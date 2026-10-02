@@ -76,6 +76,13 @@ function EditStockContent() {
   const [colorVariants, setColorVariants] = useState<ColorVariant[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
 
+  // The variants exactly as stored when this form loaded. Sent back on save so
+  // the server can apply the owner's quantity *changes* to the live document
+  // instead of overwriting sales made while the form was open. Loaded variants
+  // get the form id `variant-<index>`; the index points into this array.
+  const baseColorVariantsRef = useRef<ColorVariant[]>([]);
+  const loadedVariantIndexRef = useRef<Map<string, number>>(new Map());
+
   // Track detected colors for each variant
   const [detectedColors, setDetectedColors] = useState<
     Record<string, string[]>
@@ -144,6 +151,16 @@ function EditStockContent() {
           minQuantity: tier.minQuantity,
           price: tier.price,
         })),
+      );
+
+      baseColorVariantsRef.current = JSON.parse(
+        JSON.stringify(stock.colorVariants || []),
+      ) as ColorVariant[];
+      loadedVariantIndexRef.current = new Map(
+        (stock.colorVariants || []).map((_, index) => [
+          `variant-${index}`,
+          index,
+        ]),
       );
 
       // Set color variants with proper IDs
@@ -807,18 +824,37 @@ function EditStockContent() {
         })),
       };
 
-      // Update the current stock (first shop)
+      // Update the current stock (first shop). Each variant says which loaded
+      // variant it came from, and the loaded snapshot goes along, so the
+      // server merges quantity changes into whatever is stored now.
       const updateResponse = await fetch(`/api/stocks/${stockId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(stockData),
+        body: JSON.stringify({
+          ...stockData,
+          colorVariants: variantsWithBarcodes.map((variant) => ({
+            sourceIndex: loadedVariantIndexRef.current.get(variant.id) ?? null,
+            color: variant.color,
+            colorCode: variant.colorCode,
+            barcode: variant.barcode,
+            sizeQuantities: variant.sizeQuantities,
+            image: variant.image,
+          })),
+          baseColorVariants: baseColorVariantsRef.current,
+        }),
       });
 
       const updateResult = await updateResponse.json();
 
       if (!updateResponse.ok || !updateResult.success) {
+        if (updateResponse.status === 409) {
+          // Someone else changed this product while the form was open.
+          toast.error(updateResult.error || "This product changed. Reload and try again.", {
+            duration: 8000,
+          });
+        }
         throw new Error(updateResult.error || "Failed to update stock item");
       }
 

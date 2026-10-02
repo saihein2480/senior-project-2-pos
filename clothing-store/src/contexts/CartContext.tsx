@@ -21,6 +21,14 @@ import { toast } from "react-hot-toast";
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+type InventoryUpdate = {
+  type: "reduce" | "restore";
+  stockId: string;
+  color: string;
+  size: string;
+  quantity: number;
+};
+
 export function useCart() {
   const context = useContext(CartContext);
   if (context === undefined) {
@@ -51,7 +59,7 @@ export function CartProvider({ children }: CartProviderProps) {
       color: string,
       size: string,
       quantity: number,
-    ) => Promise<void> | void;
+    ) => Promise<boolean | void> | boolean | void;
     restoreStock: (
       stockId: string,
       color: string,
@@ -61,16 +69,19 @@ export function CartProvider({ children }: CartProviderProps) {
     checkStock: (stockId: string, color: string, size: string) => number;
   } | null>(null);
 
-  // Queue for inventory updates to be processed asynchronously
-  const [inventoryUpdateQueue, setInventoryUpdateQueue] = useState<
-    Array<{
-      type: "reduce" | "restore";
-      stockId: string;
-      color: string;
-      size: string;
-      quantity: number;
-    }>
-  >([]);
+  /**
+   * Inventory changes waiting to be written, processed one at a time and each
+   * exactly once.
+   *
+   * This used to be React state drained by an effect that also depended on
+   * the callbacks. The till re-registers its callbacks whenever its local
+   * stock changes — which the first write itself causes — so the effect could
+   * fire again while the queue still held the same update and apply it twice.
+   * A ref that is shifted as each update starts cannot be replayed.
+   */
+  const pendingInventoryUpdatesRef = useRef<InventoryUpdate[]>([]);
+  const isProcessingInventoryRef = useRef(false);
+  const inventoryCallbacksRef = useRef(inventoryCallbacks);
 
   /**
    * Signature of the cart state that Firestore and this client agree on.
@@ -155,42 +166,90 @@ export function CartProvider({ children }: CartProviderProps) {
     return () => clearTimeout(timer);
   }, [cart, user?.uid, isLoadingCart]);
 
-  // Process inventory update queue asynchronously
-  useEffect(() => {
-    const processQueue = async () => {
-      if (inventoryUpdateQueue.length > 0 && inventoryCallbacks) {
-        const promises = inventoryUpdateQueue.map(async (update) => {
-          try {
-            if (update.type === "reduce") {
-              await inventoryCallbacks.reduceStock(
-                update.stockId,
-                update.color,
-                update.size,
-                update.quantity,
-              );
-            } else {
-              await inventoryCallbacks.restoreStock(
-                update.stockId,
-                update.color,
-                update.size,
-                update.quantity,
-              );
-            }
-          } catch (error) {
-            console.error("Error processing inventory update:", error, update);
+  /**
+   * The database refused to give us the stock (someone else took it first),
+   * so take the quantity we optimistically added back out of the cart. No
+   * restore is queued: nothing was deducted.
+   */
+  const revertFailedReduction = useCallback((update: InventoryUpdate) => {
+    setCart((prevCart) => {
+      const index = prevCart.items.findIndex(
+        (item) =>
+          item.stockId === update.stockId &&
+          (item.selectedColor || "") === update.color &&
+          (item.selectedSize || "") === update.size,
+      );
+      if (index < 0) return prevCart;
+
+      const remaining = prevCart.items[index].quantity - update.quantity;
+      const updatedItems =
+        remaining > 0
+          ? prevCart.items.map((item, i) =>
+              i === index ? { ...item, quantity: remaining } : item,
+            )
+          : prevCart.items.filter((_, i) => i !== index);
+
+      return {
+        ...prevCart,
+        items: updatedItems,
+        totalItems: updatedItems.reduce((sum, item) => sum + item.quantity, 0),
+        totalAmount: updatedItems.reduce((sum, item) => {
+          const price =
+            item.discountedPrice !== undefined
+              ? item.discountedPrice
+              : item.unitPrice;
+          return sum + price * item.quantity;
+        }, 0),
+      };
+    });
+  }, []);
+
+  // Write queued inventory changes in order, one at a time.
+  const drainInventoryQueue = useCallback(async () => {
+    if (isProcessingInventoryRef.current) return;
+    isProcessingInventoryRef.current = true;
+
+    try {
+      while (pendingInventoryUpdatesRef.current.length > 0) {
+        const callbacks = inventoryCallbacksRef.current;
+        // The till registers these; until it does, keep the updates queued.
+        if (!callbacks) break;
+
+        const update = pendingInventoryUpdatesRef.current.shift()!;
+        try {
+          if (update.type === "reduce") {
+            const ok = await callbacks.reduceStock(
+              update.stockId,
+              update.color,
+              update.size,
+              update.quantity,
+            );
+            if (ok === false) revertFailedReduction(update);
+          } else {
+            await callbacks.restoreStock(
+              update.stockId,
+              update.color,
+              update.size,
+              update.quantity,
+            );
           }
-        });
-
-        await Promise.all(promises);
-        // Clear the queue after processing
-        setInventoryUpdateQueue([]);
+        } catch (error) {
+          console.error("Error processing inventory update:", error, update);
+        }
       }
-    };
+    } finally {
+      isProcessingInventoryRef.current = false;
+    }
+  }, [revertFailedReduction]);
 
-    processQueue();
-  }, [inventoryUpdateQueue, inventoryCallbacks]);
+  // Pick up the latest callbacks and flush anything queued before they existed.
+  useEffect(() => {
+    inventoryCallbacksRef.current = inventoryCallbacks;
+    if (inventoryCallbacks) void drainInventoryQueue();
+  }, [inventoryCallbacks, drainInventoryQueue]);
 
-  // Helper function to queue inventory updates
+  // Helper function to queue inventory updates. Call it from event handlers,
+  // never from inside a setState updater: React may run updaters twice.
   const queueInventoryUpdate = useCallback(
     (
       type: "reduce" | "restore",
@@ -199,12 +258,17 @@ export function CartProvider({ children }: CartProviderProps) {
       size: string,
       quantity: number,
     ) => {
-      setInventoryUpdateQueue((prev) => [
-        ...prev,
-        { type, stockId, color, size, quantity },
-      ]);
+      if (!(quantity > 0)) return;
+      pendingInventoryUpdatesRef.current.push({
+        type,
+        stockId,
+        color,
+        size,
+        quantity,
+      });
+      void drainInventoryQueue();
     },
-    [],
+    [drainInventoryQueue],
   );
 
   const addToCart = (newItem: Omit<CartItem, "id">) => {
@@ -312,20 +376,20 @@ export function CartProvider({ children }: CartProviderProps) {
   };
 
   const removeFromCart = (itemId: string) => {
+    // Queued here rather than inside the updater below: React may run an
+    // updater twice, which would put the stock back twice.
+    const itemToRemove = cart.items.find((item) => item.id === itemId);
+    if (itemToRemove) {
+      queueInventoryUpdate(
+        "restore",
+        itemToRemove.stockId,
+        itemToRemove.selectedColor || "",
+        itemToRemove.selectedSize || "",
+        itemToRemove.quantity,
+      );
+    }
+
     setCart((prevCart) => {
-      const itemToRemove = prevCart.items.find((item) => item.id === itemId);
-
-      // Queue inventory restoration
-      if (itemToRemove) {
-        queueInventoryUpdate(
-          "restore",
-          itemToRemove.stockId,
-          itemToRemove.selectedColor || "",
-          itemToRemove.selectedSize || "",
-          itemToRemove.quantity,
-        );
-      }
-
       const updatedItems = prevCart.items.filter((item) => item.id !== itemId);
       const totalItems = updatedItems.reduce(
         (sum, item) => sum + item.quantity,
@@ -383,33 +447,28 @@ export function CartProvider({ children }: CartProviderProps) {
       }
     }
 
+    // Queued outside the updater below (React may run updaters twice).
+    if (quantityDifference > 0) {
+      // Quantity increased - queue inventory reduction
+      queueInventoryUpdate(
+        "reduce",
+        currentItem.stockId,
+        currentItem.selectedColor || "",
+        currentItem.selectedSize || "",
+        quantityDifference,
+      );
+    } else if (quantityDifference < 0) {
+      // Quantity decreased - queue inventory restoration
+      queueInventoryUpdate(
+        "restore",
+        currentItem.stockId,
+        currentItem.selectedColor || "",
+        currentItem.selectedSize || "",
+        Math.abs(quantityDifference),
+      );
+    }
+
     setCart((prevCart) => {
-      const currentItem = prevCart.items.find((item) => item.id === itemId);
-
-      if (currentItem) {
-        const quantityDifference = quantity - currentItem.quantity;
-
-        if (quantityDifference > 0) {
-          // Quantity increased - queue inventory reduction
-          queueInventoryUpdate(
-            "reduce",
-            currentItem.stockId,
-            currentItem.selectedColor || "",
-            currentItem.selectedSize || "",
-            quantityDifference,
-          );
-        } else if (quantityDifference < 0) {
-          // Quantity decreased - queue inventory restoration
-          queueInventoryUpdate(
-            "restore",
-            currentItem.stockId,
-            currentItem.selectedColor || "",
-            currentItem.selectedSize || "",
-            Math.abs(quantityDifference),
-          );
-        }
-      }
-
       const updatedItems = prevCart.items.map((item) =>
         item.id === itemId ? { ...item, quantity } : item,
       );
@@ -730,7 +789,7 @@ export function CartProvider({ children }: CartProviderProps) {
         color: string,
         size: string,
         quantity: number,
-      ) => Promise<void> | void;
+      ) => Promise<boolean | void> | boolean | void;
       restoreStock: (
         stockId: string,
         color: string,

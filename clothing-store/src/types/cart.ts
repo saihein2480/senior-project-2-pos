@@ -98,12 +98,13 @@ export interface CartContextType {
   ) => void;
   removeWholesalePricing: (groupName: string) => void;
   setInventoryCallbacks?: (callbacks: {
+    /** Resolve to `false` when the stock could not be taken; the cart line is then reverted. */
     reduceStock: (
       stockId: string,
       color: string,
       size: string,
       quantity: number
-    ) => Promise<void> | void;
+    ) => Promise<boolean | void> | boolean | void;
     restoreStock: (
       stockId: string,
       color: string,

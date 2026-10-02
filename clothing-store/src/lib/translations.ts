@@ -695,6 +695,7 @@ export interface Translations {
   netTotalLabel: string;
   taxRefundedLabel: string;
   afterDiscountLabel: string;
+  deliveryFeeLabel: string;
 
   // Cart & checkout flow
   show: string;
@@ -1717,6 +1718,7 @@ export const translations: Record<Language, Translations> = {
     netTotalLabel: "Net total",
     taxRefundedLabel: "Tax refunded",
     afterDiscountLabel: "After discount",
+    deliveryFeeLabel: "Delivery fee",
 
     // Cart & checkout flow
     show: "Show",
@@ -2728,6 +2730,7 @@ export const translations: Record<Language, Translations> = {
     netTotalLabel: "အသားတင် စုစုပေါင်း",
     taxRefundedLabel: "အခွန် ပြန်အမ်းပြီး",
     afterDiscountLabel: "လျှော့ဈေးပြီးနောက်",
+    deliveryFeeLabel: "ပို့ဆောင်ခ",
 
     // Cart & checkout flow
     show: "ပြရန်",

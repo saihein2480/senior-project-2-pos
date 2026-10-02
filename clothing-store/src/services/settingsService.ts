@@ -139,6 +139,14 @@ export interface BusinessSettings {
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
+  /**
+   * Flat delivery fee in THB (the base currency), charged on every storefront
+   * order. 0 means free delivery. Not taxed, not discounted by promotions or
+   * coupons, and not counted towards loyalty points.
+   *
+   * Separate from `storeInfo.deliveryFee`, which is free text for the chatbot.
+   */
+  deliveryFee?: number;
   currentBranch?: string;
   /**
    * Owner workspace preference. When true, the walk-in POS surface is hidden
@@ -197,6 +205,10 @@ function mapSettingsDoc(data: Record<string, any>): BusinessSettings {
     enableDarkMode: data.enableDarkMode ?? false,
     enableSoundEffects: data.enableSoundEffects ?? false,
     currencyRate: data.currencyRate || 0,
+    deliveryFee:
+      Number.isFinite(Number(data.deliveryFee)) && Number(data.deliveryFee) > 0
+        ? Number(data.deliveryFee)
+        : 0,
     currentBranch: data.currentBranch || "Main Branch",
     hidePosForOwner: data.hidePosForOwner ?? false,
     labelSettings: data.labelSettings,
@@ -329,6 +341,7 @@ export class SettingsService {
       enableDarkMode: false,
       enableSoundEffects: false,
       currencyRate: 0,
+      deliveryFee: 0,
     };
 
     return await this.saveBusinessSettings(defaultSettings);

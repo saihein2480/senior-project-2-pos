@@ -12,6 +12,7 @@ import {
 import { db } from "@/lib/firebase";
 import { StockService } from "@/services/stockService";
 import { CustomerNotificationService } from "@/services/customerNotificationService";
+import type { OrderLineReturn } from "@/lib/stockMath";
 
 /**
  * Online order status -> the customer notification it should trigger.
@@ -42,6 +43,8 @@ export interface OnlineOrder {
   tax?: number;
   taxRate?: number; // Percentage applied at checkout (e.g. 7 for 7%)
   discount?: number;
+  /** Flat THB delivery fee from POS Settings, included in `total`. */
+  deliveryFee?: number;
   exchangeRate?: number; // THB -> MMK rate used at checkout
   // Coupon fields
   couponCode?: string;
@@ -158,6 +161,8 @@ export interface OnlineTransaction {
   tax?: number;
   /** Percentage applied at purchase time, e.g. 7 for 7%. */
   taxRate?: number;
+  /** Flat THB delivery fee charged with a storefront order. */
+  deliveryFee?: number;
   amountPaid?: number;
   amountMmk?: number;
   couponCode?: string;
@@ -188,67 +193,103 @@ class OnlineOrderService {
     return /cancelled|canceled|void/i.test(value || "");
   }
 
-  private buildStockRestorationItems(order: OnlineOrder): Array<{
-    stockId: string;
-    colorName: string;
-    size: string;
-    quantity: number;
-    variantHint?: string;
-  }> {
-    if (order.cartItems && order.cartItems.length > 0) {
-      const restorations: Array<{
-        stockId: string;
-        colorName: string;
-        size: string;
-        quantity: number;
-        variantHint?: string;
-      }> = [];
+  /**
+   * One return line per order line, keeping each line's position so it lines
+   * up with the transaction's `items` and the returns ledger.
+   */
+  private buildStockReturnLines(
+    order: OnlineOrder,
+    alreadyRefunded: Record<number, number>,
+  ): OrderLineReturn[] {
+    const rows =
+      order.cartItems && order.cartItems.length > 0
+        ? order.cartItems
+        : order.product
+          ? [order.product]
+          : [];
 
-      order.cartItems.forEach((item) => {
-        const stockId = String(item.productId || "").trim();
-        const quantity = Math.max(0, Number(item.quantity || 0));
+    return rows
+      .map((item, index) => ({
+        lineIndex: index,
+        quantity:
+          Math.max(0, Number(item.quantity || 0)) -
+          (alreadyRefunded[index] || 0),
+        restock: true,
+        stockId: String(item.productId || "").trim(),
+        colorName: String(item.color || "").trim(),
+        size: String(item.size || "").trim(),
+        variantHint: String(item.variantId || "").trim() || undefined,
+      }))
+      .filter((line) => line.stockId && line.quantity > 0);
+  }
 
-        if (!stockId || quantity <= 0) return;
+  /**
+   * Units already refunded on the order's transaction, per line.
+   *
+   * Refunds made since the returns ledger existed are in the ledger anyway;
+   * this covers older ones, so cancelling an order that was partly refunded
+   * earlier does not shelve the refunded units a second time.
+   */
+  private async refundedQuantitiesFor(
+    orderId: string,
+  ): Promise<Record<number, number>> {
+    const refunded: Record<number, number> = {};
+    if (!db) return refunded;
 
-        restorations.push({
-          stockId,
-          colorName: String(item.color || "").trim(),
-          size: String(item.size || "").trim(),
-          quantity,
-          variantHint: String(item.variantId || "").trim() || undefined,
-        });
-      });
-
-      return restorations;
+    try {
+      const snap = await getDocs(
+        query(collection(db, "transactions"), where("onlineOrderId", "==", orderId)),
+      );
+      const refunds = (snap.docs[0]?.data()?.refunds || []) as Array<{
+        items?: Array<{ itemIndex?: number; quantity?: number }>;
+      }>;
+      for (const refund of refunds) {
+        for (const item of refund.items || []) {
+          if (typeof item.itemIndex !== "number") continue;
+          refunded[item.itemIndex] =
+            (refunded[item.itemIndex] || 0) + Number(item.quantity || 0);
+        }
+      }
+    } catch (error) {
+      console.error(`Could not read refunds for order ${orderId}:`, error);
     }
 
-    const stockId = String(order.product?.productId || "").trim();
-    const quantity = Math.max(0, Number(order.product?.quantity || 0));
-    if (!stockId || quantity <= 0) return [];
-
-    return [
-      {
-        stockId,
-        colorName: String(order.product?.color || "").trim(),
-        size: String(order.product?.size || "").trim(),
-        quantity,
-        variantHint: String(order.product?.variantId || "").trim() || undefined,
-      },
-    ];
+    return refunded;
   }
 
   private async restoreStockIfNeeded(order: OnlineOrder): Promise<boolean> {
+    // Fast exit; both conditions are checked again inside the transaction.
     if (!order.stockDeductedAt || order.stockRestoredAt) {
       return false;
     }
 
-    const restorations = this.buildStockRestorationItems(order);
-    if (restorations.length === 0) {
+    const lines = this.buildStockReturnLines(
+      order,
+      await this.refundedQuantitiesFor(order.id),
+    );
+    if (lines.length === 0) {
       return false;
     }
 
-    await StockService.restoreMultipleItems(restorations);
-    return true;
+    // Shares the returns ledger on this order with the transactions page and
+    // the cancellation/refund screens, and the storefront releases unpaid
+    // reservations through `stockRestoredAt`, so no combination of those can
+    // put the same stock back twice.
+    const result = await StockService.returnOrderLines(lines, {
+      collection: "onlineOrders",
+      docId: order.id,
+      source: "onlineOrder",
+      requireField: "stockDeductedAt",
+      extraUpdatesWhenComplete: (current) =>
+        current.stockReservationStatus === "reserved"
+          ? {
+              stockReservationStatus: "released",
+              stockReleaseReason: "cancelled_in_pos",
+            }
+          : {},
+    });
+
+    return result.accounted > 0;
   }
 
   async getOnlineOrders(): Promise<OnlineOrder[]> {
@@ -343,7 +384,6 @@ class OnlineOrderService {
 
     const orderRef = doc(db, "onlineOrders", orderId);
     const nextStatusIsCancelled = this.isCancelledStatus(status);
-    let shouldMarkRestoredAt = false;
 
     const snap = await getDoc(orderRef);
     if (!snap.exists()) return;
@@ -359,15 +399,13 @@ class OnlineOrderService {
       (current.status || "").toLowerCase() !== (status || "").toLowerCase();
 
     if (nextStatusIsCancelled) {
-      shouldMarkRestoredAt = await this.restoreStockIfNeeded(current);
+      // Sets `stockRestoredAt` itself, atomically with the stock writes.
+      await this.restoreStockIfNeeded(current);
     }
 
     await updateDoc(orderRef, {
       status,
       updatedAt: new Date().toISOString(),
-      ...(shouldMarkRestoredAt
-        ? { stockRestoredAt: new Date().toISOString() }
-        : {}),
     });
 
     // If this is a COD order with a linked transaction, update the transaction too

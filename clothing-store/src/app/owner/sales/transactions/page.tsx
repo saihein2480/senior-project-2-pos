@@ -155,7 +155,11 @@ function TransactionsPageContent() {
     const gross = Number(transaction.grossSubtotal || 0);
     const savings = Number(transaction.totalSavings || 0);
     const discount = Number(transaction.discount || 0);
-    const subtotal = Number(transaction.subtotal || 0) || total - tax;
+    // Storefront orders carry a flat delivery fee inside `total`. It is not
+    // taxed, so it has to come out before deriving the subtotal or tax %.
+    const deliveryFee = Math.max(0, Number(transaction.deliveryFee || 0));
+    const subtotal =
+      Number(transaction.subtotal || 0) || total - tax - deliveryFee;
 
     const couponDiscount = Number(
       transaction.couponDiscount ?? transaction.couponDiscountTHB ?? 0,
@@ -163,7 +167,7 @@ function TransactionsPageContent() {
     const couponCode =
       transaction.couponCode || transaction.appliedCouponCode || "";
 
-    const taxableBase = Math.max(0, total - tax);
+    const taxableBase = Math.max(0, total - tax - deliveryFee);
     const storedRate = Number(transaction.taxRate || 0);
     const taxPercent =
       storedRate > 0
@@ -216,6 +220,9 @@ function TransactionsPageContent() {
         tone: "sub",
       });
       rows.push({ label: taxLabel, value: formatPrice(tax) });
+      if (deliveryFee > 0) {
+        rows.push({ label: t.deliveryFeeLabel, value: formatPrice(deliveryFee) });
+      }
       rows.push({
         label: t.total,
         value: formatPrice(total),
@@ -239,6 +246,9 @@ function TransactionsPageContent() {
       );
     }
     rows.push({ label: taxLabel, value: formatPrice(tax) });
+    if (deliveryFee > 0) {
+      rows.push({ label: t.deliveryFeeLabel, value: formatPrice(deliveryFee) });
+    }
     rows.push({ label: t.total, value: formatPrice(total), tone: "strong" });
 
     return rows;
@@ -2947,6 +2957,18 @@ function TransactionsPageContent() {
                                 </div>
                               );
                             })()}
+                            {Number(selectedTransaction.deliveryFee || 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">
+                                  {t.deliveryFeeLabel}:
+                                </span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {formatPrice(
+                                    Number(selectedTransaction.deliveryFee),
+                                  )}
+                                </span>
+                              </div>
+                            )}
                             <div className="border-t border-gray-300 pt-3">
                               <div className="flex justify-between">
                                 <span className="text-base font-medium text-gray-900">

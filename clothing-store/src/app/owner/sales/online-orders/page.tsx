@@ -265,8 +265,13 @@ function getOrderSummary(row: OnlineOrder) {
         ? (tax / taxableBase) * 100
         : 0;
 
+  // Flat fee from POS Settings, charged after tax. Older orders have none.
+  const rawDeliveryFee = Number(row.deliveryFee || 0);
+  const deliveryFee =
+    Number.isFinite(rawDeliveryFee) && rawDeliveryFee > 0 ? rawDeliveryFee : 0;
+
   const storedTotal = Number(row.total || 0);
-  const computedTotal = taxableBase + tax;
+  const computedTotal = taxableBase + tax + deliveryFee;
   // Trust the stored total (what was actually charged) unless it is missing.
   const total = storedTotal > 0 ? storedTotal : computedTotal;
 
@@ -288,6 +293,7 @@ function getOrderSummary(row: OnlineOrder) {
     taxableBase,
     tax,
     taxPercent,
+    deliveryFee,
     total,
     amountMmk,
     // True when the stored total disagrees with the line items, which means the
@@ -329,6 +335,7 @@ function OrderDetailsModal({
     totalSavings,
     tax,
     taxPercent,
+    deliveryFee,
     total: grandTotal,
     amountMmk,
   } = summary;
@@ -535,6 +542,13 @@ function OrderDetailsModal({
                 <span>Tax ({formatRatePercent(taxPercent)}%):</span>
                 <span>฿{tax.toFixed(2)}</span>
               </div>
+
+              {deliveryFee > 0 && (
+                <div className="flex justify-between text-gray-700">
+                  <span>Delivery Fee:</span>
+                  <span>฿{deliveryFee.toFixed(2)}</span>
+                </div>
+              )}
 
               <div className="flex justify-between font-semibold text-gray-900 pt-2 border-t border-gray-300">
                 <span>Total:</span>
@@ -1468,6 +1482,7 @@ function OnlineOrdersContent() {
       totalSavings,
       tax,
       taxPercent,
+      deliveryFee,
       total: grandTotal,
     } = summary;
 
@@ -1776,6 +1791,12 @@ function OnlineOrdersContent() {
               <span>Tax (${escapeHtml(formatRatePercent(taxPercent))}%):</span>
               <span>${formatThb(tax)}</span>
             </div>
+            ${deliveryFee > 0 ? `
+            <div class="total-line">
+              <span>Delivery Fee:</span>
+              <span>${formatThb(deliveryFee)}</span>
+            </div>
+            ` : ''}
             <div class="total-line grand-total">
               <span>TOTAL (THB):</span>
               <span>${formatThb(grandTotal)}</span>

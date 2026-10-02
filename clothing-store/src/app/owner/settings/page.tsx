@@ -28,6 +28,7 @@ import {
   LayoutDashboard,
   Plus,
   Trash2,
+  Truck,
 } from "lucide-react";
 
 type ReceiptPaperSize =
@@ -97,6 +98,8 @@ interface BusinessSettings {
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
+  /** Flat storefront delivery fee in THB. 0 = free delivery. */
+  deliveryFee?: number;
   currentBranch?: string;
   /** Owner-only: hides the Home menu entry and the top-bar cart together. */
   hidePosForOwner?: boolean;
@@ -167,6 +170,7 @@ function OwnerSettingsContent() {
     enableDarkMode: false,
     enableSoundEffects: false,
     currencyRate: 0,
+    deliveryFee: 0,
     currentBranch: "No Branch",
     hidePosForOwner: false,
     loyaltySettings: {
@@ -283,6 +287,14 @@ function OwnerSettingsContent() {
       };
     }
   };
+
+  // Delivery fee is stored in THB. The MMK hint only makes sense when the rate
+  // is expressed as THB -> MMK, i.e. the business currency is THB.
+  const deliveryFeeValue = Math.max(0, Number(settings.deliveryFee) || 0);
+  const deliveryFeeMmk =
+    settings.defaultCurrency !== "MMK" && settings.currencyRate > 0
+      ? Math.round(deliveryFeeValue * settings.currencyRate)
+      : 0;
 
   const handleInputChange = (
     field: keyof BusinessSettings,
@@ -768,6 +780,39 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
+                {/* Delivery fee, read-only. Staff can see it so they can answer
+                    customers, but only Owner + Manager can change it. */}
+                {!permissions.canEditBusinessSettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Truck className="h-5 w-5 text-rose-500 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Delivery Fee
+                      </h2>
+                    </div>
+                    <div className="bg-gradient-to-br from-rose-50 to-pink-50 border border-rose-100 rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-900">
+                          Online store delivery fee
+                        </span>
+                        <span className="text-lg font-bold text-rose-600">
+                          {deliveryFeeValue > 0
+                            ? `฿${deliveryFeeValue.toFixed(2)}`
+                            : "Free"}
+                        </span>
+                      </div>
+                      {deliveryFeeMmk > 0 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          ≈ Ks {deliveryFeeMmk.toLocaleString()}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        Added to every storefront order at checkout
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Doc: "Business Information" - Owner + Manager. */}
                 {permissions.canEditBusinessSettings && (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -1169,6 +1214,84 @@ function OwnerSettingsContent() {
                           </p>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Delivery Fee - Owner + Manager. Read by the storefront
+                    checkout from business_settings/main.deliveryFee. */}
+                {permissions.canEditBusinessSettings && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center mb-6">
+                      <Truck className="h-5 w-5 text-rose-500 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Delivery Fee
+                      </h2>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-6">
+                        <div>
+                          <label
+                            htmlFor="delivery-fee"
+                            className="text-sm font-medium text-gray-900"
+                          >
+                            Online store delivery fee (฿ THB)
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Flat fee added to every storefront order (COD and
+                            QR). Leave empty or 0 for free delivery.
+                          </p>
+                        </div>
+                        <div className="w-32 shrink-0">
+                          <Input
+                            id="delivery-fee"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            inputMode="decimal"
+                            value={
+                              !settings.deliveryFee ? "" : settings.deliveryFee
+                            }
+                            onChange={(e) => {
+                              const parsed = parseFloat(e.target.value);
+                              handleInputChange(
+                                "deliveryFee",
+                                e.target.value === "" || !Number.isFinite(parsed)
+                                  ? 0
+                                  : Math.max(0, parsed),
+                              );
+                            }}
+                            className="text-right"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-rose-50 border border-rose-200 rounded-xl p-3">
+                        <p className="text-sm text-rose-800">
+                          {deliveryFeeValue > 0 ? (
+                            <>
+                              <span className="font-medium">
+                                Customers pay:
+                              </span>{" "}
+                              ฿{deliveryFeeValue.toFixed(2)}
+                              {deliveryFeeMmk > 0 &&
+                                ` (≈ Ks ${deliveryFeeMmk.toLocaleString()})`}{" "}
+                              per order
+                            </>
+                          ) : (
+                            <span className="font-medium">
+                              Free delivery on all online orders
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-rose-700 mt-1">
+                          Not taxed, not reduced by promotions or coupons, and
+                          does not earn loyalty points. Applies to new orders
+                          only after you save.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
