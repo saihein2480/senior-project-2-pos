@@ -94,14 +94,22 @@ export async function authoriseRole(
 
   try {
     const snapshot = await adminDb.collection("users").doc(uid).get();
-    const role = snapshot.exists
-      ? ((snapshot.data()?.role as UserRole) ?? null)
-      : null;
+    const data = snapshot.exists ? snapshot.data() : undefined;
+    const role = (data?.role as UserRole | undefined) ?? null;
 
     if (!role || !allowedRoles.includes(role)) {
       return {
         status: 403,
         error: "You do not have permission to perform this action",
+      };
+    }
+
+    // A deactivated account keeps a valid ID token until it expires, so the
+    // flag has to be checked on every request rather than only at login.
+    if (data?.isActive === false) {
+      return {
+        status: 403,
+        error: "This account has been deactivated",
       };
     }
 

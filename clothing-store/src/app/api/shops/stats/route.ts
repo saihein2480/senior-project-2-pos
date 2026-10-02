@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ShopService } from '@/services/shopService';
 import { ShopStatsResponse } from '@/types/shop';
+import { OWNER_ONLY } from '@/config/rolePermissions';
+import { handleRouteError, requireRole } from '@/lib/server/apiAuth';
+import { getShopStats } from '@/server/shopsAdmin';
 
 // GET /api/shops/stats - Get shop statistics
+// Doc: "View Shop Reports" - Owner only.
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ('response' in auth) return auth.response;
+
   try {
-    const stats = await ShopService.getShopStats();
+    const stats = await getShopStats();
 
     const response: ShopStatsResponse = {
       success: true,
@@ -14,11 +20,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in GET /api/shops/stats:', error);
-    const response: ShopStatsResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch shop statistics',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      'GET /api/shops/stats',
+      'Failed to fetch shop statistics',
+    );
   }
 }

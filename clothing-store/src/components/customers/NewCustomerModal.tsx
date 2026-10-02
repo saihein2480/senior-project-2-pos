@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { X, User, Phone, MapPin, Upload, Tag } from "lucide-react";
 import { CreateCustomerRequest, Customer } from "@/types/customer";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { authFetch } from "@/lib/authFetch";
 
 interface NewCustomerModalProps {
   isOpen: boolean;
@@ -87,7 +88,7 @@ export default function NewCustomerModal({
         uploadFormData.append("file", selectedFile);
         uploadFormData.append("type", "customer");
 
-        const uploadResponse = await fetch("/api/upload", {
+        const uploadResponse = await authFetch("/api/upload", {
           method: "POST",
           body: uploadFormData,
         });

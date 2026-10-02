@@ -1,46 +1,27 @@
-// PATCH /api/settings - Partial update (e.g., just currentBranch)
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    if (!body || typeof body.currentBranch !== "string") {
-      return NextResponse.json(
-        { success: false, error: "currentBranch is required" },
-        { status: 400 },
-      );
-    }
-    // Get current settings
-    const current = await SettingsService.getBusinessSettings();
-    if (!current) {
-      return NextResponse.json(
-        { success: false, error: "No business settings found" },
-        { status: 404 },
-      );
-    }
-    // Update only currentBranch
-    const updated = await SettingsService.saveBusinessSettings({
-      ...current,
-      currentBranch: body.currentBranch,
-    });
-    return NextResponse.json({ success: true, data: updated });
-  } catch (error) {
-    console.error("Error in PATCH /api/settings:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to update settings",
-      },
-      { status: 500 },
-    );
-  }
-}
 import { NextRequest, NextResponse } from "next/server";
-import {
-  SettingsService,
+import type {
   BusinessSettings,
   CouponPackage,
   StoreInfoSettings,
 } from "@/services/settingsService";
+import { MANAGEMENT } from "@/config/rolePermissions";
+import {
+  handleRouteError,
+  jsonError,
+  requireAdminConfigured,
+  requireRole,
+} from "@/lib/server/apiAuth";
+import {
+  getBusinessSettings,
+  resetBusinessSettings,
+  saveBusinessSettings,
+} from "@/server/settingsAdmin";
+
+// Access:
+//   GET   - public. business_settings is public-read, and the storefront
+//           server proxies this route without a user token.
+//   POST / PUT?action=reset / PATCH - Owner + Manager
+//           (Doc: "Business Information" / "Store Information" etc.)
 
 interface SettingsResponse {
   success: boolean;
@@ -172,10 +153,13 @@ function sanitizeDeliveryFee(input: unknown): number {
   return Math.round(fee * 100) / 100;
 }
 
-// GET /api/settings - Get business settings
-export async function GET(request: NextRequest) {
+// GET /api/settings - Get business settings (public, see note above)
+export async function GET() {
+  const unavailable = requireAdminConfigured();
+  if (unavailable) return unavailable;
+
   try {
-    const settings = await SettingsService.getBusinessSettings();
+    const settings = await getBusinessSettings();
 
     if (!settings) {
       // Return default settings if none exist
@@ -211,20 +195,24 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in GET /api/settings:", error);
-    const response: SettingsResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to fetch settings",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "GET /api/settings",
+      "Failed to fetch settings",
+    );
   }
 }
 
 // POST /api/settings - Save/Update business settings
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, MANAGEMENT);
+  if ("response" in auth) return auth.response;
+
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonError(400, "Invalid JSON body");
+    }
 
     // Validate required fields
     const settingsData: Omit<BusinessSettings, "createdAt" | "updatedAt"> = {
@@ -300,8 +288,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const savedSettings =
-      await SettingsService.saveBusinessSettings(settingsData);
+    const savedSettings = await saveBusinessSettings(settingsData);
 
     const response: SettingsResponse = {
       success: true,
@@ -310,23 +297,25 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in POST /api/settings:", error);
-    const response: SettingsResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to save settings",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "POST /api/settings",
+      "Failed to save settings",
+    );
   }
 }
 
-// PUT /api/settings/reset - Reset settings to default
+// PUT /api/settings?action=reset - Reset settings to default
 export async function PUT(request: NextRequest) {
+  const auth = await requireRole(request, MANAGEMENT);
+  if ("response" in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action");
 
     if (action === "reset") {
-      const resetSettings = await SettingsService.resetBusinessSettings();
+      const resetSettings = await resetBusinessSettings();
 
       const response: SettingsResponse = {
         success: true,
@@ -343,12 +332,45 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(response, { status: 400 });
   } catch (error) {
-    console.error("Error in PUT /api/settings:", error);
-    const response: SettingsResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to reset settings",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "PUT /api/settings",
+      "Failed to reset settings",
+    );
+  }
+}
+
+// PATCH /api/settings - Partial update (just currentBranch)
+export async function PATCH(request: NextRequest) {
+  const auth = await requireRole(request, MANAGEMENT);
+  if ("response" in auth) return auth.response;
+
+  try {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.currentBranch !== "string") {
+      return jsonError(400, "currentBranch is required");
+    }
+
+    const current = await getBusinessSettings();
+    if (!current) {
+      return jsonError(404, "No business settings found");
+    }
+
+    // Update only currentBranch. The mapped timestamps are ISO strings, so
+    // they are left out rather than written back over the stored values.
+    const { createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = current;
+    void _createdAt;
+    void _updatedAt;
+    const updated = await saveBusinessSettings({
+      ...rest,
+      currentBranch: body.currentBranch,
+    });
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    return handleRouteError(
+      error,
+      "PATCH /api/settings",
+      "Failed to update settings",
+    );
   }
 }

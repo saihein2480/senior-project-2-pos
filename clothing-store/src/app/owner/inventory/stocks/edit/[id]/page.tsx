@@ -27,6 +27,7 @@ import { Shop, ShopListResponse } from "@/types/shop";
 import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
 import { detectColorName, extractColorsFromImage } from "@/lib/colorUtils";
+import { authFetch } from "@/lib/authFetch";
 
 // Type declaration for BarcodeDetector API
 interface BarcodeDetector {
@@ -104,7 +105,7 @@ function EditStockContent() {
   const fetchShops = async () => {
     setIsLoadingShops(true);
     try {
-      const response = await fetch("/api/shops");
+      const response = await authFetch("/api/shops");
       if (!response.ok) {
         throw new Error("Failed to fetch shops");
       }
@@ -122,7 +123,7 @@ function EditStockContent() {
   const fetchStockData = async () => {
     setIsLoadingStock(true);
     try {
-      const response = await fetch(`/api/stocks/${stockId}`);
+      const response = await authFetch(`/api/stocks/${stockId}`);
       if (!response.ok) {
         throw new Error("Failed to fetch stock data");
       }
@@ -330,7 +331,7 @@ function EditStockContent() {
           formData.append("file", file);
           formData.append("folder", "pos-clothing-store/variants");
 
-          const response = await fetch("/api/cloudflare/upload", {
+          const response = await authFetch("/api/cloudflare/upload", {
             method: "POST",
             body: formData,
           });
@@ -827,7 +828,7 @@ function EditStockContent() {
       // Update the current stock (first shop). Each variant says which loaded
       // variant it came from, and the loaded snapshot goes along, so the
       // server merges quantity changes into whatever is stored now.
-      const updateResponse = await fetch(`/api/stocks/${stockId}`, {
+      const updateResponse = await authFetch(`/api/stocks/${stockId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -867,7 +868,7 @@ function EditStockContent() {
             shop: shopId,
           };
 
-          const response = await fetch("/api/stocks", {
+          const response = await authFetch("/api/stocks", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

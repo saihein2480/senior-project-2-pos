@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ShopService } from '@/services/shopService';
 import { UpdateShopRequest, ShopResponse } from '@/types/shop';
+import { OWNER_ONLY } from '@/config/rolePermissions';
+import {
+  handleRouteError,
+  requireAdminConfigured,
+  requireRole,
+} from '@/lib/server/apiAuth';
+import {
+  deleteShop,
+  getShopById,
+  updateShop,
+} from '@/server/shopsAdmin';
+
+// Access:
+//   GET        - public (same reasoning as GET /api/shops).
+//   PUT/DELETE - Owner only (Doc: "Add/Edit/Delete Shop").
 
 // GET /api/shops/[id] - Get a specific shop by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const unavailable = requireAdminConfigured();
+  if (unavailable) return unavailable;
+
   try {
     const { id } = await params;
 
@@ -18,7 +35,7 @@ export async function GET(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const shop = await ShopService.getShopById(id);
+    const shop = await getShopById(id);
 
     if (!shop) {
       const response: ShopResponse = {
@@ -35,23 +52,32 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in GET /api/shops/[id]:', error);
-    const response: ShopResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch shop',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, 'GET /api/shops/[id]', 'Failed to fetch shop');
   }
 }
+
+/** Fields PUT accepts; each must be a string when present. */
+const TEXT_FIELDS = [
+  'name',
+  'address',
+  'primaryPhone',
+  'secondaryPhone',
+  'township',
+  'city',
+  'openingHours',
+] as const;
 
 // PUT /api/shops/[id] - Update a specific shop
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ('response' in auth) return auth.response;
+
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
     if (!id) {
       const response: ShopResponse = {
@@ -61,8 +87,25 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      TEXT_FIELDS.some(
+        (field) => body[field] !== undefined && typeof body[field] !== 'string'
+      ) ||
+      (body.status !== undefined &&
+        body.status !== 'active' &&
+        body.status !== 'inactive')
+    ) {
+      const response: ShopResponse = {
+        success: false,
+        error: 'Invalid shop fields',
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Check if shop exists
-    const existingShop = await ShopService.getShopById(id);
+    const existingShop = await getShopById(id);
     if (!existingShop) {
       const response: ShopResponse = {
         success: false,
@@ -91,7 +134,7 @@ export async function PUT(
 
     // Prepare update data (only include fields that are provided)
     const updateData: UpdateShopRequest = {};
-    
+
     if (body.name !== undefined) updateData.name = body.name.trim();
     if (body.address !== undefined) updateData.address = body.address.trim();
     if (body.primaryPhone !== undefined) updateData.primaryPhone = body.primaryPhone.trim();
@@ -105,10 +148,10 @@ export async function PUT(
     }
     if (body.status !== undefined) updateData.status = body.status;
 
-    await ShopService.updateShop(id, updateData);
+    await updateShop(id, updateData);
 
     // Fetch updated shop
-    const updatedShop = await ShopService.getShopById(id);
+    const updatedShop = await getShopById(id);
 
     const response: ShopResponse = {
       success: true,
@@ -117,12 +160,7 @@ export async function PUT(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in PUT /api/shops/[id]:', error);
-    const response: ShopResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to update shop',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, 'PUT /api/shops/[id]', 'Failed to update shop');
   }
 }
 
@@ -131,6 +169,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ('response' in auth) return auth.response;
+
   try {
     const { id } = await params;
 
@@ -143,7 +184,7 @@ export async function DELETE(
     }
 
     // Check if shop exists
-    const existingShop = await ShopService.getShopById(id);
+    const existingShop = await getShopById(id);
     if (!existingShop) {
       const response: ShopResponse = {
         success: false,
@@ -152,7 +193,7 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    await ShopService.deleteShop(id);
+    await deleteShop(id);
 
     const response: ShopResponse = {
       success: true,
@@ -160,11 +201,6 @@ export async function DELETE(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in DELETE /api/shops/[id]:', error);
-    const response: ShopResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete shop',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, 'DELETE /api/shops/[id]', 'Failed to delete shop');
   }
 }

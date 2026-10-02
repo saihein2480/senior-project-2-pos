@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CustomerService } from '@/services/customerService';
 import { CustomerStatsResponse } from '@/types/customer';
+import { ALL_STAFF } from '@/config/rolePermissions';
+import { handleRouteError, requireRole } from '@/lib/server/apiAuth';
+import { getCustomerStats } from '@/server/customersAdmin';
 
 // GET /api/customers/stats - Get customer statistics
+// Access: every POS role (shown on the customers page, which all roles open).
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(request, ALL_STAFF);
+  if ('response' in auth) return auth.response;
+
   try {
-    const stats = await CustomerService.getCustomerStats();
+    const stats = await getCustomerStats();
 
     const response: CustomerStatsResponse = {
       success: true,
@@ -14,11 +20,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in GET /api/customers/stats:', error);
-    const response: CustomerStatsResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch customer statistics',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      'GET /api/customers/stats',
+      'Failed to fetch customer statistics',
+    );
   }
 }

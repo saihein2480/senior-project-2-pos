@@ -18,6 +18,7 @@ import type {
   ReceiptLineDetail,
 } from "@/types/receipt";
 import { toast } from "react-hot-toast";
+import { authFetch } from "@/lib/authFetch";
 
 interface ShoppingCartModalProps {
   isOpen: boolean;
@@ -306,7 +307,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       // Fetch shop names
       const fetchShops = async () => {
         try {
-          const response = await fetch("/api/shops");
+          const response = await authFetch("/api/shops");
           if (response.ok) {
             const data = await response.json();
             const shopsMap: Record<string, string> = {};

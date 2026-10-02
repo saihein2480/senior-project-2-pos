@@ -27,6 +27,7 @@ import {
   ShopListResponse,
   ShopResponse,
 } from "@/types/shop";
+import { authFetch } from "@/lib/authFetch";
 
 function ShopManagementContent() {
   const permissions = usePermissions();
@@ -74,7 +75,7 @@ function ShopManagementContent() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/shops");
+      const response = await authFetch("/api/shops");
       const data: ShopListResponse = await response.json();
 
       if (data.success && data.data) {
@@ -95,7 +96,7 @@ function ShopManagementContent() {
       setIsSubmitting(true);
       setFormErrors({});
 
-      const response = await fetch("/api/shops", {
+      const response = await authFetch("/api/shops", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -133,7 +134,7 @@ function ShopManagementContent() {
 
   const deleteShop = async (id: string) => {
     try {
-      const response = await fetch(`/api/shops/${id}`, {
+      const response = await authFetch(`/api/shops/${id}`, {
         method: "DELETE",
       });
 
@@ -144,7 +145,7 @@ function ShopManagementContent() {
           const updatedShops = prevShops.filter((shop) => shop.id !== id);
           // If this deletion results in zero shops, set currentBranch to 'No Branch' in backend
           if (updatedShops.length === 0) {
-            fetch("/api/settings", {
+            authFetch("/api/settings", {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ currentBranch: "No Branch" }),
@@ -180,7 +181,7 @@ function ShopManagementContent() {
   const updateShop = async (id: string, shopData: UpdateShopRequest) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/shops/${id}`, {
+      const response = await authFetch(`/api/shops/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

@@ -25,9 +25,10 @@ import { UserRole } from "@/types/auth";
 /** The three POS roles. "customer" is a storefront role with no POS access. */
 export const POS_ROLES: UserRole[] = ["owner", "manager", "staff"];
 
-const OWNER_ONLY: UserRole[] = ["owner"];
-const MANAGEMENT: UserRole[] = ["owner", "manager"];
-const ALL_STAFF: UserRole[] = ["owner", "manager", "staff"];
+// Exported so server routes (src/app/api) check the same role sets as the UI.
+export const OWNER_ONLY: UserRole[] = ["owner"];
+export const MANAGEMENT: UserRole[] = ["owner", "manager"];
+export const ALL_STAFF: UserRole[] = ["owner", "manager", "staff"];
 
 /* ================================================================== *
  * 1. ROUTE PERMISSIONS - who can open which page

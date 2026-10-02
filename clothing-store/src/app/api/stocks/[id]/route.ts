@@ -1,20 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StockService } from "@/services/stockService";
-import { StockResponse } from "@/types/stock";
+import { StockItem, StockResponse } from "@/types/stock";
 import { isStockAdjustmentError, type EditedVariant } from "@/lib/stockMath";
+import {
+  ALL_STAFF,
+  MANAGEMENT,
+  OWNER_ONLY,
+} from "@/config/rolePermissions";
+import {
+  handleRouteError,
+  jsonError,
+  requireRole,
+} from "@/lib/server/apiAuth";
+import {
+  deleteStock,
+  getStockById,
+  updateStock,
+  updateStockWithMerge,
+} from "@/server/stocksAdmin";
+
+// Access:
+//   GET    - every POS role.
+//   PUT    - Owner + Manager (Doc: "Edit Product Details" / "Manage Stock").
+//   DELETE - Owner only (Doc: "Delete Products").
+
+/** Parse a price field: a finite number >= 0, or null if invalid. */
+function parsePrice(value: unknown): number | null {
+  const price = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
 
 // GET /api/stocks/[id] - Get a specific stock item
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
+  const auth = await requireRole(request, ALL_STAFF);
+  if ("response" in auth) return auth.response;
 
-    // For now, we'll get all stocks and find the specific one
-    // In a real implementation, you'd have a getStockById method
-    const stocks = await StockService.getAllStocks();
-    const stock = stocks.find((s) => s.id === id);
+  const { id } = await params;
+
+  try {
+    const stock = await getStockById(id);
 
     if (!stock) {
       const response: StockResponse = {
@@ -31,13 +57,11 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error(`Error in GET /api/stocks/${(await params).id}:`, error);
-    const response: StockResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to fetch stock item",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      `GET /api/stocks/${id}`,
+      "Failed to fetch stock item",
+    );
   }
 }
 
@@ -46,9 +70,16 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, MANAGEMENT);
+  if ("response" in auth) return auth.response;
+
+  const { id } = await params;
+
   try {
-    const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonError(400, "Invalid JSON body");
+    }
 
     // Basic validation
     if (!body.groupName || !body.unitPrice || !body.originalPrice) {
@@ -59,11 +90,21 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
+    const unitPrice = parsePrice(body.unitPrice);
+    const originalPrice = parsePrice(body.originalPrice);
+    if (unitPrice === null || originalPrice === null) {
+      const response: StockResponse = {
+        success: false,
+        error: "unitPrice and originalPrice must be non-negative numbers",
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Prepare update data
-    const updateData: any = {
+    const updateData: Partial<StockItem> = {
       groupName: body.groupName,
-      unitPrice: parseFloat(body.unitPrice),
-      originalPrice: parseFloat(body.originalPrice),
+      unitPrice,
+      originalPrice,
       releaseDate: body.releaseDate,
       shop: body.shop,
       isColorless: body.isColorless,
@@ -104,7 +145,7 @@ export async function PUT(
       }));
 
       try {
-        await StockService.updateStockWithMerge(
+        await updateStockWithMerge(
           id,
           otherFields,
           editedVariants,
@@ -112,15 +153,11 @@ export async function PUT(
         );
       } catch (error) {
         if (isStockAdjustmentError(error)) {
-          const response: StockResponse = {
-            success: false,
-            error: error.message,
-          };
           const status = error.code === "stock_not_found" ? 404 : 409;
-          return NextResponse.json(
-            { ...response, code: error.code, details: error.details },
-            { status },
-          );
+          return jsonError(status, error.message, {
+            code: error.code,
+            details: error.details,
+          });
         }
         throw error;
       }
@@ -136,7 +173,7 @@ export async function PUT(
     console.warn(
       `PUT /api/stocks/${id} without baseColorVariants: quantities overwritten as sent`,
     );
-    await StockService.updateStock(id, updateData);
+    await updateStock(id, updateData);
 
     const response: StockResponse = {
       success: true,
@@ -145,13 +182,11 @@ export async function PUT(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error(`Error in PUT /api/stocks/${(await params).id}:`, error);
-    const response: StockResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update stock item",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      `PUT /api/stocks/${id}`,
+      "Failed to update stock item",
+    );
   }
 }
 
@@ -160,10 +195,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
 
-    await StockService.deleteStock(id);
+  const { id } = await params;
+
+  try {
+    await deleteStock(id);
 
     const response: StockResponse = {
       success: true,
@@ -172,12 +210,10 @@ export async function DELETE(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error(`Error in DELETE /api/stocks/${(await params).id}:`, error);
-    const response: StockResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete stock item",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      `DELETE /api/stocks/${id}`,
+      "Failed to delete stock item",
+    );
   }
 }

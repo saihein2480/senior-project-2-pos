@@ -107,11 +107,9 @@ class AuthService {
     const { email, password, displayName } = credentials;
 
     try {
-      const existingUser = await this.checkUserExists(email);
-      if (existingUser) {
-        throw new Error("An account with this email already exists.");
-      }
-
+      // No Firestore pre-check: a signed-out visitor may not list `users`.
+      // Firebase Auth rejects a duplicate with auth/email-already-in-use,
+      // which handleAuthError turns into a friendly message.
       const userCredential = await createUserWithEmailAndPassword(
         auth!,
         email,
@@ -148,11 +146,8 @@ class AuthService {
     this.validateFirebaseConfig();
 
     try {
-      const existingUser = await this.checkUserExists(email);
-      if (existingUser) {
-        throw new Error("An account with this email already exists.");
-      }
-
+      // Duplicate emails are rejected by Firebase Auth itself
+      // (auth/email-already-in-use); see register().
       const userCredential = await createUserWithEmailAndPassword(
         auth!,
         email,
@@ -254,7 +249,11 @@ class AuthService {
   }
 
   /**
-   * Check if user exists by email
+   * Check if user exists by email.
+   *
+   * No longer called during registration: it lists `users`, which Firestore
+   * rules deny to signed-out visitors. Kept for compatibility; a denied query
+   * is reported as "not found" rather than as an error.
    */
   private async checkUserExists(email: string): Promise<boolean> {
     try {
@@ -265,7 +264,9 @@ class AuthService {
       const querySnapshot = await getDocs(q);
       return !querySnapshot.empty;
     } catch (error) {
-      console.error("Error checking user existence:", error);
+      if ((error as { code?: string })?.code !== "permission-denied") {
+        console.error("Error checking user existence:", error);
+      }
       return false;
     }
   }

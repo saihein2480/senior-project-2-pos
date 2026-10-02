@@ -1,38 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteFromR2 } from "@/lib/r2";
+import { MANAGEMENT } from "@/config/rolePermissions";
+import { handleRouteError, jsonError, requireRole } from "@/lib/server/apiAuth";
+import { isDeletableKey } from "@/lib/server/imageUpload";
 
+// Access: Owner + Manager (same pages as /api/cloudflare/upload).
+// Only objects under "pos-clothing-store/" can be deleted.
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, MANAGEMENT);
+  if ("response" in auth) return auth.response;
+
   try {
-    const body = await request.json();
-    const { key, url } = body;
+    const body = await request.json().catch(() => null);
+    const { key, url } = (body ?? {}) as { key?: unknown; url?: unknown };
 
     if (!key && !url) {
-      return NextResponse.json(
-        { error: "Either key or url must be provided" },
-        { status: 400 }
-      );
+      return jsonError(400, "Either key or url must be provided");
     }
 
     // Extract key from URL if not provided directly
-    let fileKey = key;
+    let fileKey: string | undefined = typeof key === "string" ? key : undefined;
     if (!fileKey && url) {
+      if (typeof url !== "string") {
+        return jsonError(400, "Invalid URL format");
+      }
       // Extract key from R2 URL (everything after the domain)
       try {
         const urlObj = new URL(url);
         fileKey = urlObj.pathname.substring(1); // Remove leading slash
-      } catch (e) {
-        return NextResponse.json(
-          { error: "Invalid URL format" },
-          { status: 400 }
-        );
+      } catch {
+        return jsonError(400, "Invalid URL format");
       }
     }
 
     if (!fileKey) {
-      return NextResponse.json(
-        { error: "Could not determine file key for deletion" },
-        { status: 400 }
-      );
+      return jsonError(400, "Could not determine file key for deletion");
+    }
+
+    if (!isDeletableKey(fileKey)) {
+      return jsonError(400, "This file cannot be deleted");
     }
 
     // Delete from R2
@@ -43,14 +49,10 @@ export async function POST(request: NextRequest) {
       key: fileKey,
     });
   } catch (error) {
-    console.error("Delete error:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to delete image",
-        success: false,
-      },
-      { status: 500 }
+    return handleRouteError(
+      error,
+      "POST /api/cloudflare/delete",
+      "Failed to delete image",
     );
   }
 }

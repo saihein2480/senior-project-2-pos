@@ -30,6 +30,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 type ReceiptPaperSize =
   | "44mm"
@@ -193,7 +194,7 @@ function OwnerSettingsContent() {
         setError("");
 
         // Fetch settings
-        const response = await fetch("/api/settings");
+        const response = await authFetch("/api/settings");
         const result = await response.json();
 
         if (result.success && result.data) {
@@ -507,7 +508,7 @@ function OwnerSettingsContent() {
       }
       // Owner/Manager: save business settings
       else {
-        const response = await fetch("/api/settings", {
+        const response = await authFetch("/api/settings", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -553,7 +554,7 @@ function OwnerSettingsContent() {
       setError("");
 
       try {
-        const response = await fetch("/api/settings?action=reset", {
+        const response = await authFetch("/api/settings?action=reset", {
           method: "PUT",
         });
 

@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CustomerService } from '@/services/customerService';
-import { CustomerListResponse, CustomerFilters, CreateCustomerRequest } from '@/types/customer';
+import { CustomerListResponse, CustomerFilters } from '@/types/customer';
+import { ALL_STAFF } from '@/config/rolePermissions';
+import { handleRouteError, jsonError, requireRole } from '@/lib/server/apiAuth';
+import {
+  createCustomer,
+  getAllCustomers,
+  getCustomersWithFilters,
+} from '@/server/customersAdmin';
+
+// Access: every POS role (Doc: "View Customer List" / "Add New Customers").
 
 // GET /api/customers - Get all customers or filtered customers
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(request, ALL_STAFF);
+  if ('response' in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     
@@ -25,9 +36,9 @@ export async function GET(request: NextRequest) {
     
     // If no filters, get all customers
     if (Object.keys(filters).length === 0) {
-      customers = await CustomerService.getAllCustomers();
+      customers = await getAllCustomers();
     } else {
-      customers = await CustomerService.getCustomersWithFilters(filters);
+      customers = await getCustomersWithFilters(filters);
     }
 
     const response: CustomerListResponse = {
@@ -38,30 +49,28 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in GET /api/customers:', error);
-    const response: CustomerListResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to fetch customers',
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, 'GET /api/customers', 'Failed to fetch customers');
   }
 }
 
+// POST /api/customers - Create a POS customer
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, ALL_STAFF);
+  if ('response' in auth) return auth.response;
+
   try {
-    const body: CreateCustomerRequest = await request.json();
-    
-    const customer = await CustomerService.createCustomer(body);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return jsonError(400, 'Invalid JSON body');
+    }
+
+    const customer = await createCustomer(body);
     
     return NextResponse.json({
       success: true,
       data: customer
     }, { status: 201 });
   } catch (error) {
-    console.error('Error creating customer:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to create customer' },
-      { status: 500 }
-    );
+    return handleRouteError(error, 'POST /api/customers', 'Failed to create customer');
   }
 }

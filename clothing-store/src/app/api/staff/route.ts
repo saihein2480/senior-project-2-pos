@@ -1,153 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
+import { OWNER_ONLY } from "@/config/rolePermissions";
 import {
-  createStaffAccount,
-  getAllStaff,
-  updateStaff,
+  handleRouteError,
+  jsonError,
+  requireRole,
+} from "@/lib/server/apiAuth";
+import {
+  createStaff,
   deleteStaff,
-} from "@/services/staffService";
+  listStaff,
+  updateStaff,
+} from "@/server/staffAdmin";
+
+// Doc: every Staff Management action (view list, add, edit, change role,
+// delete) is Owner only.
 
 export async function GET(request: NextRequest) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
+
   try {
-    const staff = await getAllStaff();
+    const staff = await listStaff();
     return NextResponse.json({ success: true, data: staff });
   } catch (error) {
-    console.error("Error in GET /api/staff:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to fetch staff" },
-      { status: 500 },
-    );
+    return handleRouteError(error, "GET /api/staff", "Failed to fetch staff");
   }
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { email, password, displayName, role } = body;
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
 
-    if (!email || !password || !displayName || !role) {
-      return NextResponse.json(
-        { success: false, error: "Missing required fields" },
-        { status: 400 },
-      );
+  try {
+    const body = await request.json().catch(() => null);
+    const { email, password, displayName, role } = (body ?? {}) as Record<
+      string,
+      unknown
+    >;
+
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      typeof displayName !== "string" ||
+      typeof role !== "string" ||
+      !email.trim() ||
+      !password ||
+      !displayName.trim() ||
+      !role
+    ) {
+      return jsonError(400, "Missing required fields");
     }
 
     if (password.length < 6) {
-      return NextResponse.json(
-        { success: false, error: "Password must be at least 6 characters" },
-        { status: 400 },
-      );
+      return jsonError(400, "Password must be at least 6 characters");
     }
 
-    if (!["staff", "manager"].includes(role)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid role" },
-        { status: 400 },
-      );
+    if (role !== "staff" && role !== "manager") {
+      return jsonError(400, "Invalid role");
     }
 
-    const staffMember = await createStaffAccount({
-      email,
-      password,
-      displayName,
-      role,
-    });
+    const staffMember = await createStaff(
+      {
+        email: email.trim(),
+        password,
+        displayName: displayName.trim(),
+        role,
+      },
+      auth.caller.uid,
+    );
 
     return NextResponse.json({ success: true, data: staffMember });
-  } catch (error: unknown) {
-    console.error("Error in POST /api/staff:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to create staff account",
-      },
-      { status: 500 },
+  } catch (error) {
+    return handleRouteError(
+      error,
+      "POST /api/staff",
+      "Failed to create staff account",
     );
   }
 }
 
 export async function PUT(request: NextRequest) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-    const body = await request.json();
 
     if (!id) {
-      return NextResponse.json(
-        { success: false, error: "ID is required" },
-        { status: 400 },
-      );
+      return jsonError(400, "ID is required");
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return jsonError(400, "Invalid JSON body");
     }
 
     const updated = await updateStaff(id, body);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    console.error("Error in PUT /api/staff:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to update staff" },
-      { status: 500 },
-    );
+    return handleRouteError(error, "PUT /api/staff", "Failed to update staff");
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json(
-        { success: false, error: "ID is required" },
-        { status: 400 },
-      );
+      return jsonError(400, "ID is required");
     }
 
-    // Delete from Firestore
-    await deleteStaff(id);
-
-    // Delete from Firebase Authentication
-    try {
-      const { adminAuth, isAdminInitialized } =
-        await import("@/lib/firebase-admin");
-
-      if (isAdminInitialized && adminAuth) {
-        try {
-          await adminAuth.deleteUser(id);
-          console.log("Successfully deleted user from Firebase Auth:", id);
-        } catch (authError: unknown) {
-          // If user doesn't exist in Auth, that's fine - they might have been deleted already
-          if (
-            authError &&
-            typeof authError === "object" &&
-            "code" in authError &&
-            authError.code === "auth/user-not-found"
-          ) {
-            console.log(
-              "User not found in Firebase Auth (already deleted):",
-              id,
-            );
-          } else {
-            console.error("Error deleting from Firebase Auth:", authError);
-          }
-        }
-      } else {
-        console.warn(
-          "Firebase Admin not initialized. User deleted from Firestore only.",
-        );
-      }
-    } catch (authError) {
-      console.error("Error deleting from Firebase Auth:", authError);
-      // Continue even if auth deletion fails - Firestore is already deleted
-    }
+    // Removes the users doc and the Firebase Auth account.
+    await deleteStaff(id, auth.caller.uid);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error in DELETE /api/staff:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to delete staff" },
-      { status: 500 },
-    );
+    return handleRouteError(error, "DELETE /api/staff", "Failed to delete staff");
   }
 }

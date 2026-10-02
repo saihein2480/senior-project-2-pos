@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 interface StaffUser extends User {
   id: string;
@@ -61,7 +62,7 @@ function StaffContent() {
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/staff");
+      const response = await authFetch("/api/staff");
       const data = await response.json();
       if (data.success) {
         setStaff(data.data);
@@ -102,7 +103,7 @@ function StaffContent() {
 
     try {
       setLoading(true);
-      const response = await fetch("/api/staff", {
+      const response = await authFetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -135,7 +136,7 @@ function StaffContent() {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/staff?id=${editingStaff.id}`, {
+      const response = await authFetch(`/api/staff?id=${editingStaff.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -166,7 +167,7 @@ function StaffContent() {
 
   const handleToggleActive = async (staffMember: StaffUser) => {
     try {
-      const response = await fetch(`/api/staff?id=${staffMember.id}`, {
+      const response = await authFetch(`/api/staff?id=${staffMember.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -204,7 +205,7 @@ function StaffContent() {
     if (!confirm("Are you sure you want to delete this staff account?")) return;
 
     try {
-      const response = await fetch(`/api/staff?id=${id}`, {
+      const response = await authFetch(`/api/staff?id=${id}`, {
         method: "DELETE",
       });
 

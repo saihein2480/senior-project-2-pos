@@ -26,6 +26,7 @@ import { Shop, ShopListResponse } from "@/types/shop";
 import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
 import { detectColorName, extractColorsFromImage } from "@/lib/colorUtils";
+import { authFetch } from "@/lib/authFetch";
 
 // Declare BarcodeDetector interface
 interface BarcodeDetector {
@@ -94,7 +95,7 @@ function NewStockContent() {
   const fetchShops = async () => {
     setIsLoadingShops(true);
     try {
-      const response = await fetch("/api/shops");
+      const response = await authFetch("/api/shops");
       if (!response.ok) {
         throw new Error("Failed to fetch shops");
       }
@@ -255,7 +256,7 @@ function NewStockContent() {
           formData.append("file", file);
           formData.append("folder", "pos-clothing-store/variants");
 
-          const response = await fetch("/api/cloudflare/upload", {
+          const response = await authFetch("/api/cloudflare/upload", {
             method: "POST",
             body: formData,
           });
@@ -745,7 +746,7 @@ function NewStockContent() {
           })),
         };
 
-        const response = await fetch("/api/stocks", {
+        const response = await authFetch("/api/stocks", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

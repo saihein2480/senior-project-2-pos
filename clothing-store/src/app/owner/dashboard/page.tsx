@@ -71,6 +71,7 @@ import { CustomerService } from "@/services/customerService";
 import { ShopService } from "@/services/shopService";
 import { StockItem } from "@/types/stock";
 import { Customer } from "@/types/customer";
+import { authFetch } from "@/lib/authFetch";
 
 interface DashboardStats {
   totalRevenue: number;
@@ -394,7 +395,7 @@ function OwnerDashboardContent() {
           transactionService.getTransactions(),
           StockService.getAllStocks(),
           CustomerService.getAllCustomers(),
-          fetch("/api/expenses"),
+          authFetch("/api/expenses"),
           ShopService.getAllShops(),
         ]);
 

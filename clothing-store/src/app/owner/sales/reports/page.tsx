@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
+import { authFetch } from "@/lib/authFetch";
 
 interface ReportData {
   totalRevenue: number;
@@ -256,7 +257,7 @@ function ReportsPageContent() {
       setLoading(true);
       const [transactions, expensesRes, stocks] = await Promise.all([
         transactionService.getTransactions(),
-        fetch("/api/expenses"),
+        authFetch("/api/expenses"),
         StockService.getAllStocks(),
       ]);
 

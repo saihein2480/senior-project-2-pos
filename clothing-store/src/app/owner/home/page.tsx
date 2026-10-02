@@ -18,6 +18,7 @@ import { StockService } from "@/services/stockService";
 import { isStockAdjustmentError } from "@/lib/stockMath";
 import { InventoryRealtimeService } from "@/services/inventoryRealtimeService";
 import { CategoryService } from "@/services/categoryService";
+import { authFetch } from "@/lib/authFetch";
 
 // Bump this suffix whenever the shape or completeness of the cached inventory
 // changes, so stale session caches are ignored instead of being trusted.
@@ -556,7 +557,7 @@ function OwnerHomeContent() {
       try {
         // Fetch shops and categories in parallel
         const [shopsResponse, cats] = await Promise.all([
-          fetch("/api/shops"),
+          authFetch("/api/shops"),
           CategoryService.getCategories(),
         ]);
 

@@ -35,6 +35,7 @@ import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
 import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { authFetch } from "@/lib/authFetch";
 
 function InventoryStocksContent() {
   const router = useRouter();
@@ -149,8 +150,8 @@ function InventoryStocksContent() {
 
         // Fetch stocks, shops, and currency settings
         const [stocksResponse, shopsResponse, settings] = await Promise.all([
-          fetch("/api/stocks"),
-          fetch("/api/shops"),
+          authFetch("/api/stocks"),
+          authFetch("/api/shops"),
           SettingsService.getBusinessSettings(),
         ]);
 
@@ -233,7 +234,7 @@ function InventoryStocksContent() {
           setError(null);
 
           const [stocksResponse, settings] = await Promise.all([
-            fetch("/api/stocks"),
+            authFetch("/api/stocks"),
             SettingsService.getBusinessSettings(),
           ]);
 
@@ -473,7 +474,7 @@ function InventoryStocksContent() {
         "Making DELETE request to:",
         `/api/stocks/${deletingGroup.groupId}`,
       );
-      const response = await fetch(`/api/stocks/${deletingGroup.groupId}`, {
+      const response = await authFetch(`/api/stocks/${deletingGroup.groupId}`, {
         method: "DELETE",
       });
 
@@ -557,7 +558,7 @@ function InventoryStocksContent() {
 
     for (const stockId of selectedStocks) {
       try {
-        const response = await fetch(`/api/stocks/${stockId}`, {
+        const response = await authFetch(`/api/stocks/${stockId}`, {
           method: "DELETE",
         });
 

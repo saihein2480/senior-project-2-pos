@@ -12,6 +12,7 @@ import React, {
 } from "react";
 import { SettingsService, BusinessSettings } from "@/services/settingsService";
 import { useAuth } from "./AuthContext";
+import { authFetch } from "@/lib/authFetch";
 
 interface SettingsContextType {
   taxRate: number;
@@ -206,7 +207,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
       // Only roles allowed to edit business settings get here. The snapshot
       // listener above will deliver the result, so there is nothing to await.
-      void fetch("/api/settings", {
+      void authFetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentBranch: branchName }),

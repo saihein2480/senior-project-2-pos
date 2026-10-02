@@ -12,6 +12,7 @@ import { Customer } from "@/types/customer";
 import { LoyaltyService } from "@/services/loyaltyService";
 import { resolveCouponPackages } from "@/services/settingsService";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { authFetch } from "@/lib/authFetch";
 
 // Programme-level analytics (membership profitability, loyalty cost vs member
 // revenue, points liability and breakage) now live on the owner dashboard at
@@ -76,7 +77,7 @@ function MembershipPageContent() {
     const loadCustomers = async () => {
       setIsLoadingCustomers(true);
       try {
-        const response = await fetch("/api/customers");
+        const response = await authFetch("/api/customers");
         const result = await response.json();
         
         if (result.success && result.data) {

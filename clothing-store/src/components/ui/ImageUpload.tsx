@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Upload, X, Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 interface ImageUploadProps {
   value?: string;
@@ -54,7 +55,7 @@ export function ImageUpload({
       formData.append("folder", folder);
 
       // Upload to Cloudflare via API route
-      const response = await fetch("/api/cloudflare/upload", {
+      const response = await authFetch("/api/cloudflare/upload", {
         method: "POST",
         body: formData,
       });
@@ -91,7 +92,7 @@ export function ImageUpload({
         value.includes(".r2.") ||
         value.includes("r2.cloudflarestorage.com")
       ) {
-        await fetch("/api/cloudflare/delete", {
+        await authFetch("/api/cloudflare/delete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -42,6 +42,7 @@ import NewCustomerModal from "@/components/customers/NewCustomerModal";
 import { DeleteConfirmationModal } from "@/components/customers/DeleteConfirmationModal";
 import { CustomerService } from "@/services/customerService";
 import { LoyaltyService } from "@/services/loyaltyService";
+import { authFetch } from "@/lib/authFetch";
 
 function CustomerPageContent() {
   const { formatPrice } = useCurrency();
@@ -95,7 +96,7 @@ function CustomerPageContent() {
     try {
       setError(null);
 
-      const response = await fetch("/api/customers");
+      const response = await authFetch("/api/customers");
       const data: CustomerListResponse = await response.json();
 
       if (data.success && data.data) {
@@ -112,7 +113,7 @@ function CustomerPageContent() {
   // Fetch customer statistics
   const fetchStats = async () => {
     try {
-      const response = await fetch("/api/customers/stats");
+      const response = await authFetch("/api/customers/stats");
       const data: CustomerStatsResponse = await response.json();
 
       if (data.success && data.data) {
@@ -321,7 +322,7 @@ function CustomerPageContent() {
     setDeleteError(null);
 
     try {
-      const response = await fetch(`/api/customers/${deletingCustomer.uid}`, {
+      const response = await authFetch(`/api/customers/${deletingCustomer.uid}`, {
         method: "DELETE",
       });
 
@@ -364,7 +365,7 @@ function CustomerPageContent() {
     try {
       if (editingCustomer) {
         // Update existing customer
-        const response = await fetch(`/api/customers/${editingCustomer.uid}`, {
+        const response = await authFetch(`/api/customers/${editingCustomer.uid}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -391,7 +392,7 @@ function CustomerPageContent() {
         }
       } else {
         // Create new customer
-        const response = await fetch("/api/customers", {
+        const response = await authFetch("/api/customers", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

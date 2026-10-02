@@ -1,14 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ShopService } from "@/services/shopService";
 import {
   CreateShopRequest,
   ShopResponse,
   ShopListResponse,
   ShopFilters,
 } from "@/types/shop";
+import { OWNER_ONLY } from "@/config/rolePermissions";
+import {
+  handleRouteError,
+  requireAdminConfigured,
+  requireRole,
+} from "@/lib/server/apiAuth";
+import {
+  createShop,
+  getAllShops,
+  getShopsWithFilters,
+} from "@/server/shopsAdmin";
+
+// Access:
+//   GET  - public. Branch names/addresses are shown to customers; the
+//          storefront server proxies this route, and the POS home page and
+//          cart read it for every role.
+//   POST - Owner only (Doc: "Add/Edit/Delete Shop").
 
 // GET /api/shops - Get all shops or filtered shops
 export async function GET(request: NextRequest) {
+  const unavailable = requireAdminConfigured();
+  if (unavailable) return unavailable;
+
   try {
     const { searchParams } = new URL(request.url);
 
@@ -31,9 +50,9 @@ export async function GET(request: NextRequest) {
 
     // If no filters, get all shops
     if (Object.keys(filters).length === 0) {
-      shops = await ShopService.getAllShops();
+      shops = await getAllShops();
     } else {
-      shops = await ShopService.getShopsWithFilters(filters);
+      shops = await getShopsWithFilters(filters);
     }
 
     const response: ShopListResponse = {
@@ -44,36 +63,61 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in GET /api/shops:", error);
-    const response: ShopListResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch shops",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, "GET /api/shops", "Failed to fetch shops");
   }
 }
 
 // POST /api/shops - Create a new shop
 export async function POST(request: NextRequest) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
+
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      const response: ShopResponse = {
+        success: false,
+        error: "Invalid JSON body",
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
     // Treat empty string as undefined for secondaryPhone
     if (body.secondaryPhone === "") {
       body.secondaryPhone = undefined;
     }
 
     // Basic validation
-    if (
-      !body.name ||
-      !body.address ||
-      !body.primaryPhone ||
-      !body.township ||
-      !body.city
-    ) {
+    const textFields = [
+      "name",
+      "address",
+      "primaryPhone",
+      "township",
+      "city",
+    ] as const;
+    if (textFields.some((field) => !body[field] || typeof body[field] !== "string")) {
       const response: ShopResponse = {
         success: false,
         error:
           "Missing required fields: name, address, primaryPhone, township, and city are required",
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const optionalTextFields = ["secondaryPhone", "openingHours"] as const;
+    if (
+      optionalTextFields.some(
+        (field) =>
+          body[field] !== undefined &&
+          body[field] !== null &&
+          typeof body[field] !== "string",
+      ) ||
+      (body.status &&
+        body.status !== "active" &&
+        body.status !== "inactive")
+    ) {
+      const response: ShopResponse = {
+        success: false,
+        error: "Invalid shop fields",
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -107,10 +151,7 @@ export async function POST(request: NextRequest) {
       status: body.status || "active",
     };
 
-    // TODO: Get actual user ID from authentication
-    const userId = "current-user-id"; // This should come from auth context
-
-    const shop = await ShopService.createShop(shopData, userId);
+    const shop = await createShop(shopData, auth.caller.uid);
 
     const response: ShopResponse = {
       success: true,
@@ -119,11 +160,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    console.error("Error in POST /api/shops:", error);
-    const response: ShopResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to create shop",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(error, "POST /api/shops", "Failed to create shop");
   }
 }

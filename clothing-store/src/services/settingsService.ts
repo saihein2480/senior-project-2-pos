@@ -187,8 +187,12 @@ export interface CurrencyInfo {
  * Extracted so the one-shot read and the live subscription below cannot drift:
  * a field defaulted in one and not the other would make the same settings look
  * different depending on how they were loaded.
+ *
+ * Pure (no Firestore calls); also used by the Admin-SDK module
+ * src/server/settingsAdmin.ts so /api/settings returns the same shape.
  */
-function mapSettingsDoc(data: Record<string, any>): BusinessSettings {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw Firestore data (client or Admin SDK)
+export function mapSettingsDoc(data: Record<string, any>): BusinessSettings {
   return {
     businessName: data.businessName || "",
     shortName: data.shortName || "",

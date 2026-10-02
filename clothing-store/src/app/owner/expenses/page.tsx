@@ -12,6 +12,7 @@ import { TopNavBar } from "@/components/ui/TopNavBar";
 import { ImageUpload } from "@/components/ui/ImageUpload";
 import { ExpenseCategory, Expense } from "@/types/expense";
 import { Trash2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 function ExpensesContent() {
   const permissions = usePermissions();
@@ -54,8 +55,8 @@ function ExpensesContent() {
     try {
       setLoading(true);
       const [categoriesRes, expensesRes] = await Promise.all([
-        fetch("/api/expenses?type=categories"),
-        fetch("/api/expenses"),
+        authFetch("/api/expenses?type=categories"),
+        authFetch("/api/expenses"),
       ]);
 
       const categoriesData = await categoriesRes.json();
@@ -82,7 +83,7 @@ function ExpensesContent() {
     }
 
     try {
-      const response = await fetch("/api/expenses", {
+      const response = await authFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "category", name: newCategoryName }),
@@ -119,7 +120,7 @@ function ExpensesContent() {
 
     try {
       setLoading(true);
-      const response = await fetch("/api/expenses", {
+      const response = await authFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -163,7 +164,7 @@ function ExpensesContent() {
     if (!confirm("Are you sure you want to delete this category?")) return;
 
     try {
-      const response = await fetch(`/api/expenses?type=category&id=${id}`, {
+      const response = await authFetch(`/api/expenses?type=category&id=${id}`, {
         method: "DELETE",
       });
 
@@ -194,7 +195,7 @@ function ExpensesContent() {
     }
 
     try {
-      const response = await fetch(`/api/expenses?id=${id}`, {
+      const response = await authFetch(`/api/expenses?id=${id}`, {
         method: "DELETE",
       });
 
@@ -251,7 +252,7 @@ function ExpensesContent() {
 
     for (const expenseId of selectedExpenses) {
       try {
-        const response = await fetch(`/api/expenses?id=${expenseId}`, {
+        const response = await authFetch(`/api/expenses?id=${expenseId}`, {
           method: "DELETE",
         });
 
@@ -305,7 +306,7 @@ function ExpensesContent() {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/expenses?id=${editingExpense.id}`, {
+      const response = await authFetch(`/api/expenses?id=${editingExpense.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -6,6 +6,7 @@ import { Customer } from "@/types/customer";
 import { SelectedCustomer } from "@/types/cart";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Translations } from "@/lib/translations";
+import { authFetch } from "@/lib/authFetch";
 
 type SourceFilter = "all" | "online" | "pos";
 type TypeFilter =
@@ -122,7 +123,7 @@ export function CustomerSelectionModal({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/customers");
+      const response = await authFetch("/api/customers");
       const data = await response.json();
 
       if (data.success) {

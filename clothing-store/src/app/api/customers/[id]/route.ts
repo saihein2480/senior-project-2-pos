@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CustomerService } from "@/services/customerService";
-import { CustomerResponse, UpdateCustomerRequest } from "@/types/customer";
+import { CustomerResponse } from "@/types/customer";
+import { ALL_STAFF, OWNER_ONLY } from "@/config/rolePermissions";
+import { handleRouteError, requireRole } from "@/lib/server/apiAuth";
+import {
+  deleteCustomer,
+  getCustomerById,
+  updateCustomer,
+} from "@/server/customersAdmin";
+
+// Access:
+//   GET / PUT - every POS role (Doc: "Edit Customer Info"). PUT only accepts
+//               profile fields; loyalty state cannot be set here.
+//   DELETE    - Owner only (Doc: "Delete Customers").
 
 // GET /api/customers/[id] - Get a specific customer by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, ALL_STAFF);
+  if ("response" in auth) return auth.response;
+
   try {
     const { id } = await params;
 
@@ -18,7 +32,7 @@ export async function GET(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const customer = await CustomerService.getCustomerById(id);
+    const customer = await getCustomerById(id);
 
     if (!customer) {
       const response: CustomerResponse = {
@@ -35,13 +49,11 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in GET /api/customers/[id]:", error);
-    const response: CustomerResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to fetch customer",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "GET /api/customers/[id]",
+      "Failed to fetch customer",
+    );
   }
 }
 
@@ -50,6 +62,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, ALL_STAFF);
+  if ("response" in auth) return auth.response;
+
   try {
     const { id } = await params;
 
@@ -61,10 +76,9 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const body: UpdateCustomerRequest = await request.json();
+    const body = await request.json().catch(() => null);
 
-    // Validate required fields if needed
-    if (!body || Object.keys(body).length === 0) {
+    if (!body || typeof body !== "object" || Object.keys(body).length === 0) {
       const response: CustomerResponse = {
         success: false,
         error: "Update data is required",
@@ -72,7 +86,7 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const updatedCustomer = await CustomerService.updateCustomer(id, body);
+    const updatedCustomer = await updateCustomer(id, body);
 
     const response: CustomerResponse = {
       success: true,
@@ -82,13 +96,11 @@ export async function PUT(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in PUT /api/customers/[id]:", error);
-    const response: CustomerResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update customer",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "PUT /api/customers/[id]",
+      "Failed to update customer",
+    );
   }
 }
 
@@ -97,6 +109,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireRole(request, OWNER_ONLY);
+  if ("response" in auth) return auth.response;
+
   try {
     const { id } = await params;
 
@@ -108,7 +123,7 @@ export async function DELETE(
       return NextResponse.json(response, { status: 400 });
     }
 
-    await CustomerService.deleteCustomer(id);
+    await deleteCustomer(id);
 
     const response: CustomerResponse = {
       success: true,
@@ -117,12 +132,10 @@ export async function DELETE(
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Error in DELETE /api/customers/[id]:", error);
-    const response: CustomerResponse = {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete customer",
-    };
-    return NextResponse.json(response, { status: 500 });
+    return handleRouteError(
+      error,
+      "DELETE /api/customers/[id]",
+      "Failed to delete customer",
+    );
   }
 }
