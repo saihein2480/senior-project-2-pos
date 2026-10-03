@@ -105,7 +105,7 @@ const ONLINE_SHOP_MARKERS = new Set(["online", "online_store", "web", "storefron
  * nothing at all. Rather than render a dash for them, walk a chain of weaker
  * signals that are still present on the document:
  *
- * 1. `branchName` / `shopId` written directly on the transaction.
+ * 1. `shopId` (current shop name) / `branchName` written on the transaction.
  * 2. `items[].shop` — the shop the line was sold from.
  * 3. `stocks/{stockId}.shop` — the shop that owns the stock record.
  * 4. "Online Store" when the order came from the storefront.
@@ -119,10 +119,11 @@ function resolveBranchName(
   shopNames: Record<string, string>,
   stockShops: Record<string, string>
 ): string {
-  if (transaction.branchName) return transaction.branchName;
+  // The id first, so a renamed shop shows its current name.
   if (transaction.shopId && shopNames[transaction.shopId]) {
     return shopNames[transaction.shopId];
   }
+  if (transaction.branchName) return transaction.branchName;
 
   const items = transaction.items || [];
   let sawOnlineMarker = false;

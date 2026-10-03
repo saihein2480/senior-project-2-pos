@@ -17,6 +17,7 @@ import type {
   ShopStats,
   UpdateShopRequest,
 } from "@/types/shop";
+import { nextFormerNames, normalizeBranchName } from "@/lib/branch";
 import { getAdminDb } from "./adminDb";
 import { timestampToIso, toClientJson } from "./serialize";
 
@@ -101,6 +102,14 @@ export async function createShop(
   return { id: docRef.id, ...cleanShopData } as Shop;
 }
 
+/**
+ * The business-wide default branch is stored by *name* in
+ * business_settings/main.currentBranch (see settingsAdmin.ts). A rename keeps
+ * it pointing at the same shop.
+ */
+const SETTINGS_COLLECTION = "business_settings";
+const SETTINGS_DOC_ID = "main";
+
 export async function updateShop(
   id: string,
   updates: UpdateShopRequest,
@@ -114,9 +123,70 @@ export async function updateShop(
     ]),
   );
 
-  await shops()
-    .doc(id)
-    .update({ ...payload, updatedAt: FieldValue.serverTimestamp() });
+  const shopRef = shops().doc(id);
+
+  if (typeof updates.name !== "string") {
+    await shopRef.update({ ...payload, updatedAt: FieldValue.serverTimestamp() });
+    return;
+  }
+
+  const newName = updates.name;
+  const db = getAdminDb();
+  const settingsRef = db.collection(SETTINGS_COLLECTION).doc(SETTINGS_DOC_ID);
+
+  // A rename: remember the old name so records that only stored a branch name
+  // still match this shop, and keep the business default on the same shop.
+  // One transaction so two renames in quick succession cannot lose a name.
+  await db.runTransaction(async (tx) => {
+    // The whole (small) shops collection is read so the default is only moved
+    // when no other shop still carries the old name.
+    const [shopSnap, allShopsSnap, settingsSnap] = await Promise.all([
+      tx.get(shopRef),
+      tx.get(shops()),
+      tx.get(settingsRef),
+    ]);
+
+    const data = shopSnap.data() ?? {};
+    const oldName = typeof data.name === "string" ? data.name : "";
+    const renamed =
+      normalizeBranchName(oldName) !== normalizeBranchName(newName);
+
+    const existingFormer: unknown[] = Array.isArray(data.formerNames)
+      ? data.formerNames
+      : [];
+    const formerNames = nextFormerNames(
+      existingFormer.filter((name): name is string => typeof name === "string"),
+      renamed ? oldName : null,
+      newName,
+    );
+
+    // update() (not set) so a missing shop still fails as before.
+    tx.update(shopRef, {
+      ...payload,
+      formerNames: formerNames.length > 0 ? formerNames : FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    const defaultBranch = settingsSnap.exists
+      ? settingsSnap.get("currentBranch")
+      : undefined;
+    const oldNameStillUsed = allShopsSnap.docs.some(
+      (doc) =>
+        doc.id !== id &&
+        normalizeBranchName(doc.get("name")) === normalizeBranchName(oldName),
+    );
+    if (
+      renamed &&
+      !oldNameStillUsed &&
+      typeof defaultBranch === "string" &&
+      normalizeBranchName(defaultBranch) === normalizeBranchName(oldName)
+    ) {
+      tx.update(settingsRef, {
+        currentBranch: newName,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
 }
 
 export async function deleteShop(id: string): Promise<void> {

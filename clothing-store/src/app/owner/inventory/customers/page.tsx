@@ -609,7 +609,7 @@ function CustomerPageContent() {
                   }`}
                 >
                   <Users className="h-4 w-4" />
-                  🌐 Online Customers
+                    Online Customers
                 </button>
                 <button
                   onClick={() => {
@@ -700,7 +700,7 @@ function CustomerPageContent() {
                         : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                     }`}
                   >
-                    🌐 Online Customers
+                      Online Customers
                   </button>
                   <button
                     onClick={() => setSelectedCustomerSource('pos')}
@@ -710,7 +710,7 @@ function CustomerPageContent() {
                         : "bg-white text-gray-700 shadow-sm hover:bg-pink-50"
                     }`}
                   >
-                    🏪 POS Customers
+                    POS Customers
                   </button>
                 </div>
               </div>

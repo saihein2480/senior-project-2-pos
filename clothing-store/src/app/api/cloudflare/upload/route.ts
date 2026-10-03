@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { uploadToR2 } from "@/lib/r2";
 import { MANAGEMENT } from "@/config/rolePermissions";
 import { handleRouteError, jsonError, requireRole } from "@/lib/server/apiAuth";
@@ -8,6 +9,20 @@ import {
   resolveUploadFolder,
   safeUploadFilename,
 } from "@/lib/server/imageUpload";
+import { parseFormFields } from "@/server/validation";
+
+/**
+ * The form's text fields (the image is read by readImageFile). `folder` is
+ * mapped onto the allowlist by resolveUploadFolder, so an unknown, malformed
+ * or missing value lands in the default root folder rather than failing.
+ */
+const uploadFieldsSchema = z.object({
+  folder: z
+    .string()
+    .optional()
+    .catch(undefined)
+    .transform(resolveUploadFolder),
+});
 
 // Access: Owner + Manager. Used by ImageUpload on the stock, settings and
 // expense pages, all of which are Owner + Manager only.
@@ -31,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Only known folders; anything else (or a traversal attempt) falls back
     // to the default root folder.
-    const folder = resolveUploadFolder(formData.get("folder"));
+    const { folder } = parseFormFields(formData, uploadFieldsSchema);
 
     // Content-Type and extension come from the sniffed bytes, never from the
     // client's file.type or file name.

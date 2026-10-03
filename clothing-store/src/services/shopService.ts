@@ -13,8 +13,12 @@ import {
   Timestamp,
   getDoc,
   deleteField,
+  onSnapshot,
+  runTransaction,
+  type DocumentData,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
+import { nextFormerNames, normalizeBranchName } from "@/lib/branch";
 import {
   Shop,
   CreateShopRequest,
@@ -28,6 +32,21 @@ const COLLECTION_NAME = "shops";
 // Helper function to generate unique IDs
 const generateId = () =>
   Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+function mapShopDoc(id: string, data: DocumentData): Shop {
+  return {
+    id,
+    ...data,
+    createdAt:
+      data.createdAt instanceof Timestamp
+        ? data.createdAt.toDate().toISOString()
+        : data.createdAt,
+    updatedAt:
+      data.updatedAt instanceof Timestamp
+        ? data.updatedAt.toDate().toISOString()
+        : data.updatedAt,
+  } as Shop;
+}
 
 export class ShopService {
   static async createShop(
@@ -101,6 +120,42 @@ export class ShopService {
       console.error("Error fetching shops:", error);
       return this.getMockShops();
     }
+  }
+
+  /**
+   * Watch the shops list (oldest first) and report every change.
+   *
+   * Used by SettingsContext so a rename or a new branch reaches every branch
+   * picker and filter without a reload. `fromServer` is false for snapshots
+   * served from the local cache, which may be incomplete; callers should not
+   * make destructive decisions (such as dropping a saved selection) on those.
+   *
+   * @returns an unsubscribe function.
+   */
+  static subscribeToShops(
+    onChange: (shops: Shop[], meta: { fromServer: boolean }) => void,
+    onError?: (error: unknown) => void,
+  ): () => void {
+    if (!db || !isFirebaseConfigured) {
+      onChange(this.getMockShops(), { fromServer: true });
+      return () => {};
+    }
+
+    const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "asc"));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        onChange(
+          snapshot.docs.map((d) => mapShopDoc(d.id, d.data())),
+          { fromServer: !snapshot.metadata.fromCache },
+        );
+      },
+      (error) => {
+        console.error("Error watching shops:", error);
+        onError?.(error);
+      },
+    );
   }
 
   static async getShopById(id: string): Promise<Shop | null> {
@@ -242,9 +297,40 @@ export class ShopService {
         ])
       );
 
-      await updateDoc(docRef, {
-        ...payload,
-        updatedAt: serverTimestamp(),
+      if (typeof updates.name !== "string") {
+        await updateDoc(docRef, {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+        return;
+      }
+
+      // A rename keeps the old name in `formerNames` so records that only
+      // stored a branch name still match (src/lib/branch.ts). PUT
+      // /api/shops/[id] is the main path and also moves a business default
+      // that named this shop; this client path only records the name.
+      const newName = updates.name;
+      const firestore = db;
+      await runTransaction(firestore, async (tx) => {
+        const snap = await tx.get(docRef);
+        const data = snap.data() ?? {};
+        const oldName = typeof data.name === "string" ? data.name : "";
+        const renamed =
+          normalizeBranchName(oldName) !== normalizeBranchName(newName);
+        const existing: unknown[] = Array.isArray(data.formerNames)
+          ? data.formerNames
+          : [];
+        const formerNames = nextFormerNames(
+          existing.filter((name): name is string => typeof name === "string"),
+          renamed ? oldName : null,
+          newName,
+        );
+
+        tx.update(docRef, {
+          ...payload,
+          formerNames: formerNames.length > 0 ? formerNames : deleteField(),
+          updatedAt: serverTimestamp(),
+        });
       });
     } catch (error) {
       console.error("Error updating shop:", error);

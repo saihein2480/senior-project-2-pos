@@ -6,6 +6,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
+import { matchesBranch, toBranchRefs } from "@/lib/branch";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import {
@@ -123,10 +124,12 @@ function ShopReportsContent() {
         );
       }
 
-      // Calculate reports for each shop
-      const reports = shopsData.map((shop) => {
-        const shopTransactions = filteredTransactions.filter(
-          (t) => t.branchName === shop.name
+      // Calculate reports for each shop. Match by shop id first, then by the
+      // shop's current or former names for sales that only stored a name.
+      const branchRefs = toBranchRefs(shopsData);
+      const reports = shopsData.map((shop, index) => {
+        const shopTransactions = filteredTransactions.filter((t) =>
+          matchesBranch(t, branchRefs[index])
         );
         return calculateShopReport(shop, shopTransactions);
       });

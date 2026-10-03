@@ -425,13 +425,33 @@ export class LoyaltyService {
           throw new Error("Coupon has expired");
         }
 
-        coupons[couponIndex] = {
+        // The storefront holds a coupon for an open QR checkout
+        // (reservedForOrderId / reservedUntil, set with the stock reservation).
+        // Spending it here as well would let the same coupon discount twice.
+        const reservedUntil = coupon.reservedUntil?.toDate
+          ? coupon.reservedUntil.toDate()
+          : coupon.reservedUntil
+            ? new Date(coupon.reservedUntil)
+            : null;
+        if (
+          coupon.reservedForOrderId &&
+          reservedUntil &&
+          !Number.isNaN(reservedUntil.getTime()) &&
+          reservedUntil > new Date()
+        ) {
+          throw new Error("Coupon is held by an online checkout in progress");
+        }
+
+        const usedCoupon = {
           ...coupon,
           status: "used",
           usedAt: Timestamp.now(),
           usedInTransaction: params.transactionId,
           inUse: false,
         };
+        delete usedCoupon.reservedForOrderId;
+        delete usedCoupon.reservedUntil;
+        coupons[couponIndex] = usedCoupon;
 
         // Using a coupon spends the points its package cost. Coupons issued
         // before pointsCost was recorded deduct nothing rather than a guess.

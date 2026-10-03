@@ -16,12 +16,17 @@ import type { ColorVariant, SizeQuantity } from "@/types/stock";
 /** One change to one size of one variant. */
 export interface StockAdjustment {
   /**
-   * The variant as the caller knows it: a stored id, or one synthesised by a
-   * screen for a variant that has none (`cv1-<stockId>`, `variant-0`).
+   * The variant as the caller knows it: its stored id, or the till's
+   * positional stand-in (`cv<n>-<stockId>`) for a variant stored without one.
    */
   variantId?: string;
-  /** Colour name, colour code or barcode — whatever the caller recorded. */
+  /**
+   * Colour name as recorded on the line. POS cart lines and sales keep the
+   * variant id in `selectedColor`, so an id is accepted here too.
+   */
   color?: string;
+  /** Hex colour code recorded on the line; confirms a positional stand-in id. */
+  colorCode?: string;
   size: string;
   /** Positive puts stock back, negative takes it. */
   delta: number;
@@ -85,113 +90,99 @@ function quantityOf(
   return entry ? toQuantity(entry.quantity) : undefined;
 }
 
-/**
- * Index encoded in an id that a screen synthesised for a variant stored
- * without one. The POS till uses `cv<n>-<stockId>` (1-based) and the edit and
- * till screens use `variant-<n>` (0-based).
- */
-function synthesisedIndex(candidate: string, stockId: string): number | null {
-  const tillMatch = /^cv(\d+)-(.+)$/.exec(candidate);
-  if (tillMatch && tillMatch[2] === stockId) {
-    return Number(tillMatch[1]) - 1;
-  }
-  const screenMatch = /^variant-(\d+)$/.exec(candidate);
-  if (screenMatch) return Number(screenMatch[1]);
-  return null;
+function clean(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 /**
- * Find the variant an adjustment refers to.
+ * Position encoded in the till's stand-in id for a variant stored without an
+ * id: `cv<n>-<stockId>`, 1-based (see transformStockData in
+ * src/app/owner/home/page.tsx). Such variants are real: before the
+ * merge-based edit form, saving a product wrote `colorVariants` without ids,
+ * and the till put these stand-ins into carts and sales.
+ */
+function tillPositionalIndex(candidate: string, stockId: string): number | null {
+  const match = /^cv(\d+)-(.+)$/.exec(candidate);
+  if (!match || match[2] !== stockId) return null;
+  const index = Number(match[1]) - 1;
+  return Number.isInteger(index) && index >= 0 ? index : null;
+}
+
+/**
+ * Ids made up by a screen, never stored: the till's `cv<n>-<stockId>`, the
+ * edit form's `variant-<n>` and the storefront's bare index (`"0"`).
+ */
+function isPlaceholderId(candidate: string, stockId: string): boolean {
+  return (
+    tillPositionalIndex(candidate, stockId) !== null ||
+    /^variant-\d+$/.test(candidate) ||
+    /^\d{1,3}$/.test(candidate)
+  );
+}
+
+/**
+ * Find the variant a line refers to, or -1. Strict on purpose: taking or
+ * returning stock on the wrong variant is worse than reporting the line as
+ * unresolved.
  *
- * `mode` matters for the loose fallbacks: when taking stock we refuse to guess
- * between several candidates, because guessing wrong sells the wrong item.
- * Putting stock back keeps the historical, more forgiving behaviour of
- * `restoreInventory`.
+ *  1. A stored variant id, exactly (checked against `variantId` and against
+ *     `color`, where POS lines keep the id).
+ *  2. The till's `cv<n>-<stockId>` stand-in, only if the variant at that
+ *     position still has the colour the line recorded (name or hex code):
+ *     positions move when variants are added or removed.
+ *  3. Lines without a variant id (legacy data): the colour name, trimmed and
+ *     case-insensitive, and only a variant that has the size. More than one
+ *     candidate is ambiguous and resolves to nothing.
+ *
+ * There is no "size only" or "the only variant" fallback.
  */
 export function resolveVariantIndex(
   variants: ColorVariant[],
   stockId: string,
-  hint: { variantId?: string; color?: string; size?: string },
-  mode: "take" | "give",
+  hint: { variantId?: string; color?: string; colorCode?: string; size?: string },
 ): number {
-  const variantId = (hint.variantId || "").trim();
-  const color = (hint.color || "").trim();
-  const size = (hint.size || "").trim();
+  const list = Array.isArray(variants) ? variants : [];
+  const variantId = clean(hint.variantId);
+  const color = clean(hint.color);
+  const colorCode = clean(hint.colorCode);
+  const size = clean(hint.size);
   const idCandidates = [variantId, color].filter(Boolean);
 
-  // 1. A stored id.
+  // 1. Stored id.
   for (const candidate of idCandidates) {
-    const idx = variants.findIndex(
-      (v) => !!v.id && norm(v.id) === norm(candidate),
-    );
+    const idx = list.findIndex((v) => clean(v?.id) !== "" && clean(v.id) === candidate);
     if (idx >= 0) return idx;
   }
 
-  // 2. An id synthesised from the variant's position. Positions move when the
-  //    owner adds or removes variants, so when we also know the colour, only
-  //    accept the position if the colour there still matches.
+  // A colour *name* on the line, as opposed to a stand-in id in that field.
+  const colourName = color && !isPlaceholderId(color, stockId) ? color : "";
+
+  // 2. Till stand-in, confirmed by colour.
   for (const candidate of idCandidates) {
-    const idx = synthesisedIndex(candidate, stockId);
-    if (idx === null || idx < 0 || idx >= variants.length) continue;
-
-    const colourHint = candidate === variantId ? color : "";
-    const colourHintIsPlain =
-      !!colourHint && synthesisedIndex(colourHint, stockId) === null;
-    if (
-      colourHintIsPlain &&
-      norm(variants[idx].color) !== norm(colourHint) &&
-      norm(variants[idx].colorCode) !== norm(colourHint)
-    ) {
-      continue;
-    }
-    return idx;
+    const idx = tillPositionalIndex(candidate, stockId);
+    if (idx === null || idx >= list.length) continue;
+    const variant = list[idx];
+    const nameHint = candidate === color ? "" : colourName;
+    const sameName = !!nameHint && norm(variant?.color) === norm(nameHint);
+    const sameCode = !!colorCode && norm(variant?.colorCode) === norm(colorCode);
+    if (sameName || sameCode) return idx;
   }
 
-  if (color) {
-    // 3. Colour name. Two variants can share a name; prefer the one that
-    //    actually carries the size.
-    const byName = variants
+  // 3. Legacy line without a variant id: colour name + size, unambiguous.
+  const hasVariantId =
+    !!variantId &&
+    !isPlaceholderId(variantId, stockId) &&
+    norm(variantId) !== norm(color);
+  if (!hasVariantId && colourName) {
+    const matches = list
       .map((v, idx) => ({ v, idx }))
-      .filter(({ v }) => norm(v.color) === norm(color));
-    if (byName.length === 1) return byName[0].idx;
-    if (byName.length > 1) {
-      const withSize = byName.find(
-        ({ v }) => size && quantityOf(v, size) !== undefined,
+      .filter(
+        ({ v }) =>
+          norm(v?.color) === norm(colourName) &&
+          (!size || quantityOf(v, size) !== undefined),
       );
-      return (withSize || byName[0]).idx;
-    }
-
-    // 4. Barcode, 5. colour code.
-    const byBarcode = variants.findIndex(
-      (v) => !!v.barcode && String(v.barcode).trim() === color,
-    );
-    if (byBarcode >= 0) return byBarcode;
-
-    const byCode = variants.findIndex(
-      (v) => !!v.colorCode && norm(v.colorCode) === norm(color),
-    );
-    if (byCode >= 0) return byCode;
-
-    // 6. Legacy restore heuristic: an id that merely contains the colour.
-    if (mode === "give") {
-      const byIdFragment = variants.findIndex(
-        (v) => !!v.id && v.id.includes(color),
-      );
-      if (byIdFragment >= 0) return byIdFragment;
-    }
+    if (matches.length === 1) return matches[0].idx;
   }
-
-  // 7. The size alone.
-  if (size) {
-    const withSize = variants
-      .map((v, idx) => ({ v, idx }))
-      .filter(({ v }) => quantityOf(v, size) !== undefined);
-    if (withSize.length === 1) return withSize[0].idx;
-    if (withSize.length > 1 && mode === "give") return withSize[0].idx;
-  }
-
-  // 8. Only one variant to choose from.
-  if (variants.length === 1) return 0;
 
   return -1;
 }
@@ -237,12 +228,7 @@ export function applyAdjustments(
     const delta = toQuantity(adjustment.delta);
     if (delta === 0) continue;
 
-    const variantIndex = resolveVariantIndex(
-      variants,
-      stockId,
-      adjustment,
-      delta < 0 ? "take" : "give",
-    );
+    const variantIndex = resolveVariantIndex(variants, stockId, adjustment);
 
     if (variantIndex < 0) {
       if (options.skipUnresolvable) {
@@ -252,7 +238,12 @@ export function applyAdjustments(
       throw new StockAdjustmentError(
         "variant_not_found",
         `Variant not found for ${describe(stockId, adjustment)}`,
-        { stockId, color: adjustment.color, size: adjustment.size },
+        {
+          stockId,
+          color: adjustment.color,
+          size: adjustment.size,
+          label: adjustment.label,
+        },
       );
     }
 
@@ -277,7 +268,12 @@ export function applyAdjustments(
       throw new StockAdjustmentError(
         "size_not_found",
         `Size not found for ${describe(stockId, adjustment)}`,
-        { stockId, color: variant.color, size: adjustment.size },
+        {
+          stockId,
+          color: variant.color,
+          size: adjustment.size,
+          label: adjustment.label,
+        },
       );
     }
 
@@ -296,6 +292,7 @@ export function applyAdjustments(
           size: sizes[sizeIndex].size,
           requested: -delta,
           available,
+          label: adjustment.label,
         },
       );
     }
@@ -306,6 +303,235 @@ export function applyAdjustments(
   }
 
   return { colorVariants: variants, applied, skipped };
+}
+
+// ---------------------------------------------------------------------------
+// Till lines: availability checks, the sale's deduction, legacy carts
+// ---------------------------------------------------------------------------
+//
+// The till no longer takes stock when an item goes into the cart. Adding only
+// checks the shelf; `transactionService.recordSale` takes the stock in the
+// same Firestore transaction that saves the sale.
+
+/** A POS cart or sale line, as far as stock is concerned (a CartItem). */
+export interface StockLine {
+  stockId?: string;
+  /** The variant id as the till showed it (stored id or `cv<n>-<stockId>`). */
+  selectedColor?: string;
+  colorCode?: string;
+  selectedSize?: string;
+  quantity?: number;
+  groupName?: string;
+}
+
+/** How a till line points at its variant. */
+export function lineVariantHint(line: StockLine): {
+  variantId: string;
+  colorCode: string;
+  size: string;
+} {
+  return {
+    variantId: clean(line.selectedColor),
+    colorCode: clean(line.colorCode),
+    size: clean(line.selectedSize),
+  };
+}
+
+/** Same product, variant and size: one cart line. */
+export function isSameStockLine(a: StockLine, b: StockLine): boolean {
+  return (
+    clean(a.stockId) === clean(b.stockId) &&
+    clean(a.selectedColor) === clean(b.selectedColor) &&
+    clean(a.selectedSize) === clean(b.selectedSize)
+  );
+}
+
+/** Units of this line already in the cart. */
+export function quantityInCart(lines: StockLine[], line: StockLine): number {
+  return (Array.isArray(lines) ? lines : [])
+    .filter((entry) => isSameStockLine(entry, line))
+    .reduce((sum, entry) => sum + Math.max(0, toQuantity(entry.quantity)), 0);
+}
+
+/**
+ * What the shelf holds for a line's variant and size, from a freshly read
+ * `colorVariants`. Null when the line no longer matches a variant and size.
+ */
+export function shelfQuantity(
+  colorVariants: ColorVariant[] | undefined,
+  stockId: string,
+  line: StockLine,
+): { quantity: number; variant: ColorVariant } | null {
+  const variants = Array.isArray(colorVariants) ? colorVariants : [];
+  const hint = lineVariantHint(line);
+  const index = resolveVariantIndex(variants, stockId, hint);
+  if (index < 0) return null;
+  const quantity = quantityOf(variants[index], hint.size);
+  if (quantity === undefined) return null;
+  return { quantity: Math.max(0, quantity), variant: variants[index] };
+}
+
+/** Units that may still go into the cart: shelf minus what the cart holds. */
+export function availableToAdd(shelf: number, alreadyInCart: number): number {
+  return Math.max(
+    0,
+    Math.max(0, toQuantity(shelf)) - Math.max(0, toQuantity(alreadyInCart)),
+  );
+}
+
+/** A product's shelf as last read: does it exist, and its variants. */
+export interface ShelfSnapshot {
+  exists: boolean;
+  colorVariants: ColorVariant[];
+}
+
+/** One cart line that `trimLinesToShelf` cut down or removed. */
+export interface ShelfTrim<T> {
+  item: T;
+  /** Units left on the line (0 = removed). */
+  kept: number;
+  /** The variant's colour name, when the line still matches one. */
+  colour?: string;
+  reason: "product_gone" | "variant_gone" | "short";
+}
+
+/**
+ * The cart's lines for `stockId`, cut down to what the shelf holds. Lines
+ * for the same variant and size share the shelf; earlier lines keep their
+ * units first, so the most recent addition is what gets trimmed. Pure (same
+ * input, same output), so it is safe inside a React state updater.
+ */
+export function trimLinesToShelf<T extends StockLine & { quantity: number }>(
+  items: T[],
+  stockId: string,
+  shelf: ShelfSnapshot,
+): { items: T[]; changes: ShelfTrim<T>[] } {
+  const remainingByLine = new Map<string, number>();
+  const next: T[] = [];
+  const changes: ShelfTrim<T>[] = [];
+
+  for (const item of items) {
+    if (clean(item.stockId) !== stockId) {
+      next.push(item);
+      continue;
+    }
+
+    const match = shelf.exists
+      ? shelfQuantity(shelf.colorVariants, stockId, item)
+      : null;
+    const key = `${clean(item.selectedColor)}|${clean(item.selectedSize)}`;
+    const remaining = remainingByLine.get(key) ?? (match ? match.quantity : 0);
+    const quantity = Math.max(0, toQuantity(item.quantity));
+    const kept = Math.max(0, Math.min(quantity, remaining));
+    remainingByLine.set(key, remaining - kept);
+
+    if (kept < quantity) {
+      changes.push({
+        item,
+        kept,
+        colour: match?.variant.color,
+        reason: !shelf.exists ? "product_gone" : !match ? "variant_gone" : "short",
+      });
+    }
+    if (kept > 0) next.push(kept === quantity ? item : { ...item, quantity: kept });
+  }
+
+  return { items: next, changes };
+}
+
+/**
+ * Group till lines into per-product adjustments of `sign × quantity`. Lines
+ * for the same variant and size are merged, so a check sees the total asked
+ * of each shelf. Lines without a product id come back in `unlinked`.
+ */
+export function groupLineAdjustments(
+  lines: StockLine[],
+  sign: 1 | -1,
+): { byStock: Map<string, StockAdjustment[]>; unlinked: StockLine[] } {
+  const grouped = new Map<string, Map<string, StockAdjustment>>();
+  const unlinked: StockLine[] = [];
+
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const quantity = Math.max(0, toQuantity(line?.quantity));
+    if (quantity === 0) continue;
+    const stockId = clean(line.stockId);
+    if (!stockId) {
+      unlinked.push(line);
+      continue;
+    }
+
+    const hint = lineVariantHint(line);
+    const key = [hint.variantId, norm(hint.colorCode), norm(hint.size)].join("|");
+    const perStock = grouped.get(stockId) ?? new Map<string, StockAdjustment>();
+    const existing = perStock.get(key);
+    if (existing) {
+      existing.delta += sign * quantity;
+    } else {
+      perStock.set(key, {
+        ...(hint.variantId ? { variantId: hint.variantId } : {}),
+        ...(hint.colorCode ? { colorCode: hint.colorCode } : {}),
+        size: hint.size,
+        delta: sign * quantity,
+        ...(clean(line.groupName) ? { label: clean(line.groupName) } : {}),
+      });
+    }
+    grouped.set(stockId, perStock);
+  }
+
+  const byStock = new Map<string, StockAdjustment[]>();
+  grouped.forEach((perStock, stockId) =>
+    byStock.set(stockId, Array.from(perStock.values())),
+  );
+  return { byStock, unlinked };
+}
+
+/** The message a cashier sees when a sale cannot take its stock. */
+export function saleStockMessage(error: StockAdjustmentError): string {
+  const details = error.details || {};
+  const name = `"${clean(details.label) || "This item"}"`;
+  const colour = clean(details.color);
+  const size = clean(details.size);
+
+  switch (error.code) {
+    case "insufficient_stock": {
+      const detail = [colour, size].filter(Boolean).join(" / ");
+      const what = detail ? `${name} (${detail})` : name;
+      const available = Math.max(0, toQuantity(details.available));
+      return available > 0
+        ? `Only ${available} left of ${what}`
+        : `${what} is sold out`;
+    }
+    case "variant_not_found":
+      return `${name}${size ? ` (size ${size})` : ""}: that colour is no longer on the product. Remove it from the cart and add it again.`;
+    case "size_not_found":
+      return `${name}${colour ? ` (${colour})` : ""}: size ${size || "?"} is no longer on the product. Remove it from the cart and add it again.`;
+    case "stock_not_found":
+      return `${name} is no longer in the catalogue. Remove it from the cart.`;
+    default:
+      return error.message;
+  }
+}
+
+/**
+ * Take a sale's lines off one product's freshly read `colorVariants`.
+ * Unresolved lines and short shelves throw a StockAdjustmentError whose
+ * message is meant for the cashier (see saleStockMessage).
+ */
+export function deductSaleLines(
+  colorVariants: ColorVariant[] | undefined,
+  stockId: string,
+  adjustments: StockAdjustment[],
+): ColorVariant[] {
+  try {
+    return applyAdjustments(colorVariants, stockId, adjustments).colorVariants;
+  } catch (error) {
+    if (!isStockAdjustmentError(error)) throw error;
+    throw new StockAdjustmentError(
+      error.code,
+      saleStockMessage(error),
+      error.details,
+    );
+  }
 }
 
 /** A variant as submitted by the owner's edit form. */
@@ -465,6 +691,12 @@ export interface OrderLineReturn {
   colorName: string;
   size: string;
   variantHint?: string;
+  /**
+   * Hex colour code recorded on the line (POS `items[].colorCode`). Needed to
+   * confirm the till's `cv<n>-<stockId>` stand-in ids; without it such lines
+   * are reported as unresolved instead of being restocked by position alone.
+   */
+  colorCode?: string;
 }
 
 /** Which document the ledger lives on. */
@@ -566,6 +798,7 @@ export function planOrderLineReturns(
       list.push({
         variantId: line.variantHint,
         color: line.colorName,
+        ...(line.colorCode ? { colorCode: line.colorCode } : {}),
         size: line.size,
         delta: allowed,
       });

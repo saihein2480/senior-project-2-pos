@@ -14,11 +14,10 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ColorVariant, StockItem, WholesaleTier } from "@/types/stock";
-import { StockService } from "@/services/stockService";
-import { isStockAdjustmentError } from "@/lib/stockMath";
 import { InventoryRealtimeService } from "@/services/inventoryRealtimeService";
 import { CategoryService } from "@/services/categoryService";
 import { authFetch } from "@/lib/authFetch";
+import { LEGACY_UNASSIGNED_BRANCH_NAME, matchesBranch } from "@/lib/branch";
 
 // Bump this suffix whenever the shape or completeness of the cached inventory
 // changes, so stale session caches are ignored instead of being trusted.
@@ -45,11 +44,24 @@ interface ClothingInventoryItem {
   }[];
 }
 
+/** One cart line: product, the variant id this screen showed, size. */
+function cartLineKey(stockId: string, variantId?: string, size?: string): string {
+  return `${stockId}|${variantId || ""}|${size || ""}`;
+}
+
+/** Whole-product stock minus everything of it already in the cart. */
+function availableStockOf(
+  item: ClothingInventoryItem,
+  inCartByStock: Map<string, number>,
+): number {
+  return Math.max(0, (Number(item.stock) || 0) - (inCartByStock.get(item.id) || 0));
+}
+
 function OwnerHomeContent() {
   const {} = useAuth();
-  const { addToCart, setInventoryCallbacks } = useCart();
+  const { cart, addToCart, subscribeToStockReads } = useCart();
   const { formatPrice } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { branch: currentBranchRef } = useSettings();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -96,6 +108,41 @@ function OwnerHomeContent() {
   const handleSizeSelect = (itemId: string, size: string) => {
     setSelectedSizes((prev) => ({ ...prev, [itemId]: size }));
   };
+
+  // The cart holds no stock any more (the sale takes it), so what this screen
+  // offers is the shelf minus what is already in the cart.
+  const inCartByLine = useMemo(() => {
+    const byLine = new Map<string, number>();
+    for (const line of cart.items) {
+      const key = cartLineKey(line.stockId, line.selectedColor, line.selectedSize);
+      byLine.set(key, (byLine.get(key) || 0) + Math.max(0, line.quantity));
+    }
+    return byLine;
+  }, [cart.items]);
+
+  const inCartByStock = useMemo(() => {
+    const byStock = new Map<string, number>();
+    for (const line of cart.items) {
+      byStock.set(
+        line.stockId,
+        (byStock.get(line.stockId) || 0) + Math.max(0, line.quantity),
+      );
+    }
+    return byStock;
+  }, [cart.items]);
+
+  /** Units of one size still available to add: shelf minus cart. */
+  const availableForSize = (
+    itemId: string,
+    variantId: string,
+    size: string,
+    shelf: number,
+  ) =>
+    Math.max(
+      0,
+      (Number(shelf) || 0) -
+        (inCartByLine.get(cartLineKey(itemId, variantId, size)) || 0),
+    );
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -157,18 +204,19 @@ function OwnerHomeContent() {
     return foundVariant || null;
   };
 
+  /** Sizes of the selected colour, with what is still available to add. */
   const getAvailableSizes = (item: ClothingInventoryItem) => {
     const selectedVariant = getSelectedColorVariant(item);
-    const sizes = selectedVariant?.sizeQuantities || [];
-    console.log(`getAvailableSizes for item ${item.id}:`, {
-      selectedColorId: selectedColors[item.id],
-      selectedVariant,
-      sizeQuantities: selectedVariant?.sizeQuantities,
-      colorVariants: item.colorVariants,
-      returningSizes: sizes,
-      sizesLength: sizes.length,
-    });
-    return sizes;
+    if (!selectedVariant) return [];
+    return (selectedVariant.sizeQuantities || []).map((sizeQty) => ({
+      ...sizeQty,
+      quantity: availableForSize(
+        item.id,
+        selectedVariant.id,
+        sizeQty.size,
+        sizeQty.quantity,
+      ),
+    }));
   };
 
   const getStockForSize = (item: ClothingInventoryItem, size: string) => {
@@ -176,7 +224,8 @@ function OwnerHomeContent() {
     const sizeQty = selectedVariant?.sizeQuantities.find(
       (sq) => sq.size === size,
     );
-    return sizeQty?.quantity || 0;
+    if (!selectedVariant || !sizeQty) return 0;
+    return availableForSize(item.id, selectedVariant.id, size, sizeQty.quantity);
   };
 
   // Helper function to get the current image for an item
@@ -190,15 +239,15 @@ function OwnerHomeContent() {
     );
   };
 
-  // Helper function to get display stock (total or for selected color)
+  // Display stock (whole product, or the selected colour): shelf minus cart.
   const getDisplayStock = (item: ClothingInventoryItem) => {
     const selectedVariant = getSelectedColorVariant(item);
     if (!selectedVariant || !selectedVariant.sizeQuantities) {
-      return item.stock;
+      return availableStockOf(item, inCartByStock);
     }
-    // Calculate total stock for the selected color variant
     return selectedVariant.sizeQuantities.reduce(
-      (total, sq) => total + (sq.quantity || 0),
+      (total, sq) =>
+        total + availableForSize(item.id, selectedVariant.id, sq.size, sq.quantity),
       0,
     );
   };
@@ -243,182 +292,12 @@ function OwnerHomeContent() {
     [],
   );
 
-  const refreshItemFromDatabase = useCallback(
-    async (itemId: string) => {
-      try {
-        const fresh = await StockService.getStockById(itemId);
-        if (fresh) applyFreshVariants(itemId, fresh.colorVariants);
-      } catch (error) {
-        console.error("Failed to refresh stock item:", error);
-      }
-    },
-    [applyFreshVariants],
-  );
-
-  // Function to reduce inventory stock when item is added to cart
-  const reduceInventoryStock = useCallback(
-    async (
-      itemId: string,
-      colorId: string,
-      size: string,
-      quantity: number = 1,
-    ) => {
-      // Update local state immediately for UI responsiveness
-      setClothingInventory((prevInventory) => {
-        return prevInventory.map((item) => {
-          if (item.id === itemId) {
-            return {
-              ...item,
-              colorVariants:
-                item.colorVariants?.map((variant) => {
-                  if (variant.id === colorId) {
-                    return {
-                      ...variant,
-                      sizeQuantities: variant.sizeQuantities.map((sizeQty) => {
-                        if (sizeQty.size === size) {
-                          return {
-                            ...sizeQty,
-                            quantity: Math.max(0, sizeQty.quantity - quantity),
-                          };
-                        }
-                        return sizeQty;
-                      }),
-                    };
-                  }
-                  return variant;
-                }) || [],
-            };
-          }
-          return item;
-        });
-      });
-
-      // Persist as a change, not a snapshot. The transaction subtracts from
-      // whatever the database holds right now, so an online sale or an owner
-      // restock made since this page loaded is kept. It refuses to go below
-      // zero, which is how we find out somebody else got the last one.
-      const item = clothingInventory.find((entry) => entry.id === itemId);
-      const variant = item?.colorVariants?.find((v) => v.id === colorId);
-
-      try {
-        const result = await StockService.adjustStock(itemId, [
-          {
-            variantId: colorId,
-            color: variant?.color,
-            size,
-            delta: -quantity,
-            label: item?.name,
-          },
-        ]);
-        applyFreshVariants(itemId, result.colorVariants);
-        return true;
-      } catch (error) {
-        if (isStockAdjustmentError(error) && error.code === "insufficient_stock") {
-          const available = Number(error.details.available ?? 0);
-          toast.error(
-            `Only ${available} left of ${item?.name || "this item"} (${[
-              variant?.color,
-              size,
-            ]
-              .filter(Boolean)
-              .join(" / ")}). It may have just sold online or at another till.`,
-            { duration: 5000 },
-          );
-          await refreshItemFromDatabase(itemId);
-          return false;
-        }
-
-        // Anything else (network, permissions, mock mode) keeps the previous
-        // behaviour: log it and leave the optimistic update in place.
-        console.error("Error updating stock in database:", error);
-        return true;
-      }
-    },
-    [clothingInventory, applyFreshVariants, refreshItemFromDatabase],
-  );
-
-  // Function to restore inventory stock when item is removed from cart
-  const restoreInventoryStock = useCallback(
-    async (
-      itemId: string,
-      colorId: string,
-      size: string,
-      quantity: number = 1,
-    ) => {
-      // Update local state immediately for UI responsiveness
-      setClothingInventory((prevInventory) => {
-        return prevInventory.map((item) => {
-          if (item.id === itemId) {
-            return {
-              ...item,
-              colorVariants:
-                item.colorVariants?.map((variant) => {
-                  if (variant.id === colorId) {
-                    return {
-                      ...variant,
-                      sizeQuantities: variant.sizeQuantities.map((sizeQty) => {
-                        if (sizeQty.size === size) {
-                          return {
-                            ...sizeQty,
-                            quantity: sizeQty.quantity + quantity,
-                          };
-                        }
-                        return sizeQty;
-                      }),
-                    };
-                  }
-                  return variant;
-                }) || [],
-            };
-          }
-          return item;
-        });
-      });
-
-      // Persist as a change against the live document (see reduceInventoryStock).
-      const item = clothingInventory.find((entry) => entry.id === itemId);
-      const variant = item?.colorVariants?.find((v) => v.id === colorId);
-
-      try {
-        const result = await StockService.adjustStock(
-          itemId,
-          [
-            {
-              variantId: colorId,
-              color: variant?.color,
-              size,
-              delta: quantity,
-              label: item?.name,
-            },
-          ],
-          { allowAddSize: true },
-        );
-        applyFreshVariants(itemId, result.colorVariants);
-      } catch (error) {
-        console.error("Error updating stock in database:", error);
-        // Keep the optimistic update, as before.
-      }
-    },
-    [clothingInventory, applyFreshVariants],
-  );
-
-  // Function to check available stock for a specific item, color, and size
-  const checkInventoryStock = useCallback(
-    (itemId: string, colorId: string, size: string): number => {
-      const item = clothingInventory.find((item) => item.id === itemId);
-      if (!item) return 0;
-
-      const colorVariant = item.colorVariants?.find(
-        (variant) => variant.id === colorId,
-      );
-      if (!colorVariant) return 0;
-
-      const sizeQuantity = colorVariant.sizeQuantities.find(
-        (sizeQty) => sizeQty.size === size,
-      );
-      return sizeQuantity?.quantity || 0;
-    },
-    [clothingInventory],
+  // Every fresh read the cart makes (the check when adding or raising a
+  // quantity, and the sold products right after a sale) updates the numbers
+  // shown here. The cart itself no longer changes stock.
+  useEffect(
+    () => subscribeToStockReads(applyFreshVariants),
+    [subscribeToStockReads, applyFreshVariants],
   );
 
   // Transform stock data to clothing inventory format
@@ -688,139 +567,6 @@ function OwnerHomeContent() {
     });
   }, [clothingInventory]);
 
-  // Set up inventory callbacks for cart operations (run once)
-  useEffect(() => {
-    if (setInventoryCallbacks) {
-      setInventoryCallbacks({
-        reduceStock: (
-          stockId: string,
-          color: string,
-          size: string,
-          quantity: number,
-        ) => {
-          console.debug("inventory.reduceStock called", {
-            stockId,
-            color,
-            size,
-            quantity,
-          });
-          // Find the color variant either by id or by color name (case-insensitive)
-          const item = clothingInventory.find((item) => item.id === stockId);
-          if (!item) return;
-
-          let colorVariant = item.colorVariants?.find(
-            (variant) => variant.id === color,
-          );
-
-          if (!colorVariant) {
-            colorVariant = item.colorVariants?.find(
-              (variant) => variant.color.toLowerCase() === color.toLowerCase(),
-            );
-          }
-
-          if (colorVariant) {
-            console.debug("inventory.reduceStock found variant", {
-              colorVariantId: colorVariant.id,
-              colorVariantName: colorVariant.color,
-            });
-            // Resolves to false when the database had too few left; the cart
-            // then takes the line back out.
-            return reduceInventoryStock(stockId, colorVariant.id, size, quantity);
-          } else {
-            console.warn("Color variant not found:", {
-              stockId,
-              color,
-              availableVariants: item?.colorVariants,
-            });
-          }
-        },
-        restoreStock: (
-          stockId: string,
-          color: string,
-          size: string,
-          quantity: number,
-        ) => {
-          console.debug("inventory.restoreStock called", {
-            stockId,
-            color,
-            size,
-            quantity,
-          });
-          // Find the color variant either by id or by color name (case-insensitive)
-          const item = clothingInventory.find((item) => item.id === stockId);
-          if (!item) return;
-
-          let colorVariant = item.colorVariants?.find(
-            (variant) => variant.id === color,
-          );
-
-          if (!colorVariant) {
-            colorVariant = item.colorVariants?.find(
-              (variant) => variant.color.toLowerCase() === color.toLowerCase(),
-            );
-          }
-
-          if (colorVariant) {
-            console.debug("inventory.restoreStock found variant", {
-              colorVariantId: colorVariant.id,
-              colorVariantName: colorVariant.color,
-            });
-            return restoreInventoryStock(stockId, colorVariant.id, size, quantity);
-          } else {
-            console.warn("Color variant not found:", {
-              stockId,
-              color,
-              availableVariants: item?.colorVariants,
-            });
-          }
-        },
-        checkStock: (stockId: string, color: string, size: string) => {
-          console.debug("inventory.checkStock called", {
-            stockId,
-            color,
-            size,
-          });
-          // Find the color variant either by id or by color name (case-insensitive)
-          const item = clothingInventory.find((item) => item.id === stockId);
-          if (!item) return 0;
-
-          let colorVariant = item.colorVariants?.find(
-            (variant) => variant.id === color,
-          );
-
-          if (!colorVariant) {
-            colorVariant = item.colorVariants?.find(
-              (variant) => variant.color.toLowerCase() === color.toLowerCase(),
-            );
-          }
-
-          if (colorVariant) {
-            const qty = checkInventoryStock(stockId, colorVariant.id, size);
-            console.debug("inventory.checkStock found variant", {
-              colorVariantId: colorVariant.id,
-              colorVariantName: colorVariant.color,
-              qty,
-            });
-            return qty;
-          } else {
-            console.warn("Color variant not found for stock check:", {
-              stockId,
-              color,
-              availableVariants: item?.colorVariants,
-            });
-            return 0;
-          }
-        },
-      });
-    }
-  }, [
-    clothingInventory,
-    checkInventoryStock,
-    reduceInventoryStock,
-    restoreInventoryStock,
-    setInventoryCallbacks,
-  ]); // Include all dependencies
-
   // Search and pagination state
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -871,19 +617,12 @@ function OwnerHomeContent() {
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
 
-      // Get current branch from settings and filter by it
-      const currentBranch = businessSettings?.currentBranch || "Main Branch";
-
-      // Find shop by name to get its ID, or match directly
-      const currentShop = shops.find((s) => s.name === currentBranch);
-      const currentShopId = currentShop?.id;
-
-      // Match if item.shop equals currentBranch name OR currentShop ID
-      const matchesShop =
-        item.shop === currentBranch || // Match by name
-        item.shop === currentShopId || // Match by ID
-        (!item.shop && currentBranch === "Main Branch") ||
-        (item.shop === "" && currentBranch === "Main Branch");
+      // This cashier's branch, matched by shop id first; legacy rows that
+      // stored a branch name (current or former) or nothing at all ("Main
+      // Branch") still match. Renaming a shop no longer hides its stock.
+      const matchesShop = matchesBranch(item, currentBranchRef, {
+        unassignedBranchName: LEGACY_UNASSIGNED_BRANCH_NAME,
+      });
 
       // Category filter
       const matchesCategory =
@@ -891,15 +630,16 @@ function OwnerHomeContent() {
         (item.category &&
           item.category.toLowerCase() === selectedCategory.toLowerCase());
 
-      // Stock status filter
+      // Stock status filter, on what is still available (shelf minus cart).
       // Treat "in-stock" as any positive stock (includes low-stock)
+      const available = availableStockOf(item, inCartByStock);
       const matchesStockStatus =
         selectedStockStatus === "all" ||
-        (selectedStockStatus === "in-stock" && item.stock > 0) ||
+        (selectedStockStatus === "in-stock" && available > 0) ||
         (selectedStockStatus === "low-stock" &&
-          item.stock > 0 &&
-          item.stock <= 10) ||
-        (selectedStockStatus === "out-of-stock" && item.stock === 0);
+          available > 0 &&
+          available <= 10) ||
+        (selectedStockStatus === "out-of-stock" && available === 0);
 
       // Price range filter
       const matchesPriceRange =
@@ -917,15 +657,17 @@ function OwnerHomeContent() {
 
     // Sort items: in-stock items first, out-of-stock items last
     return filtered.sort((a, b) => {
-      if (a.stock === 0 && b.stock > 0) return 1; // a is out of stock, move to end
-      if (a.stock > 0 && b.stock === 0) return -1; // b is out of stock, move to end
+      const aStock = availableStockOf(a, inCartByStock);
+      const bStock = availableStockOf(b, inCartByStock);
+      if (aStock === 0 && bStock > 0) return 1; // a is out of stock, move to end
+      if (aStock > 0 && bStock === 0) return -1; // b is out of stock, move to end
       return 0; // maintain original order for items with same stock status
     });
   }, [
     displayInventory,
+    inCartByStock,
     searchTerm,
-    businessSettings?.currentBranch,
-    shops,
+    currentBranchRef,
     selectedCategory,
     selectedStockStatus,
     priceRange.min,
@@ -964,14 +706,20 @@ function OwnerHomeContent() {
         return;
       }
 
-      // Check if selected size has stock
+      // Quick check on the numbers shown (shelf minus cart). addToCart checks
+      // again against a fresh read, and the sale itself is the final word.
       const stockForSize = getStockForSize(item, selectedSize);
       if (stockForSize === 0) {
-        toast.error("Selected size is out of stock");
+        toast.error(
+          inCartByLine.get(cartLineKey(item.id, selectedVariant.id, selectedSize))
+            ? "All of this size in stock is already in the cart"
+            : "Selected size is out of stock",
+        );
         return;
       }
 
-      addToCart({
+      // Nothing is taken from stock here; the sale does that.
+      void addToCart({
         stockId: item.id,
         groupName: item.name,
         unitPrice: item.price,
@@ -984,13 +732,6 @@ function OwnerHomeContent() {
         shop: item.shop,
         wholesaleTiers: item.wholesaleTiers,
       });
-
-      // Inventory reduction will be handled by CartContext through callbacks
-
-      // Optional: Show success message
-      console.log(
-        `Added ${item.name} (${selectedVariant.color}, ${selectedSize}) to cart - Stock reduced`,
-      );
     } catch (error) {
       console.error("Error adding item to cart:", error);
     }

@@ -12,6 +12,12 @@ export interface Shop {
    * chatbot when it is asked about opening hours.
    */
   openingHours?: string;
+  /**
+   * Names this shop had before being renamed, oldest first. Maintained by the
+   * server on rename (never accepted from clients) so legacy records that only
+   * stored a branch *name* still match the shop. See src/lib/branch.ts.
+   */
+  formerNames?: string[];
   status: 'active' | 'inactive';
   createdAt: string;
   updatedAt: string;

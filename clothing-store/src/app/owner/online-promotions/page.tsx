@@ -10,6 +10,11 @@ import { ShopService } from "@/services/shopService";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
+  LEGACY_UNASSIGNED_BRANCH_NAME,
+  findBranchById,
+  matchesBranch,
+} from "@/lib/branch";
+import {
   onlinePromotionService,
   OnlinePromotion,
   PromotionDiscountType,
@@ -47,7 +52,7 @@ function formatDate(value?: string): string {
 
 function OnlinePromotionsContent() {
   const permissions = usePermissions();
-  const { currentBranch } = useSettings();
+  const { branch: currentBranch, branches } = useSettings();
   const { t } = useLanguage();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -104,12 +109,17 @@ function OnlinePromotionsContent() {
   const branchProducts = useMemo(() => {
     if (!branchId) return [];
 
-    return products.filter((product) => {
-      if (product.shop === branchId) return true;
-      if (selectedBranchName && product.shop === selectedBranchName) return true;
-      return !product.shop && selectedBranchName === "Main Branch";
-    });
-  }, [products, branchId, selectedBranchName]);
+    // Includes former names, so stock saved under a branch's old name stays.
+    const branch = findBranchById(branches, branchId) || {
+      id: branchId,
+      name: selectedBranchName,
+    };
+    return products.filter((product) =>
+      matchesBranch(product, branch, {
+        unassignedBranchName: LEGACY_UNASSIGNED_BRANCH_NAME,
+      }),
+    );
+  }, [products, branchId, selectedBranchName, branches]);
 
   const selectedProduct = useMemo(
     () => branchProducts.find((p) => p.id === productId),
@@ -151,18 +161,17 @@ function OnlinePromotionsContent() {
   }, []);
 
   /**
-   * Default the branch to the one selected in the top bar.
-   *
-   * That selection is a branch *name*, so it is resolved to a shop id here. Only
-   * applied while the field is untouched, so it never overrides a deliberate
-   * choice mid-edit.
+   * Default the branch to the one selected in the top bar (already a shop id
+   * in the settings context). Only applied while the field is untouched, so
+   * it never overrides a deliberate choice mid-edit.
    */
   useEffect(() => {
-    if (branchId || shops.length === 0 || !currentBranch) return;
+    if (branchId || shops.length === 0 || !currentBranch.id) return;
 
-    const match = shops.find((shop) => shop.name === currentBranch);
-    if (match) setBranchId(match.id);
-  }, [branchId, shops, currentBranch]);
+    if (shops.some((shop) => shop.id === currentBranch.id)) {
+      setBranchId(currentBranch.id);
+    }
+  }, [branchId, shops, currentBranch.id]);
 
   /** Changing branch invalidates the product and variant chosen under it. */
   const handleBranchSelect = (nextBranchId: string) => {

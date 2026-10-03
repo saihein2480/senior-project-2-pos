@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { OWNER_ONLY } from "@/config/rolePermissions";
 import {
   handleRouteError,
@@ -11,9 +12,61 @@ import {
   listStaff,
   updateStaff,
 } from "@/server/staffAdmin";
+import { parseJson, parseQuery } from "@/server/validation";
 
 // Doc: every Staff Management action (view list, add, edit, change role,
 // delete) is Owner only.
+
+const MISSING_FIELDS = "Missing required fields";
+const STAFF_ROLES = ["staff", "manager"] as const;
+
+/**
+ * POST body. Presence of all four fields is checked before the password
+ * length and the role, so a half-filled form keeps getting "Missing required
+ * fields" first, as it always has. Email and display name are trimmed; the
+ * password is taken as typed.
+ */
+const createStaffSchema = z
+  .object(
+    {
+      email: z.string({ error: MISSING_FIELDS }).trim().min(1, MISSING_FIELDS),
+      password: z.string({ error: MISSING_FIELDS }).min(1, MISSING_FIELDS),
+      displayName: z
+        .string({ error: MISSING_FIELDS })
+        .trim()
+        .min(1, MISSING_FIELDS),
+      role: z.string({ error: MISSING_FIELDS }).min(1, MISSING_FIELDS),
+    },
+    { error: MISSING_FIELDS },
+  )
+  .pipe(
+    z.object({
+      email: z.string(),
+      password: z
+        .string()
+        .min(6, "Password must be at least 6 characters"),
+      displayName: z.string(),
+      role: z.enum(STAFF_ROLES, { error: "Invalid role" }),
+    }),
+  );
+
+/** PUT body: the fields updateStaff accepts, with its messages. */
+const updateStaffSchema = z.object({
+  displayName: z
+    .string({ error: "displayName must be a non-empty string" })
+    .trim()
+    .min(1, "displayName must be a non-empty string")
+    .optional(),
+  isActive: z.boolean({ error: "isActive must be a boolean" }).optional(),
+  currentBranch: z
+    .string({ error: "currentBranch must be a string" })
+    .optional(),
+  role: z.enum(STAFF_ROLES, { error: "Invalid role" }).optional(),
+});
+
+const staffIdQuerySchema = z.object({
+  id: z.string({ error: "ID is required" }).min(1, "ID is required"),
+});
 
 export async function GET(request: NextRequest) {
   const auth = await requireRole(request, OWNER_ONLY);
@@ -32,42 +85,11 @@ export async function POST(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    const { email, password, displayName, role } = (body ?? {}) as Record<
-      string,
-      unknown
-    >;
+    const input = await parseJson(request, createStaffSchema, {
+      invalidBodyMessage: MISSING_FIELDS,
+    });
 
-    if (
-      typeof email !== "string" ||
-      typeof password !== "string" ||
-      typeof displayName !== "string" ||
-      typeof role !== "string" ||
-      !email.trim() ||
-      !password ||
-      !displayName.trim() ||
-      !role
-    ) {
-      return jsonError(400, "Missing required fields");
-    }
-
-    if (password.length < 6) {
-      return jsonError(400, "Password must be at least 6 characters");
-    }
-
-    if (role !== "staff" && role !== "manager") {
-      return jsonError(400, "Invalid role");
-    }
-
-    const staffMember = await createStaff(
-      {
-        email: email.trim(),
-        password,
-        displayName: displayName.trim(),
-        role,
-      },
-      auth.caller.uid,
-    );
+    const staffMember = await createStaff(input, auth.caller.uid);
 
     return NextResponse.json({ success: true, data: staffMember });
   } catch (error) {
@@ -84,18 +106,11 @@ export async function PUT(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const { id } = parseQuery(request, staffIdQuerySchema);
+    const body = await parseJson(request, updateStaffSchema);
 
-    if (!id) {
-      return jsonError(400, "ID is required");
-    }
-
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
-
+    // updateStaff applies the same whitelist and answers "No editable
+    // fields provided" when nothing above was sent.
     const updated = await updateStaff(id, body);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {

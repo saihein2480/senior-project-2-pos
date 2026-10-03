@@ -7,7 +7,7 @@ import { TopNavBar } from "@/components/ui/TopNavBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
-import { transactionService, Transaction } from "@/services/transactionService";
+import { transactionService, Transaction, type InspectionLine } from "@/services/transactionService";
 import { 
   RotateCcw, 
   CheckCircle, 
@@ -22,6 +22,10 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
+
+/** Message to show for a failed action (wrappers throw with the server's reason). */
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Unknown error";
 
 function RefundRequestsContent() {
   const { user } = useAuth();
@@ -114,22 +118,13 @@ function RefundRequestsContent() {
     setProcessing(transaction.id);
     
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
-      const refundRequest = (transaction as any).refundRequest;
-      
-      await updateDoc(doc(db!, "transactions", transaction.id), {
-        refundRequest: {
-          ...refundRequest,
-          status: "approved",
-          approvedAt: new Date().toISOString(),
-          approvedBy: user?.email || "Owner",
-        },
-      });
+      // Server sets refundRequest.status "approved" / approvedAt / approvedBy.
+      await transactionService.approveRefundRequest(transaction.id);
       
       toast.success("Return request approved! Customer can now bring items to store.");
     } catch (error) {
       console.error("Error approving return:", error);
-      toast.error("Failed to approve return");
+      toast.error(`Failed to approve return: ${errorMessage(error)}`);
     } finally {
       setProcessing(null);
     }
@@ -156,6 +151,11 @@ function RefundRequestsContent() {
       // Step 3: After return received, do inspection
       if (refundReq.returnReceived && !refundReq.inspectionCompleted) {
         setSelectedRequest(transaction);
+        // Keep the status recorded when the items were received; otherwise the
+        // default "fully_returned" would overwrite a "partially_returned" mark.
+        setReturnStatus(
+          refundReq.returnStatus === "partially_returned" ? "partially_returned" : "fully_returned",
+        );
         
         // Initialize inspection results if not set
         const requestedItems = refundReq.items || [];
@@ -229,24 +229,29 @@ function RefundRequestsContent() {
         });
       }
       
-      // Process the refund
-      await transactionService.processRefund(
-        selectedRequest.id,
-        refundItems,
-        selectedRequest,
-        (selectedRequest as any).refundRequest?.reason || "Customer requested refund",
-        user?.email || "Owner",
-        undefined, // refundMethod is set later during payment confirmation
-        inspectionResultsForRefund // Pass inspection results
-      );
+      const isCancelledOrder = (selectedRequest.status || "").toLowerCase() === "cancelled";
       
-      // Update refund request status
-      const { doc, updateDoc } = await import("firebase/firestore");
-      await updateDoc(doc(db!, "transactions", selectedRequest.id), {
-        "refundRequest.status": "approved",
-        "refundRequest.approvedAt": new Date().toISOString(),
-        "refundRequest.approvedBy": user?.email || "Owner",
-      });
+      if (refundReq?.type === "cancellation" && isCancelledOrder) {
+        // Cancelled order with a refund request: processRefund refuses cancelled
+        // orders, so approve the request instead. The server records the pending
+        // cancellation refund (total − already refunded) and approves the request
+        // in one transaction.
+        await transactionService.approveRefundRequest(selectedRequest.id);
+      } else {
+        // Process the refund and approve the pending refund request in the same
+        // server transaction.
+        await transactionService.processRefund(
+          selectedRequest.id,
+          refundItems,
+          selectedRequest,
+          refundReq?.reason || "Customer requested refund",
+          user?.email || "Owner",
+          undefined, // refundMethod is set later during payment confirmation
+          inspectionResultsForRefund, // Pass inspection results
+          undefined, // returnStatus
+          { approveRefundRequest: true },
+        );
+      }
       
       if (isPaidOrder) {
         toast.success("Refund processed! Please confirm payment to customer.");
@@ -303,7 +308,7 @@ function RefundRequestsContent() {
       setSelectedRefundStatus("refunded"); // Reset to default
     } catch (error) {
       console.error("Error confirming refund payment:", error);
-      toast.error("Failed to confirm refund payment");
+      toast.error(`Failed to confirm refund payment: ${errorMessage(error)}`);
     } finally {
       setIsConfirmingPayment(false);
     }
@@ -315,30 +320,12 @@ function RefundRequestsContent() {
     setProcessing(selectedRequest.id);
     
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
       const refundRequest = (selectedRequest as any).refundRequest;
       
-      // Update transaction with return received status AND order status based on selected return status
-      await updateDoc(doc(db!, "transactions", selectedRequest.id), {
-        refundRequest: {
-          ...refundRequest,
-          returnReceived: true,
-          returnReceivedAt: new Date().toISOString(),
-          returnReceivedBy: user?.email || "Owner",
-          returnStatus: returnStatus, // Save the selected return status
-        },
-        orderStatus: returnStatus, // Update order status immediately (fully_returned or partially_returned)
-      });
-      
-      // Also update onlineOrders collection if this is an online order
-      if (selectedRequest.onlineOrderId) {
-        const onlineOrderRef = doc(db!, "onlineOrders", selectedRequest.onlineOrderId);
-        await updateDoc(onlineOrderRef, {
-          status: returnStatus, // Update status in onlineOrders collection
-          orderStatus: returnStatus,
-          lastUpdated: new Date().toISOString(),
-        });
-      }
+      // Server sets refundRequest.returnReceived/At/By + returnStatus, sets
+      // orderStatus to the selected return status (fully_returned or
+      // partially_returned) and mirrors it to the linked onlineOrders doc.
+      await transactionService.markReturnReceived(selectedRequest.id, returnStatus);
       
       toast.success(`Items marked as ${returnStatus === "fully_returned" ? "fully" : "partially"} returned. Please proceed with inspection.`);
       setShowReturnReceivedModal(false);
@@ -360,7 +347,7 @@ function RefundRequestsContent() {
       }, 500);
     } catch (error) {
       console.error("Error marking return received:", error);
-      toast.error("Failed to mark return received");
+      toast.error(`Failed to mark return received: ${errorMessage(error)}`);
     } finally {
       setProcessing(null);
     }
@@ -388,287 +375,57 @@ function RefundRequestsContent() {
     setProcessing(selectedRequest.id);
     
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
-      
-      // Build inspection results array
-      const itemInspectionResults = Object.entries(inspectionResults).map(([itemIndex, status]) => ({
-        itemIndex: parseInt(itemIndex),
-        status,
-        inspectedAt: new Date().toISOString(),
-      }));
-      
-      // Create the refund items based on inspection
-      const refundItems: { [key: string]: number } = {};
+      // One line per inspected item: the requested (returned) quantity and the
+      // inspection result for that line.
+      const lines: InspectionLine[] = [];
       selectedRequest.items.forEach((item, index) => {
         const requestedItem = requestedItems.find(
           (ri: any) => ri.id === item.id || ri.groupName === item.groupName
         );
+        const inspection = inspectionResults[index];
         
-        if (requestedItem && requestedItem.quantity > 0) {
-          const key = `${item.id || item.groupName}___${index}`;
-          refundItems[key] = requestedItem.quantity;
-          console.log(`Adding refund item: ${key} = ${requestedItem.quantity}`);
+        if (requestedItem && requestedItem.quantity > 0 && inspection) {
+          lines.push({
+            lineIndex: index,
+            quantity: requestedItem.quantity,
+            result: inspection,
+            damageReason: damageReasons[index] || undefined,
+          });
         }
       });
       
-      console.log("Refund items prepared:", refundItems);
+      console.log("Inspection lines prepared:", lines);
       
       // Validate we have items to refund
-      if (Object.keys(refundItems).length === 0) {
+      if (lines.length === 0) {
         throw new Error("No items to refund. Check item matching logic.");
       }
       
-      // Process the refund immediately (creates pending refund for paid orders)
-      // COD orders are considered "paid" once delivered (customer paid cash on delivery)
-      // Also consider orders that are already marked as fully_returned or partially_returned
-      // IMPORTANT: We're in the inspection phase, which means items were already marked as returned
-      const refundReq = (selectedRequest as any).refundRequest;
-      const isReturnTypeRefund = refundReq?.type === "return" && refundReq?.returnReceived;
-      
-      // Normalize payment method and status for comparison (case-insensitive)
-      const paymentMethodLower = (selectedRequest.paymentMethod || "").toLowerCase();
-      const deliveryStatusLower = (selectedRequest.deliveryStatus || "").toLowerCase();
-      const orderStatusLower = (selectedRequest.orderStatus || "").toLowerCase();
-      
-      console.log("Checking if order is paid:", {
-        paymentMethod: selectedRequest.paymentMethod,
-        paymentMethodLower,
-        deliveryStatus: selectedRequest.deliveryStatus,
-        deliveryStatusLower,
-        orderStatus: selectedRequest.orderStatus,
-        orderStatusLower,
-        isReturnTypeRefund,
-        refundReqType: refundReq?.type,
-        returnReceived: refundReq?.returnReceived,
-      });
-      
-      const isPaidOrder = paymentMethodLower === "cash" || 
-                          paymentMethodLower === "scan" || 
-                          paymentMethodLower === "wallet" ||
-                          isReturnTypeRefund || // If it's a return type and items were received, it must be paid/delivered
-                          (paymentMethodLower === "cod" && 
-                           (deliveryStatusLower === "delivered" || 
-                            orderStatusLower === "delivered" ||
-                            orderStatusLower === "fully_returned" ||
-                            orderStatusLower === "partially_returned"));
-      
-      console.log("isPaidOrder result:", isPaidOrder);
-      
-      if (!isPaidOrder) {
-        const isCODNotDelivered = paymentMethodLower === "cod" && 
-                                   deliveryStatusLower !== "delivered" &&
-                                   orderStatusLower !== "delivered" &&
-                                   orderStatusLower !== "fully_returned" &&
-                                   orderStatusLower !== "partially_returned" &&
-                                   !isReturnTypeRefund;
-        const errorMessage = isCODNotDelivered 
-          ? "COD order has not been delivered yet. Customer has not paid. Cannot process return refund."
-          : "This order was not paid yet. Cannot process return refund.";
-        
-        console.error("Payment check failed:", {
-          isCODNotDelivered,
-          errorMessage,
-          paymentMethod: selectedRequest.paymentMethod,
-          paymentMethodLower,
-          deliveryStatus: selectedRequest.deliveryStatus,
-          deliveryStatusLower,
-          orderStatus: selectedRequest.orderStatus,
-          orderStatusLower,
-        });
-        
-        toast.error(errorMessage);
-        setProcessing(null);
-        return;
-      }
-      
-      // Convert inspection results to the format expected by processRefund
-      const inspectionResultsForRefund: { [itemIndex: number]: "accepted" | "damaged" } = {};
-      itemInspectionResults.forEach((result) => {
-        inspectionResultsForRefund[result.itemIndex] = result.status as "accepted" | "damaged";
-      });
-      
-      // **NEW LOGIC: Check if ALL items are damaged**
-      const allDamaged = itemInspectionResults.every(result => result.status === "damaged");
-      const hasAcceptedItems = itemInspectionResults.some(result => result.status === "accepted");
-      
-      console.log("Inspection analysis:", {
-        allDamaged,
-        hasAcceptedItems,
-        inspectionResults: inspectionResultsForRefund,
-      });
-      
-      // STEP 1: Confirm return status (updates ONLY orderStatus, NOT payment status)
-      await transactionService.confirmReturnStatus(
-        selectedRequest.id,
+      // ONE server transaction: confirms the return status, records the
+      // inspection results, restocks accepted units / writes off damaged ones,
+      // and either rejects the refund (all damaged) or creates a pending refund
+      // for the accepted units only. The server also refuses unpaid orders,
+      // mirrors the online order's payment status and writes the owner and
+      // customer notification docs.
+      const result = await transactionService.completeReturnInspection(selectedRequest.id, {
+        lines,
         returnStatus, // "fully_returned" or "partially_returned"
-        user?.email || "Owner"
-      );
+      });
       
-      if (allDamaged) {
-        // **SCENARIO: ALL ITEMS ARE DAMAGED - NO REFUND (REJECTED)**
-        console.log("All items damaged - marking as refund rejected");
-        
-        // Update transaction with inspection results and refund_rejected status
-        await updateDoc(doc(db!, "transactions", selectedRequest.id), {
-          "refundRequest.inspectionCompleted": true,
-          "refundRequest.itemInspectionResults": itemInspectionResults,
-          "refundRequest.inspectedBy": user?.email || "Owner",
-          "refundRequest.inspectedAt": new Date().toISOString(),
-          "refundRequest.status": "completed_no_refund", // Mark as completed but no refund
-          "paymentStatus": "refund_rejected", // Changed from "no_refund_needed" to "refund_rejected"
-          "status": "refund_rejected",
-        });
-        
-        // Also update onlineOrders collection
-        if (selectedRequest.onlineOrderId) {
-          const onlineOrderRef = doc(db!, "onlineOrders", selectedRequest.onlineOrderId);
-          await updateDoc(onlineOrderRef, {
-            paymentStatus: "refund_rejected",
-            lastUpdated: new Date().toISOString(),
-          });
-        }
-        
-        // Create notification for customer
-        if (selectedRequest.customer?.uid) {
-          const { addDoc, collection: firestoreCollection, serverTimestamp } = await import("firebase/firestore");
-          
-          const notificationData: any = {
-            userId: selectedRequest.customer.uid,
-            type: "refund_rejected",
-            title: "Refund Rejected",
-            message: `Sorry, your return for order ${selectedRequest.transactionId} cannot be refunded. All returned items were damaged and not in resellable condition.`,
-            orderId: selectedRequest.transactionId,
-            transactionId: selectedRequest.id,
-            read: false,
-            createdAt: serverTimestamp(),
-          };
-          
-          // Only add optional fields if they have values
-          if (selectedRequest.onlineOrderId) {
-            notificationData.onlineOrderId = selectedRequest.onlineOrderId;
-          }
-          if (selectedRequest.shopId) {
-            notificationData.branchId = selectedRequest.shopId;
-          }
-          
-          await addDoc(firestoreCollection(db!, "notifications"), notificationData);
-        }
-        
+      if (result.outcome === "refund_rejected") {
+        // All items damaged: no refund. The server set status/paymentStatus
+        // "refund_rejected", refundRequest.status "completed_no_refund" and
+        // wrote the customer `refund_rejected` notification.
         toast.success("Inspection complete! All items damaged - refund rejected. Customer notification sent.");
       } else {
-        // **SCENARIO: HAS ACCEPTED ITEMS - CREATE PENDING REFUND**
-        console.log("Has accepted items - creating pending refund for accepted items only");
-        
-        // Filter refund items to include ONLY accepted items
-        const acceptedRefundItems: { [key: string]: number } = {};
-        Object.entries(refundItems).forEach(([key, quantity]) => {
-          const [, indexStr] = key.split("___");
-          const itemIndex = parseInt(indexStr);
-          
-          if (inspectionResultsForRefund[itemIndex] === "accepted") {
-            acceptedRefundItems[key] = quantity;
-            console.log(`Including accepted item for refund: ${key} = ${quantity}`);
-          } else {
-            console.log(`Excluding damaged item from refund: ${key}`);
-          }
-        });
-        
-        if (Object.keys(acceptedRefundItems).length === 0) {
-          throw new Error("Logic error: hasAcceptedItems is true but no accepted items found");
-        }
-        
-        // Update transaction with inspection results and pending_refund status
-        await updateDoc(doc(db!, "transactions", selectedRequest.id), {
-          "refundRequest.inspectionCompleted": true,
-          "refundRequest.itemInspectionResults": itemInspectionResults,
-          "refundRequest.inspectedBy": user?.email || "Owner",
-          "refundRequest.inspectedAt": new Date().toISOString(),
-          "refundRequest.status": "completed", // Mark return request as completed
-          "paymentStatus": "pending_refund", // Update payment status to pending_refund
-        });
-        
-        // Also update onlineOrders collection payment status
-        if (selectedRequest.onlineOrderId) {
-          const onlineOrderRef = doc(db!, "onlineOrders", selectedRequest.onlineOrderId);
-          await updateDoc(onlineOrderRef, {
-            paymentStatus: "pending_refund",
-            lastUpdated: new Date().toISOString(),
-          });
-        }
-
-        // Create an owner-facing notification for the pending refund payment
-        try {
-          const { addDoc, collection: firestoreCollection, serverTimestamp } = await import("firebase/firestore");
-          await addDoc(firestoreCollection(db!, "notifications"), {
-            type: "refund_payment",
-            title: "Refund Payment Pending",
-            message: `Refund payment pending for order #${selectedRequest.transactionId}`,
-            link: "/owner/requests/pending-refunds",
-            metadata: {
-              transactionId: selectedRequest.id,
-              orderId: selectedRequest.transactionId,
-            },
-            read: false,
-            createdAt: serverTimestamp(),
-          });
-        } catch (notifError) {
-          console.error("Error creating owner notification for pending refund payment:", notifError);
-        }
-        
-        // Get fresh transaction data
-        const { getDoc } = await import("firebase/firestore");
-        const transactionRef = doc(db!, "transactions", selectedRequest.id);
-        const updatedTransactionDoc = await getDoc(transactionRef);
-        
-        if (!updatedTransactionDoc.exists()) {
-          throw new Error("Transaction not found after inspection update");
-        }
-        
-        const updatedTransaction = {
-          ...updatedTransactionDoc.data(),
-          id: updatedTransactionDoc.id,
-        } as Transaction;
-        
-        // Process refund ONLY for accepted items
-        await transactionService.processRefund(
-          selectedRequest.id,
-          acceptedRefundItems, // ✅ Only accepted items
-          updatedTransaction,
-          refundReq.reason || "Customer return request",
-          user?.email || "Owner",
-          undefined, // refundMethod will be set during payment confirmation
-          inspectionResultsForRefund, // Pass all inspection results for inventory logic
-          undefined // Do NOT pass returnStatus here - we already set orderStatus above
-        );
-        
-        const damagedCount = itemInspectionResults.filter(r => r.status === "damaged").length;
-        const acceptedCount = itemInspectionResults.filter(r => r.status === "accepted").length;
-        
-        // Create notification for customer if there are damaged items
-        if (damagedCount > 0 && selectedRequest.customer?.uid) {
-          const { addDoc, collection: firestoreCollection, serverTimestamp } = await import("firebase/firestore");
-          
-          const notificationData: any = {
-            userId: selectedRequest.customer.uid,
-            type: "partial_refund_with_damaged_items",
-            title: "Partial Refund",
-            message: `Your return for order ${selectedRequest.transactionId}:\n\n✅ ${acceptedCount} item(s) accepted - Refund approved\n❌ ${damagedCount} item(s) damaged - No refund\n\nOnly accepted items will be refunded.`,
-            orderId: selectedRequest.transactionId,
-            transactionId: selectedRequest.id,
-            read: false,
-            createdAt: serverTimestamp(),
-          };
-          
-          // Only add optional fields if they have values
-          if (selectedRequest.onlineOrderId) {
-            notificationData.onlineOrderId = selectedRequest.onlineOrderId;
-          }
-          if (selectedRequest.shopId) {
-            notificationData.branchId = selectedRequest.shopId;
-          }
-          
-          await addDoc(firestoreCollection(db!, "notifications"), notificationData);
-        }
+        // Some items accepted: the server created a pending refund for the
+        // accepted units only (paymentStatus "pending_refund"), wrote the owner
+        // `refund_payment` notification and, if any were damaged, the customer
+        // `partial_refund_with_damaged_items` notification.
+        const acceptedCount =
+          result.acceptedCount ?? lines.filter((line) => line.result === "accepted").length;
+        const damagedCount =
+          result.damagedCount ?? lines.filter((line) => line.result === "damaged").length;
         
         toast.success(`Inspection complete! ${acceptedCount} accepted item(s) will be refunded. ${damagedCount} damaged item(s) excluded. ${damagedCount > 0 ? "Customer notification sent. " : ""}Go to 'Pending Refund Payments' to process payment.`);
       }
@@ -708,23 +465,14 @@ function RefundRequestsContent() {
     setProcessing(transaction.id);
     
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
-      const refundRequest = (transaction as any).refundRequest;
-      
-      await updateDoc(doc(db!, "transactions", transaction.id), {
-        refundRequest: {
-          ...refundRequest,
-          status: "rejected",
-          rejectedAt: new Date().toISOString(),
-          rejectionReason: reason,
-          rejectedBy: user?.email || "Owner",
-        },
-      });
+      // Server sets refundRequest.status "rejected" / rejectedAt /
+      // rejectionReason / rejectedBy.
+      await transactionService.rejectRefundRequest(transaction.id, reason);
       
       toast.success("Refund request rejected");
     } catch (error) {
       console.error("Error rejecting refund:", error);
-      toast.error("Failed to reject refund");
+      toast.error(`Failed to reject refund: ${errorMessage(error)}`);
     } finally {
       setProcessing(null);
     }

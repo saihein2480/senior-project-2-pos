@@ -5,6 +5,7 @@ import {
   ShopListResponse,
   ShopFilters,
 } from "@/types/shop";
+import { z } from "zod";
 import { OWNER_ONLY } from "@/config/rolePermissions";
 import {
   handleRouteError,
@@ -16,12 +17,68 @@ import {
   getAllShops,
   getShopsWithFilters,
 } from "@/server/shopsAdmin";
+import { parseJson } from "@/server/validation";
 
 // Access:
 //   GET  - public. Branch names/addresses are shown to customers; the
 //          storefront server proxies this route, and the POS home page and
 //          cart read it for every role.
 //   POST - Owner only (Doc: "Add/Edit/Delete Shop").
+
+const MISSING_SHOP_FIELDS =
+  "Missing required fields: name, address, primaryPhone, township, and city are required";
+const INVALID_SHOP_FIELDS = "Invalid shop fields";
+/** Any starting digit, 7-17 digits. */
+const PHONE_PATTERN = /^\d{7,17}$/;
+
+const requiredShopText = z
+  .string({ error: MISSING_SHOP_FIELDS })
+  .trim()
+  .min(1, MISSING_SHOP_FIELDS);
+
+/** Optional text: absent, null or "" all mean "not given". */
+const optionalShopText = z
+  .string({ error: INVALID_SHOP_FIELDS })
+  .trim()
+  .nullish()
+  .transform((value) => value || undefined);
+
+/**
+ * POST body. Errors come out in the order the route always reported them:
+ * a missing required field, then a wrongly typed optional field or status,
+ * then the phone formats (checked last, once every field has the right type).
+ */
+const createShopSchema = z
+  .object({
+    name: requiredShopText,
+    address: requiredShopText,
+    primaryPhone: requiredShopText,
+    township: requiredShopText,
+    city: requiredShopText,
+    secondaryPhone: optionalShopText,
+    openingHours: optionalShopText,
+    // A falsy status (absent, "", null) means the default, "active".
+    status: z.preprocess(
+      (value) => value || undefined,
+      z
+        .enum(["active", "inactive"], { error: INVALID_SHOP_FIELDS })
+        .default("active"),
+    ),
+  })
+  .superRefine((shop, ctx) => {
+    if (!PHONE_PATTERN.test(shop.primaryPhone)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Invalid primary phone number format. Must be 7-17 digits.",
+      });
+    }
+    if (shop.secondaryPhone && !PHONE_PATTERN.test(shop.secondaryPhone)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Invalid secondary phone number format. Must be 7-17 digits.",
+      });
+    }
+  });
 
 // GET /api/shops - Get all shops or filtered shops
 export async function GET(request: NextRequest) {
@@ -73,83 +130,10 @@ export async function POST(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      const response: ShopResponse = {
-        success: false,
-        error: "Invalid JSON body",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-    // Treat empty string as undefined for secondaryPhone
-    if (body.secondaryPhone === "") {
-      body.secondaryPhone = undefined;
-    }
-
-    // Basic validation
-    const textFields = [
-      "name",
-      "address",
-      "primaryPhone",
-      "township",
-      "city",
-    ] as const;
-    if (textFields.some((field) => !body[field] || typeof body[field] !== "string")) {
-      const response: ShopResponse = {
-        success: false,
-        error:
-          "Missing required fields: name, address, primaryPhone, township, and city are required",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const optionalTextFields = ["secondaryPhone", "openingHours"] as const;
-    if (
-      optionalTextFields.some(
-        (field) =>
-          body[field] !== undefined &&
-          body[field] !== null &&
-          typeof body[field] !== "string",
-      ) ||
-      (body.status &&
-        body.status !== "active" &&
-        body.status !== "inactive")
-    ) {
-      const response: ShopResponse = {
-        success: false,
-        error: "Invalid shop fields",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Validate phone number format: allow any starting digit, 7-17 digits
-    const phoneRegex = /^\d{7,17}$/;
-    if (!phoneRegex.test(body.primaryPhone)) {
-      const response: ShopResponse = {
-        success: false,
-        error: "Invalid primary phone number format. Must be 7-17 digits.",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-    // secondaryPhone is optional, but if provided, must match format
-    if (body.secondaryPhone && !phoneRegex.test(body.secondaryPhone)) {
-      const response: ShopResponse = {
-        success: false,
-        error: "Invalid secondary phone number format. Must be 7-17 digits.",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const shopData: CreateShopRequest = {
-      name: body.name.trim(),
-      address: body.address.trim(),
-      primaryPhone: body.primaryPhone.trim(),
-      secondaryPhone: body.secondaryPhone?.trim() || undefined,
-      township: body.township.trim(),
-      city: body.city.trim(),
-      openingHours: body.openingHours?.trim() || undefined,
-      status: body.status || "active",
-    };
+    const shopData: CreateShopRequest = await parseJson(
+      request,
+      createShopSchema,
+    );
 
     const shop = await createShop(shopData, auth.caller.uid);
 

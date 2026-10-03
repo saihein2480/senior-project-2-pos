@@ -72,6 +72,13 @@ import { ShopService } from "@/services/shopService";
 import { StockItem } from "@/types/stock";
 import { Customer } from "@/types/customer";
 import { authFetch } from "@/lib/authFetch";
+import {
+  LEGACY_UNASSIGNED_BRANCH_NAME,
+  branchKey,
+  matchesBranch,
+  resolveBranchFilter,
+  toBranchRefs,
+} from "@/lib/branch";
 
 interface DashboardStats {
   totalRevenue: number;
@@ -174,7 +181,7 @@ interface Expense {
 
 function OwnerDashboardContent() {
   const { formatPrice } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { businessSettings, branch: currentBranch } = useSettings();
   const { t } = useLanguage();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -277,11 +284,14 @@ function OwnerDashboardContent() {
     fetchShops();
   }, []);
 
+  // Default the branch filter to this user's branch (by id; a legacy branch
+  // that is not a shop falls back to its name). See src/lib/branch.ts.
+  const currentBranchKey = branchKey(currentBranch);
   useEffect(() => {
-    if (businessSettings?.currentBranch) {
-      setFilterBranch(businessSettings.currentBranch);
+    if (currentBranchKey) {
+      setFilterBranch(currentBranchKey);
     }
-  }, [businessSettings?.currentBranch]);
+  }, [currentBranchKey]);
 
   // Initialize date filters
   useEffect(() => {
@@ -416,9 +426,14 @@ function OwnerDashboardContent() {
           new Date(t.timestamp) <= rangeEndDate,
       );
 
-      if (filterBranch && filterBranch !== "all") {
-        filteredTransactions = filteredTransactions.filter(
-          (t) => t.branchName === filterBranch,
+      // Branch filter: id first, legacy names (current or former) as fallback.
+      const branchFilter = resolveBranchFilter(
+        filterBranch,
+        toBranchRefs(shopsData || []),
+      );
+      if (branchFilter) {
+        filteredTransactions = filteredTransactions.filter((t) =>
+          matchesBranch(t, branchFilter),
         );
       }
 
@@ -443,18 +458,13 @@ function OwnerDashboardContent() {
       });
 
       // Filter stocks by selected branch so low-stock counts respect branch filter
+      // Stock rows with no branch at all count as "Main Branch" (legacy).
       let stocksForStats = stocks;
-      if (filterBranch && filterBranch !== "all") {
-        const branchShop = (shopsData || shops).find(
-          (s) => s.name === filterBranch || s.id === filterBranch,
-        );
-        const branchId = branchShop?.id;
-        stocksForStats = stocks.filter(
-          (s) =>
-            s.shop === filterBranch ||
-            s.shop === branchId ||
-            (!s.shop && filterBranch === "Main Branch") ||
-            (s.shop === "" && filterBranch === "Main Branch"),
+      if (branchFilter) {
+        stocksForStats = stocks.filter((s) =>
+          matchesBranch(s, branchFilter, {
+            unassignedBranchName: LEGACY_UNASSIGNED_BRANCH_NAME,
+          }),
         );
       }
 
@@ -1087,7 +1097,7 @@ function OwnerDashboardContent() {
                     >
                       <option value="all">{t.allBranches}</option>
                       {shops.map((shop) => (
-                        <option key={shop.id} value={shop.name}>
+                        <option key={shop.id} value={shop.id}>
                           {shop.name}
                         </option>
                       ))}

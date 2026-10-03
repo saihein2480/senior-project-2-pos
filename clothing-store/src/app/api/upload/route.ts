@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { uploadToR2 } from "@/lib/r2";
 import { ALL_STAFF, MANAGEMENT } from "@/config/rolePermissions";
 import { handleRouteError, jsonError, requireRole } from "@/lib/server/apiAuth";
@@ -7,9 +8,21 @@ import {
   readImageFile,
   safeUploadFilename,
 } from "@/lib/server/imageUpload";
+import { parseFormFields } from "@/server/validation";
 
 const UPLOAD_TYPES = ["customer", "business-logo", "expense"] as const;
 type UploadType = (typeof UPLOAD_TYPES)[number];
+
+/** The form's text fields (the image itself is read by readImageFile). */
+const uploadFieldsSchema = z.object({
+  type: z.enum(UPLOAD_TYPES, {
+    error:
+      'Invalid upload type. Must be "customer", "expense" or "business-logo"',
+  }),
+  // Optional naming hint; safeUploadFilename sanitises it. Anything that is
+  // not text (e.g. a file sent under this name) is ignored, as before.
+  id: z.string().optional().catch(undefined),
+});
 
 const FOLDER_BY_TYPE: Record<Exclude<UploadType, "business-logo">, string> = {
   customer: "pos-clothing-store/customers",
@@ -38,22 +51,13 @@ export async function POST(request: NextRequest) {
     }
 
     const fileEntry = formData.get("file");
-    const type = formData.get("type"); // 'customer', 'expense' or 'business-logo'
-    const id = formData.get("id"); // optional ID for naming
 
     if (!fileEntry) {
       return jsonError(400, "No file provided");
     }
 
-    if (
-      typeof type !== "string" ||
-      !UPLOAD_TYPES.includes(type as UploadType)
-    ) {
-      return jsonError(
-        400,
-        'Invalid upload type. Must be "customer", "expense" or "business-logo"',
-      );
-    }
+    // 'customer', 'expense' or 'business-logo', plus an optional id for naming
+    const { type, id } = parseFormFields(formData, uploadFieldsSchema);
 
     if (type === "business-logo") {
       return jsonError(501, "Business logo upload not implemented with R2 yet.");
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
     const result = await uploadToR2(
       file.buffer,
       file.image.contentType,
-      FOLDER_BY_TYPE[type as Exclude<UploadType, "business-logo">],
+      FOLDER_BY_TYPE[type],
       safeUploadFilename(id, file.image),
     );
 

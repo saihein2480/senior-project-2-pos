@@ -7,13 +7,22 @@ import { X, User, CreditCard, Wallet, QrCode, Eye, Truck } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { SelectedCustomer } from "@/types/cart";
 import { CartItem } from "@/types/cart";
 import { transactionService } from "@/services/transactionService";
 import type { DiscountBreakdown } from "@/services/transactionService";
 import { SettingsService } from "@/services/settingsService";
 import { detectColorName } from "@/lib/colorUtils";
+import { isStockAdjustmentError } from "@/lib/stockMath";
 import type { ReceiptBreakdown } from "@/types/receipt";
+import {
+  CURRENCY_DECIMALS,
+  exceedsMoney,
+  roundMoney,
+  roundTo,
+  safeDivide,
+} from "@/lib/money";
 
 type ReceiptPaperSize =
   | "44mm"
@@ -42,6 +51,12 @@ interface PaymentClearanceModalProps {
   subtotal: number;
   discount: number;
   tax: number;
+  /**
+   * Tax rate (percent, e.g. 7 for 7%) the cart applied to reach `tax`.
+   * Recorded on the sale and printed on the receipt. Optional for older
+   * callers only; without it the rate is estimated from tax / taxable base.
+   */
+  taxRate?: number;
   total: number;
   discountBreakdown?: DiscountBreakdown;
   /**
@@ -80,6 +95,90 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * An image URL that may go into the receipt: http(s) or an inline data:image.
+ * Anything else (javascript:, relative paths, other data: types) yields "" so
+ * the image is simply left out.
+ */
+function safeImageSrc(url: string | undefined | null): string {
+  const value = String(url ?? "").trim();
+  return /^https?:\/\//i.test(value) || /^data:image\//i.test(value)
+    ? value
+    : "";
+}
+
+/** Shown where the receipt number goes until the sale is actually saved. */
+const RECEIPT_NUMBER_PENDING = "Receipt no. assigned when payment is confirmed";
+
+/**
+ * Print an HTML document from a hidden iframe, so no popup (and no popup
+ * blocker) is involved.
+ *
+ * The receipt goes in through `srcdoc`; printing starts on the frame's `load`
+ * (which waits for the logo and footer image), or after `loadTimeoutMs` with
+ * whatever has loaded if an image hangs. The frame is removed once the print
+ * dialog closes (`afterprint`, with a fallback timer for browsers that do not
+ * fire it). Rejects when the frame cannot be printed at all.
+ */
+function printHtmlInHiddenFrame(
+  html: string,
+  loadTimeoutMs = 8000,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    frame.title = "Receipt";
+    frame.style.cssText =
+      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+
+    let printed = false;
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      frame.remove();
+    };
+
+    const print = () => {
+      if (printed) return;
+      printed = true;
+      window.clearTimeout(loadTimer);
+      const frameWindow = frame.contentWindow;
+      if (!frameWindow) {
+        remove();
+        reject(new Error("The print frame could not be created."));
+        return;
+      }
+      try {
+        frameWindow.addEventListener("afterprint", () => window.setTimeout(remove, 0), {
+          once: true,
+        });
+        frameWindow.focus();
+        frameWindow.print();
+        // Most browsers block in print() until the dialog closes; the others
+        // fire afterprint. Either way the frame goes; this is the backstop.
+        window.setTimeout(remove, 60_000);
+        resolve();
+      } catch (error) {
+        remove();
+        reject(error);
+      }
+    };
+
+    const loadTimer = window.setTimeout(print, loadTimeoutMs);
+    frame.addEventListener("load", () => {
+      // Only the receipt document counts, not an initial empty about:blank.
+      const isReceipt =
+        frame.contentWindow?.location.href === "about:srcdoc" ||
+        !!frame.contentDocument?.body?.firstElementChild;
+      if (isReceipt) print();
+    });
+    frame.srcdoc = html;
+    document.body.appendChild(frame);
+  });
+}
+
 export function PaymentClearanceModal({
   isOpen,
   onClose,
@@ -89,7 +188,8 @@ export function PaymentClearanceModal({
   subtotal,
   discount,
   tax,
-  total,
+  taxRate,
+  total: goodsTotal,
   discountBreakdown,
   receiptBreakdown,
   couponId,
@@ -100,27 +200,56 @@ export function PaymentClearanceModal({
   const { formatPrice, selectedCurrency, currencyRate, defaultCurrency } =
     useCurrency();
   const { user } = useAuth();
+  // The cashier's own working branch (not the business-wide default): the
+  // sale is recorded against it, by shop id as well as name.
+  const { branch: currentBranchRef, businessSettings } = useSettings();
   const { t } = useLanguage();
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<PaymentMethod>("cash");
+
+  /**
+   * COD orders are delivered, so they carry the flat delivery fee from
+   * Settings (business_settings/main.deliveryFee, THB, kept live by
+   * SettingsContext). It is added after tax: not taxed, not discounted,
+   * no loyalty points, never refunded on a return. Cash sales have none.
+   */
+  const configuredDeliveryFee = roundMoney(
+    Math.max(0, Number(businessSettings?.deliveryFee) || 0),
+    defaultCurrency,
+  );
+  const deliveryFee =
+    selectedPaymentMethod === "cod" ? configuredDeliveryFee : 0;
+  /** What the customer owes: the cart's total plus any delivery fee. */
+  const total = roundMoney(goodsTotal + deliveryFee, defaultCurrency);
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [calculatorDisplay, setCalculatorDisplay] = useState<string>("0");
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showReceipt, setShowReceipt] = useState<boolean>(false);
   const [receiptData, setReceiptData] = useState<{
-    transactionId: string;
+    /**
+     * Receipt number. null while the preview is shown: the number is allocated
+     * by recordSale together with the sale document, so a preview that is
+     * cancelled never uses one up.
+     */
+    transactionId: string | null;
+    /** Identifies this preview, so auto-print fires once per checkout. */
+    previewKey: string;
     customer: SelectedCustomer | null;
     items: CartItem[];
     subtotal: number;
     tax: number;
     discount: number;
+    /** COD delivery fee (THB), already included in `total`; 0 otherwise. */
+    deliveryFee: number;
     total: number;
     amountPaid: number;
     change: number;
     paymentMethod: PaymentMethod;
     timestamp: string;
     branchName: string;
+    /** shops/{id} of the branch, when it resolves to a shop. */
+    shopId?: string;
     businessName: string;
     invoiceFooterMessage: string;
     invoiceFooterImage: string;
@@ -137,8 +266,12 @@ export function PaymentClearanceModal({
   } | null>(null);
   const [receiptSize, setReceiptSize] = useState<ReceiptPaperSize>("80mm");
   const amountInputRef = useRef<HTMLInputElement | null>(null);
-  const autoPrintedTxnRef = useRef<string | null>(null);
+  const autoPrintedPreviewRef = useRef<string | null>(null);
   const handlePrintReceiptRef = useRef<(() => Promise<void>) | null>(null);
+  /** Synchronous guard: state updates are too late to stop a double click. */
+  const confirmInFlightRef = useRef(false);
+  /** Receipt number once this checkout's sale is saved; never record twice. */
+  const savedTransactionIdRef = useRef<string | null>(null);
 
   // Get receipt width in pixels based on paper size
   const getReceiptWidth = (size: ReceiptPaperSize): string => {
@@ -184,6 +317,8 @@ export function PaymentClearanceModal({
       setIsProcessing(false);
       setShowReceipt(false);
       setReceiptData(null);
+      confirmInFlightRef.current = false;
+      savedTransactionIdRef.current = null;
       // Focus the amount input after modal opens
       setTimeout(() => {
         try {
@@ -199,10 +334,11 @@ export function PaymentClearanceModal({
     }
   }, [isOpen]);
 
-  // Calculate change in selling currency
+  // Cash is counted in the selling currency, rounded to its minor unit (whole
+  // kyat for MMK), and compared with the money helpers rather than raw floats.
   const totalInSellingCurrency =
     selectedCurrency === defaultCurrency
-      ? total
+      ? roundMoney(total, selectedCurrency)
       : SettingsService.convertPrice(
           total,
           defaultCurrency,
@@ -210,7 +346,29 @@ export function PaymentClearanceModal({
           currencyRate,
           defaultCurrency,
         );
-  const change = amountPaid - totalInSellingCurrency;
+  const paidInSellingCurrency = roundMoney(amountPaid, selectedCurrency);
+  const change = roundMoney(
+    paidInSellingCurrency - totalInSellingCurrency,
+    selectedCurrency,
+  );
+  /** Cash tendered falls short of the total by at least one minor unit. */
+  const isCashShort =
+    selectedPaymentMethod === "cash" &&
+    exceedsMoney(totalInSellingCurrency, paidInSellingCurrency, selectedCurrency);
+
+  /**
+   * The rate the cart applied. Only when it was not passed is it estimated
+   * from the amounts, which is inexact once tax has been rounded.
+   */
+  const appliedTaxRate = (() => {
+    const passed = Number(taxRate);
+    if (taxRate !== undefined && Number.isFinite(passed)) return passed;
+    if (receiptBreakdown) return receiptBreakdown.taxRate;
+    const taxableBase = roundMoney(subtotal - discount, defaultCurrency);
+    return taxableBase > 0 && tax > 0
+      ? roundTo(safeDivide(tax, taxableBase, 0) * 100, 2)
+      : 0;
+  })();
 
   /**
    * The cart computes the full breakdown and passes it down. This fallback only
@@ -219,40 +377,44 @@ export function PaymentClearanceModal({
    * `discount` already has the coupon folded into it and counting the coupon
    * again here would double it.
    */
-  const effectiveBreakdown: ReceiptBreakdown = receiptBreakdown ?? {
-    grossSubtotal: subtotal,
-    wholesaleSavings: 0,
-    groupPercentSavings: 0,
-    groupFixedTotal: 0,
-    variantPercentSavings: 0,
-    variantFixedTotal: 0,
-    cartDiscount: discount,
-    cartDiscountPercent: 0,
-    itemsTotal: subtotal,
-    subtotalAfterDiscounts: subtotal - discount,
-    couponCode: undefined,
-    couponDiscount: 0,
-    taxableBase: subtotal - discount,
-    taxRate:
-      subtotal - discount > 0 && tax > 0
-        ? (tax / (subtotal - discount)) * 100
-        : 0,
-    tax,
-    total,
-    totalSavings: discount,
-    lines: items.map((item) => {
-      const lineTotal = item.unitPrice * item.quantity;
-      return {
-        itemId: item.id,
-        originalUnitPrice: item.unitPrice,
-        finalUnitPrice: item.unitPrice,
-        lineOriginalTotal: lineTotal,
-        lineFinalTotal: lineTotal,
-        lineSavings: 0,
-        discountLabels: [],
+  const fallbackTaxableBase = roundMoney(subtotal - discount, defaultCurrency);
+  const effectiveBreakdown: ReceiptBreakdown = receiptBreakdown
+    ? { ...receiptBreakdown, taxRate: appliedTaxRate, deliveryFee, total }
+    : {
+        grossSubtotal: subtotal,
+        wholesaleSavings: 0,
+        groupPercentSavings: 0,
+        groupFixedTotal: 0,
+        variantPercentSavings: 0,
+        variantFixedTotal: 0,
+        cartDiscount: discount,
+        cartDiscountPercent: 0,
+        itemsTotal: subtotal,
+        subtotalAfterDiscounts: fallbackTaxableBase,
+        couponCode: undefined,
+        couponDiscount: 0,
+        taxableBase: fallbackTaxableBase,
+        taxRate: appliedTaxRate,
+        tax,
+        deliveryFee,
+        total,
+        totalSavings: discount,
+        lines: items.map((item) => {
+          const lineTotal = roundMoney(
+            item.unitPrice * item.quantity,
+            defaultCurrency,
+          );
+          return {
+            itemId: item.id,
+            originalUnitPrice: item.unitPrice,
+            finalUnitPrice: item.unitPrice,
+            lineOriginalTotal: lineTotal,
+            lineFinalTotal: lineTotal,
+            lineSavings: 0,
+            discountLabels: [],
+          };
+        }),
       };
-    }),
-  };
 
   const handleCalculatorInput = (value: string) => {
     if (value === "Clear") {
@@ -310,16 +472,13 @@ export function PaymentClearanceModal({
   };
 
   const handleQuickAmount = (amount: number) => {
-    const newAmount = amountPaid + amount;
+    const newAmount = roundMoney(amountPaid + amount, selectedCurrency);
     setAmountPaid(newAmount);
     setCalculatorDisplay(newAmount.toString());
   };
 
   const handlePayNow = async () => {
-    if (
-      selectedPaymentMethod === "cash" &&
-      amountPaid < totalInSellingCurrency
-    ) {
+    if (isCashShort) {
       toast.error(t.insufficientPaymentAmount);
       return;
     }
@@ -331,45 +490,51 @@ export function PaymentClearanceModal({
     setIsProcessing(true);
 
     try {
-      // Generate sequential transaction ID (TXN-0000000000001 format)
-      const transactionId = await transactionService.generateTransactionId();
+      // No receipt number yet: recordSale allocates it together with the sale
+      // document on confirmation, so cancelling this preview leaves no gap.
 
-      // Get selling currency data using proper conversion
+      // Selling-currency total and the rate behind it. The configured rate is
+      // "1 default = rate selling"; when it is unset the conversion is 1:1, so
+      // the ratio (or 1 for a zero total) is recorded instead of NaN/Infinity.
       let currentExchangeRate: number;
-      let sellingTotal: number;
+      const sellingTotal = totalInSellingCurrency;
 
       if (selectedCurrency === defaultCurrency) {
         currentExchangeRate = 1;
-        sellingTotal = total;
       } else {
-        sellingTotal = SettingsService.convertPrice(
-          total,
-          defaultCurrency,
-          selectedCurrency,
-          currencyRate,
-          defaultCurrency,
-        );
-        currentExchangeRate = sellingTotal / total;
+        const configuredRate = Number(currencyRate);
+        currentExchangeRate =
+          Number.isFinite(configuredRate) && configuredRate > 0
+            ? configuredRate
+            : safeDivide(sellingTotal, total, 1);
       }
 
-      // Get current branch from settings
+      // Business name, footer and logo come from the settings document; the
+      // branch is the cashier's own selection. It used to be the business
+      // default here, so a sale rung up at another branch was recorded
+      // against the default one.
       const settings = await SettingsService.getBusinessSettings();
-      const currentBranch = settings?.currentBranch || "Main Branch";
+      const currentBranch = currentBranchRef.name || "Main Branch";
+      const previewTimestamp = new Date().toISOString();
 
       // Prepare receipt data and show receipt preview (NO database write yet)
       setReceiptData({
-        transactionId,
+        transactionId: null,
+        previewKey: `${previewTimestamp}-${Math.random().toString(36).slice(2)}`,
         customer,
         items,
         subtotal,
         tax,
         discount,
+        deliveryFee,
         total,
-        amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
+        amountPaid:
+          selectedPaymentMethod === "cash" ? paidInSellingCurrency : total,
         change: selectedPaymentMethod === "cash" ? change : 0,
         paymentMethod: selectedPaymentMethod,
-        timestamp: new Date().toISOString(),
+        timestamp: previewTimestamp,
         branchName: currentBranch,
+        shopId: currentBranchRef.id || undefined,
         businessName: settings?.businessName || "Shop",
         invoiceFooterMessage: settings?.invoiceFooterMessage || "",
         invoiceFooterImage: settings?.invoiceFooterImage || "",
@@ -399,10 +564,19 @@ export function PaymentClearanceModal({
     }
   };
 
-  // Function to confirm and record the payment (called by Print/Skip buttons)
-  const handleConfirmPayment = async () => {
-    if (!receiptData || isProcessing) return;
+  /**
+   * Save the sale (called by the Print and Skip buttons, and by auto-print).
+   *
+   * recordSale allocates the receipt number and writes the sale document in
+   * one Firestore transaction, so a number exists only for a saved sale.
+   * Resolves to that receipt number, or null when nothing was saved (an error
+   * toast has been shown); callers must not print or navigate on null.
+   */
+  const handleConfirmPayment = async (): Promise<string | null> => {
+    if (savedTransactionIdRef.current) return savedTransactionIdRef.current;
+    if (!receiptData || confirmInFlightRef.current) return null;
 
+    confirmInFlightRef.current = true;
     setIsProcessing(true);
 
     try {
@@ -412,21 +586,26 @@ export function PaymentClearanceModal({
       const transactionStatus =
         selectedPaymentMethod === "cash" ? "completed" : "pending";
 
-      // Record transaction in database
-      const recordedTransactionId = await transactionService.recordTransaction({
-        transactionId: receiptData.transactionId,
+      // Record the sale; the receipt number comes back with it.
+      const sale = await transactionService.recordSale({
         customer,
         items,
         subtotal,
         tax,
         discount,
-        total,
-        amountPaid: selectedPaymentMethod === "cash" ? amountPaid : total,
-        change: selectedPaymentMethod === "cash" ? change : 0,
+        // The figures the customer was shown on the preview (the fee is
+        // fixed there, even if Settings change before confirmation).
+        total: receiptData.total,
+        ...(receiptData.deliveryFee > 0 ? { deliveryFee: receiptData.deliveryFee } : {}),
+        amountPaid: receiptData.amountPaid,
+        change: receiptData.change,
         paymentMethod: selectedPaymentMethod,
         timestamp: new Date().toISOString(),
         status: transactionStatus,
         branchName: receiptData.branchName,
+        // Branch identity is the shop id; the name is kept for receipts and
+        // older readers. Filters use matchesBranch (src/lib/branch.ts).
+        ...(receiptData.shopId ? { shopId: receiptData.shopId } : {}),
         // Attribute the sale to the signed-in operator. Reports previously
         // showed whoever was *viewing* them as the seller, because nothing was
         // ever recorded here.
@@ -450,6 +629,7 @@ export function PaymentClearanceModal({
         // nothing that already reads them changes behaviour.
         grossSubtotal: receiptData.breakdown.grossSubtotal,
         totalSavings: receiptData.breakdown.totalSavings,
+        // The rate the cart applied, passed down explicitly.
         taxRate: receiptData.breakdown.taxRate,
         ...(couponId
           ? {
@@ -460,9 +640,16 @@ export function PaymentClearanceModal({
           : {}),
       });
 
+      savedTransactionIdRef.current = sale.transactionId;
       console.log(
-        "Transaction recorded successfully with ID:",
-        recordedTransactionId,
+        "Sale recorded:",
+        sale.transactionId,
+        `(document ${sale.id})`,
+      );
+
+      // The preview now shows the real receipt number.
+      setReceiptData((prev) =>
+        prev ? { ...prev, transactionId: sale.transactionId } : prev,
       );
 
       // Show appropriate success message
@@ -480,15 +667,26 @@ export function PaymentClearanceModal({
         discount: receiptData.discount,
       });
 
-      setIsProcessing(false);
+      return sale.transactionId;
     } catch (error) {
-      setIsProcessing(false);
       console.error("Error recording transaction:", error);
-      toast.error(
-        `${t.errorRecordingTransaction}: ${
-          error instanceof Error ? error.message : t.unknownError
-        }. ${t.pleaseTryAgain}`,
-      );
+      if (isStockAdjustmentError(error)) {
+        // The shelf can't cover the cart (or a line no longer matches its
+        // variant). Nothing was saved; the cashier fixes the cart and retries.
+        toast.error(`${error.message.replace(/\.$/, "")}. The sale was not saved.`, {
+          duration: 7000,
+        });
+      } else {
+        toast.error(
+          `${t.errorRecordingTransaction}: ${
+            error instanceof Error ? error.message : t.unknownError
+          }. ${t.pleaseTryAgain}`,
+        );
+      }
+      return null;
+    } finally {
+      confirmInFlightRef.current = false;
+      setIsProcessing(false);
     }
   };
 
@@ -660,6 +858,14 @@ export function PaymentClearanceModal({
       tone: "plain",
     });
 
+    if (data.deliveryFee > 0) {
+      rows.push({
+        label: t.deliveryFeeLabel,
+        value: formatPrice(data.deliveryFee),
+        tone: "plain",
+      });
+    }
+
     rows.push({ label: t.total, value: formatPrice(b.total), tone: "grand" });
 
     if (b.totalSavings > 0) {
@@ -729,14 +935,16 @@ export function PaymentClearanceModal({
     return rows;
   };
 
-  const handlePrintReceipt = async () => {
-    if (!receiptData) return;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      toast.error(t.allowPopupsToPrint);
-      return;
-    }
+  /**
+   * The printable receipt for a saved sale. Every interpolated value is
+   * escaped, and images are limited to http(s)/data:image URLs.
+   */
+  const buildReceiptHtml = (
+    data: NonNullable<typeof receiptData>,
+    transactionId: string,
+  ): string => {
+    const logoSrc = data.showBusinessLogo ? safeImageSrc(data.businessLogo) : "";
+    const footerImageSrc = safeImageSrc(data.invoiceFooterImage);
 
     // Dynamic sizing based on paper size
     const getPrintSizes = (size: ReceiptPaperSize) => {
@@ -813,12 +1021,12 @@ export function PaymentClearanceModal({
     const { width, fontSize, titleSize, detailSize } =
       getPrintSizes(receiptSize);
 
-    const receiptHTML = `
+    return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>${escapeHtml(t.receipt)} - ${receiptData.transactionId}</title>
+          <title>${escapeHtml(t.receipt)} - ${escapeHtml(transactionId)}</title>
           <style>
             @media print {
               @page {
@@ -953,17 +1161,17 @@ export function PaymentClearanceModal({
         <body>
           <div class="header">
             ${
-              receiptData.showBusinessLogo && receiptData.businessLogo
-                ? `<img class="logo" src="${receiptData.businessLogo}" alt="${escapeHtml(t.businessLogo)}" />`
+              logoSrc
+                ? `<img class="logo" src="${escapeHtml(logoSrc)}" alt="${escapeHtml(t.businessLogo)}" />`
                 : ""
             }
-            <div class="title">${receiptData.businessName || escapeHtml(t.receipt)}</div>
-            <div class="branch">${receiptData.branchName || "Main Branch"}</div>
-            <div class="datetime">${new Date(receiptData.timestamp).toLocaleString()}</div>
-            <div style="margin-top: 4px;">${escapeHtml(t.transaction)}: ${receiptData.transactionId}</div>
+            <div class="title">${escapeHtml(data.businessName || t.receipt)}</div>
+            <div class="branch">${escapeHtml(data.branchName || "Main Branch")}</div>
+            <div class="datetime">${escapeHtml(new Date(data.timestamp).toLocaleString())}</div>
+            <div style="margin-top: 4px;">${escapeHtml(t.transaction)}: ${escapeHtml(transactionId)}</div>
           </div>
 
-          ${buildInfoRows(receiptData)
+          ${buildInfoRows(data)
             .map(
               ([label, value]) => `
           <div class="info-row">
@@ -974,7 +1182,7 @@ export function PaymentClearanceModal({
             .join("")}
 
           <div class="items">
-            ${buildItemRows(receiptData)
+            ${buildItemRows(data)
               .map(
                 (row) => `
               <div class="item">
@@ -1001,7 +1209,7 @@ export function PaymentClearanceModal({
           </div>
 
           <div class="totals">
-            ${buildTotalRows(receiptData)
+            ${buildTotalRows(data)
               .map((row) => {
                 const toneClass =
                   row.tone === "grand"
@@ -1027,50 +1235,69 @@ export function PaymentClearanceModal({
             <div class="thank-you">${escapeHtml(t.thankYou)}</div>
             <div>${escapeHtml(t.visitAgain)}</div>
             ${
-              receiptData.invoiceFooterMessage
-                ? `<div style="margin-top: 8px; font-size: ${detailSize}; text-align: center;">${receiptData.invoiceFooterMessage}</div>`
+              data.invoiceFooterMessage
+                ? `<div style="margin-top: 8px; font-size: ${detailSize}; text-align: center;">${escapeHtml(data.invoiceFooterMessage)}</div>`
                 : ""
             }
             ${
-              receiptData.invoiceFooterImage
-                ? `<div style="margin-top: 8px; text-align: center;"><img src="${receiptData.invoiceFooterImage}" alt="${escapeHtml(t.invoiceFooter)}" style="max-width: 100%; max-height: 80px; object-fit: contain;" /></div>`
+              footerImageSrc
+                ? `<div style="margin-top: 8px; text-align: center;"><img src="${escapeHtml(footerImageSrc)}" alt="${escapeHtml(t.invoiceFooter)}" style="max-width: 100%; max-height: 80px; object-fit: contain;" /></div>`
                 : ""
             }
           </div>
         </body>
       </html>
     `;
+  };
 
-    printWindow.document.write(receiptHTML);
-    printWindow.document.close();
-    printWindow.focus();
+  /**
+   * Save the sale, then print its receipt.
+   *
+   * Nothing is printed until recordSale has succeeded: the receipt carries
+   * the number it returned. If saving fails nothing prints and we stay on
+   * this screen so the cashier can retry. Printing goes through a hidden
+   * iframe, so it needs no popup and works for auto-print too.
+   *
+   * Printing never records anything: handleConfirmPayment returns the saved
+   * receipt number for any later call (savedTransactionIdRef) and ignores
+   * calls while a save is in flight (confirmInFlightRef). A failed print
+   * leaves the saved sale alone and says so.
+   */
+  const handlePrintReceipt = async () => {
+    if (!receiptData || confirmInFlightRef.current) return;
+    const data = receiptData;
 
-    // First confirm payment (record transaction)
-    await handleConfirmPayment();
+    const transactionId = await handleConfirmPayment();
+    if (!transactionId) return;
 
-    // Then print
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-      // Navigate to home page
-      router.push("/owner/home");
-    }, 250);
+    try {
+      await printHtmlInHiddenFrame(buildReceiptHtml(data, transactionId));
+    } catch (error) {
+      console.error("Receipt printing failed:", error);
+      toast.error(
+        `Sale ${transactionId} is saved, but the receipt could not be printed.`,
+        { duration: 6000 },
+      );
+    }
+
+    router.push("/owner/home");
   };
   handlePrintReceiptRef.current = handlePrintReceipt;
 
   useEffect(() => {
-    // Auto-print exactly once per transaction when enabled
+    // Auto-print exactly once per checkout when enabled. It goes through
+    // handlePrintReceipt, so it saves first and prints only a saved sale.
     if (!showReceipt || !receiptData?.autoPrintReceipt) {
       return;
     }
 
-    if (autoPrintedTxnRef.current === receiptData.transactionId) {
+    if (autoPrintedPreviewRef.current === receiptData.previewKey) {
       return;
     }
 
-    autoPrintedTxnRef.current = receiptData.transactionId;
+    autoPrintedPreviewRef.current = receiptData.previewKey;
     void handlePrintReceiptRef.current?.();
-  }, [showReceipt, receiptData?.transactionId, receiptData?.autoPrintReceipt]);
+  }, [showReceipt, receiptData?.previewKey, receiptData?.autoPrintReceipt]);
 
   if (!isOpen) return null;
 
@@ -1130,10 +1357,11 @@ export function PaymentClearanceModal({
               >
                 {/* Header */}
                 <div className="text-center border-b border-dashed border-black pb-2 mb-2">
-                  {receiptData.showBusinessLogo && receiptData.businessLogo && (
+                  {receiptData.showBusinessLogo &&
+                    safeImageSrc(receiptData.businessLogo) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={receiptData.businessLogo}
+                      src={safeImageSrc(receiptData.businessLogo)}
                       alt={t.businessLogo}
                       className="mx-auto mb-2 max-h-14 object-contain"
                     />
@@ -1156,7 +1384,8 @@ export function PaymentClearanceModal({
                   <div
                     className={`text-black ${receiptSize === "58mm" ? "text-[10px] lg:text-xs xl:text-sm" : "text-xs lg:text-sm xl:text-base"} mt-1`}
                   >
-                    {t.transaction}: {receiptData.transactionId}
+                    {t.transaction}:{" "}
+                    {receiptData.transactionId ?? RECEIPT_NUMBER_PENDING}
                   </div>
                 </div>
 
@@ -1256,10 +1485,10 @@ export function PaymentClearanceModal({
                       {receiptData.invoiceFooterMessage}
                     </div>
                   )}
-                  {receiptData.invoiceFooterImage && (
+                  {safeImageSrc(receiptData.invoiceFooterImage) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={receiptData.invoiceFooterImage}
+                      src={safeImageSrc(receiptData.invoiceFooterImage)}
                       alt={t.invoiceFooter}
                       className="mx-auto mt-2 max-h-20 object-contain"
                     />
@@ -1279,8 +1508,10 @@ export function PaymentClearanceModal({
               </button>
               <button
                 onClick={async () => {
-                  await handleConfirmPayment();
-                  router.push("/owner/home");
+                  // Leave only once the sale is saved; on failure the toast
+                  // explains and the cashier can retry from here.
+                  const transactionId = await handleConfirmPayment();
+                  if (transactionId) router.push("/owner/home");
                 }}
                 disabled={isProcessing}
                 className="flex-1 bg-white text-gray-700 border-2 border-pink-300 px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-pink-50 transition-all text-sm lg:text-base font-bold shadow-sm hover:shadow-md"
@@ -1511,6 +1742,19 @@ export function PaymentClearanceModal({
                 </div>
               )}
 
+              {/* Delivery fee (COD only, from Settings) */}
+              {selectedPaymentMethod === "cod" && (
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-pink-300">
+                  <span className="text-gray-700 font-medium flex items-center gap-1">
+                    <Truck className="h-3 w-3" aria-hidden="true" />
+                    {t.deliveryFeeLabel}
+                  </span>
+                  <span className="text-gray-900 font-semibold">
+                    {deliveryFee > 0 ? `+${formatPrice(deliveryFee)}` : t.freeDeliveryLabel}
+                  </span>
+                </div>
+              )}
+
               {/* Total */}
               <div className="flex justify-between items-center py-2 border-t-2 border-pink-300">
                 <span className="text-sm font-bold text-gray-900">
@@ -1597,7 +1841,9 @@ export function PaymentClearanceModal({
                 placeholder="0"
                 className="w-full text-xl font-bold text-gray-900 bg-transparent text-right border-none outline-none"
                 min="0"
-                step="0.01"
+                step={
+                  CURRENCY_DECIMALS[selectedCurrency] === 0 ? "1" : "0.01"
+                }
               />
             </div>
 
@@ -1681,15 +1927,9 @@ export function PaymentClearanceModal({
             {/* Pay Now Button */}
             <button
               onClick={handlePayNow}
-              disabled={
-                isProcessing ||
-                (selectedPaymentMethod === "cash" &&
-                  amountPaid < totalInSellingCurrency)
-              }
+              disabled={isProcessing || isCashShort}
               className={`w-full p-3 rounded-xl font-black text-white transition-all shadow-md hover:shadow-lg ${
-                isProcessing ||
-                (selectedPaymentMethod === "cash" &&
-                  amountPaid < totalInSellingCurrency)
+                isProcessing || isCashShort
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600"
               }`}

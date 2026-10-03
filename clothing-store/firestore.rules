@@ -14,8 +14,9 @@ rules_version = '2';
 // are written against the actual browser reads and writes in both apps:
 //
 //   POS browser:        sale (transactions create, counters, stocks quantities),
-//                       refunds/cancellations (management), notifications,
-//                       loyalty updates on customers, per-user cart, settings.
+//                       notifications (mark read / clear), loyalty updates on
+//                       customers, per-user cart, settings. Every order change
+//                       after the sale goes through the POS order API.
 //   Storefront browser: catalogue reads, own users/customers profile + cart,
 //                       own orders/transactions/notifications, own
 //                       shopperSignals. Orders, coupons, loyalty and refund or
@@ -152,28 +153,54 @@ service cloud.firestore {
       allow read: if isPosUser()
         || (isSignedIn() && resource.data.customer.uid == request.auth.uid);
 
-      // Walk-in sales from the POS. Online orders are written by the order
-      // routes; cancel/refund requests by their API routes.
-      allow create: if isPosUser();
+      // Walk-in sales from the POS (transactionService.recordSale). Online
+      // orders are written by the order routes. A new sale starts clean: no
+      // refunds, requests or archive fields, and it is attributed to the
+      // caller if attributed at all.
+      allow create: if isPosUser()
+        && request.resource.data.get('status', '') in ['completed', 'pending']
+        && !request.resource.data.keys().hasAny([
+             'refunds', 'refundRequest', 'cancellationRequest',
+             'cancellationRefund', 'archivedAt', 'archivedBy',
+             // Server-only bookkeeping: loyalty markers (a forged
+             // loyaltyAward would block the real award or inflate a
+             // reversal) and the restock ledger.
+             'loyaltyAward', 'loyaltyReversed', 'couponRestored',
+             'stockReturnLedger', 'stockRestoredAt'])
+        && request.resource.data.get('soldByUid', request.auth.uid) == request.auth.uid;
 
-      // Refund, cancel, approve, delivery status: Owner + Manager.
-      allow update: if isManagement();
-      allow delete: if isOwner();
+      // Every change after the sale (approve, cancel, refund, requests,
+      // delivery status, archive) goes through /api/transactions/[id]/actions
+      // or /api/transactions/archive: Admin SDK, one transaction, audit entry.
+      allow update, delete: if false;
     }
 
     match /onlineOrders/{orderId} {
       // Staff can already see the same customer details on transactions.
       allow read: if isPosUser()
         || (isSignedIn() && resource.data.customer.uid == request.auth.uid);
-      // Created only by /api/mmpay/create-order and /api/transactions/create-cod.
-      allow create: if false;
-      allow update: if isManagement();
-      allow delete: if isOwner();
+      // Created by /api/mmpay/create-order and /api/transactions/create-cod;
+      // changed by /api/online-orders/* and the transaction actions.
+      allow create, update, delete: if false;
     }
 
+    // Legacy: refunds now live in transactions/{id}.refunds[]. Old documents
+    // stay readable for reports; nothing writes here any more.
     match /refunds/{refundId} {
-      allow read, create, update: if isManagement();
-      allow delete: if isOwner();
+      allow read: if isManagement();
+      allow write: if false;
+    }
+
+    // Written by the order actions (Admin SDK) with the verified caller.
+    match /auditLog/{entryId} {
+      allow read: if isManagement();
+      allow write: if false;
+    }
+
+    // "Deleted" transactions, moved here by /api/transactions/archive.
+    match /transactions_archive/{txnId} {
+      allow read: if isOwner();
+      allow write: if false;
     }
 
     // Receipt numbers. Only the transaction counter, only forwards by one.
@@ -293,12 +320,14 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isPosUser()
         || (isSignedIn() && resource.data.userId == request.auth.uid);
-      // POS creates both kinds; storefront ones come from API routes.
-      allow create: if isPosUser();
-      allow update: if isPosUser()
-        || (isSignedIn()
-            && resource.data.userId == request.auth.uid
-            && changedKeys().hasOnly(['read', 'readAt']));
+      // Order and refund notifications are written by the server actions.
+      // A POS browser may still add a staff-facing one (no userId), but can't
+      // address a customer.
+      allow create: if isPosUser() && !('userId' in request.resource.data);
+      // Marking read is the only change a browser makes.
+      allow update: if changedKeys().hasOnly(['read', 'readAt'])
+        && (isPosUser()
+            || (isSignedIn() && resource.data.userId == request.auth.uid));
       // The notifications page (all POS roles) can clear entries.
       allow delete: if isPosUser();
     }

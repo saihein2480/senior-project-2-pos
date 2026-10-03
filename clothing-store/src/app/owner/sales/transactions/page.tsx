@@ -38,6 +38,8 @@ import {
   Package,
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
+import { branchKey, matchesBranch, resolveBranchFilter } from "@/lib/branch";
+import { deliveryFeeOf as transactionDeliveryFee } from "@/lib/deliveryFee";
 
 export default function TransactionsPage() {
   return (
@@ -61,7 +63,8 @@ function TransactionsPageContent() {
   const showFinancialColumns =
     permissions.canViewFullPaymentDetails && permissions.canViewProfitLoss;
   const { formatPrice } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { businessSettings, branch: currentBranch, branches } = useSettings();
+  const currentBranchKey = branchKey(currentBranch);
   const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -449,14 +452,14 @@ function TransactionsPageContent() {
       }
     };
     fetchShops();
-  }, [businessSettings?.currentBranch]); // Reload when branch changes
+  }, [currentBranchKey]); // Reload when branch changes
 
-  // Set initial branch filter from settings
+  // Set initial branch filter from settings (by id when known)
   useEffect(() => {
-    if (businessSettings?.currentBranch) {
-      setFilterBranch(businessSettings.currentBranch);
+    if (currentBranchKey) {
+      setFilterBranch(currentBranchKey);
     }
-  }, [businessSettings?.currentBranch]);
+  }, [currentBranchKey]);
 
   // Initialize date filters
   useEffect(() => {
@@ -593,6 +596,9 @@ function TransactionsPageContent() {
     }, 0);
   };
 
+  // Branch filter: id first, legacy names (current or former) as fallback.
+  const branchFilter = resolveBranchFilter(filterBranch, branches);
+
   const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
       transaction.transactionId
@@ -616,11 +622,9 @@ function TransactionsPageContent() {
       (filterWholesale === "with_wholesale" && hasWholesale) ||
       (filterWholesale === "without_wholesale" && !hasWholesale);
 
-    // Branch filter - show all if "all" selected, otherwise filter by branch name
-    const matchesBranch =
-      filterBranch === "all" ||
-      !filterBranch ||
-      transaction.branchName === filterBranch;
+    // Branch filter - show all if "all" selected, otherwise match the branch
+    const matchesSelectedBranch =
+      !branchFilter || matchesBranch(transaction, branchFilter);
 
     // Date range filtering
     let matchesDateRange = true;
@@ -668,7 +672,7 @@ function TransactionsPageContent() {
       matchesPaymentMethod &&
       matchesWholesale &&
       matchesDateRange &&
-      matchesBranch
+      matchesSelectedBranch
     );
   });
 
@@ -934,17 +938,18 @@ function TransactionsPageContent() {
     const confirmed = window.confirm(
       `Are you sure you want to approve this COD transaction?\n\nTransaction ID: ${
         transaction.transactionId
-      }\nTotal: ${formatPrice(transaction.total)}`,
+      }\nTotal: ${formatPrice(transaction.total)}\n\nThe delivery status will be set to Confirmed.`,
     );
 
     if (!confirmed) return;
 
     try {
+      // The server also confirms a pending COD delivery in the same step.
       await transactionService.approveTransaction(
         transaction.id,
         user?.email || "Admin",
       );
-      toast.success("Transaction approved successfully!");
+      toast.success("Transaction approved and delivery confirmed!");
       loadTransactions(); // Reload transactions
     } catch (error) {
       console.error("Error approving transaction:", error);
@@ -1028,6 +1033,12 @@ function TransactionsPageContent() {
       // amount reported after processing did not match what was shown.
       const { refundAmount } = getRefundSummary(selectedTransaction, refundItems);
 
+      // If this refund comes from a pending customer request, the server also
+      // marks the request approved (approvedAt/approvedBy) in the same
+      // transaction as the refund.
+      const refundRequest = (selectedTransaction as any).refundRequest;
+      const approveRefundRequest = refundRequest?.status === "pending";
+
       // Process the refund through the service
       const refundId = await transactionService.processRefund(
         selectedTransaction.id,
@@ -1035,19 +1046,11 @@ function TransactionsPageContent() {
         selectedTransaction,
         "Manual refund processed by owner", // reason
         "Owner", // processedBy
+        undefined, // refundMethod
+        undefined, // inspectionResults
+        undefined, // returnStatus
+        { approveRefundRequest },
       );
-
-      // If this refund was from a customer request, mark it as approved
-      const refundRequest = (selectedTransaction as any).refundRequest;
-      if (refundRequest?.status === "pending") {
-        const { db } = await import("@/lib/firebase");
-        const { doc, updateDoc } = await import("firebase/firestore");
-        await updateDoc(doc(db!, "transactions", selectedTransaction.id), {
-          "refundRequest.status": "approved",
-          "refundRequest.approvedAt": new Date().toISOString(),
-          "refundRequest.approvedBy": user?.email || "Owner",
-        });
-      }
 
       // Reported as a success; this was a `toast.error` call, which showed the
       // confirmation styled as a failure.
@@ -1101,7 +1104,7 @@ function TransactionsPageContent() {
         user?.email || "Unknown user",
       );
 
-      toast.error(
+      toast.success(
         `Transaction ${selectedTransaction.transactionId} has been cancelled successfully.\nInventory has been restored.`,
       );
 
@@ -1181,13 +1184,12 @@ function TransactionsPageContent() {
       }
 
       if (successCount > 0) {
-        toast.error(
-          `Successfully approved ${successCount} transaction(s).${
-            failCount > 0
-              ? `\nFailed to approve ${failCount} transaction(s).`
-              : ""
-          }`,
-        );
+        // Partly failed: a warning icon, not a success tick.
+        const message = `Successfully approved ${successCount} transaction(s).${
+          failCount > 0 ? `\nFailed to approve ${failCount} transaction(s).` : ""
+        }`;
+        if (failCount > 0) toast(message, { icon: "⚠️" });
+        else toast.success(message);
         setSelectedTransactions([]);
         loadTransactions();
       } else {
@@ -1241,13 +1243,11 @@ function TransactionsPageContent() {
       }
 
       if (successCount > 0) {
-        toast.error(
-          `Successfully cancelled ${successCount} transaction(s).${
-            failCount > 0
-              ? `\nFailed to cancel ${failCount} transaction(s).`
-              : ""
-          }`,
-        );
+        const message = `Successfully cancelled ${successCount} transaction(s).${
+          failCount > 0 ? `\nFailed to cancel ${failCount} transaction(s).` : ""
+        }`;
+        if (failCount > 0) toast(message, { icon: "⚠️" });
+        else toast.success(message);
         setSelectedTransactions([]);
         loadTransactions();
       } else {
@@ -1281,13 +1281,13 @@ function TransactionsPageContent() {
         await transactionService.deleteTransactions(selectedTransactions);
 
       if (result.successCount > 0) {
-        toast.error(
-          `Successfully deleted ${result.successCount} transaction(s).${
-            result.failCount > 0
-              ? `\nFailed to delete ${result.failCount} transaction(s).`
-              : ""
-          }`,
-        );
+        const message = `Successfully deleted ${result.successCount} transaction(s).${
+          result.failCount > 0
+            ? `\nFailed to delete ${result.failCount} transaction(s).`
+            : ""
+        }`;
+        if (result.failCount > 0) toast(message, { icon: "⚠️" });
+        else toast.success(message);
         setSelectedTransactions([]);
         loadTransactions();
       } else {
@@ -1323,6 +1323,7 @@ function TransactionsPageContent() {
       "Wholesale Amount",
       "Profit",
       "Tax",
+      "Delivery Fee",
       "Branch",
       "Selling Currency",
       "Payment Method",
@@ -1383,6 +1384,9 @@ function TransactionsPageContent() {
           : "-",
         formatPrice(netProfit),
         formatPrice(netTax),
+        transactionDeliveryFee(transaction) > 0
+          ? formatPrice(transactionDeliveryFee(transaction))
+          : "-",
         transaction.branchName || "N/A",
         transaction.sellingCurrency || "THB",
         transaction.paymentMethod?.toUpperCase() || "N/A",
@@ -1636,7 +1640,7 @@ function TransactionsPageContent() {
                 >
                   <option value="all">{t.allBranches}</option>
                   {shops.map((shop) => (
-                    <option key={shop.id} value={shop.name}>
+                    <option key={shop.id} value={shop.id}>
                       {shop.name}
                     </option>
                   ))}
@@ -1876,6 +1880,9 @@ function TransactionsPageContent() {
                             )}
                             <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.tax}
+                            </th>
+                            <th className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                              {t.deliveryFeeLabel}
                             </th>
                             <th className="hidden md:table-cell px-3 md:px-4 lg:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                               {t.branch}
@@ -2141,6 +2148,15 @@ function TransactionsPageContent() {
                                     // For partial refunds or completed, show original tax
                                     return formatPrice(originalTax);
                                   })()}
+                                </td>
+                                {/* Delivery fee: COD sales and storefront orders.
+                                    Included in the total, not taxed. */}
+                                <td className="hidden lg:table-cell px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
+                                  {transactionDeliveryFee(transaction) > 0 ? (
+                                    formatPrice(transactionDeliveryFee(transaction))
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
                                 </td>
                                 <td className="px-3 md:px-4 lg:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                                   {transaction.branchName || t.mainBranch}
@@ -3239,28 +3255,23 @@ function TransactionsPageContent() {
                               onClick={async () => {
                                 if (!transaction) return;
                                 try {
-                                  // Approve cancellation
-                                  await transactionService.cancelTransaction(
+                                  // One server action: cancel the order (stock
+                                  // back, pending refund for a paid order) and
+                                  // mark the request approved, atomically.
+                                  await transactionService.approveCancellationRequest(
                                     transaction.id!,
-                                    transaction,
-                                    user?.email || "Owner",
                                   );
-                                  
-                                  // Update cancellation request status
-                                  const { db } = await import("@/lib/firebase");
-                                  const { doc, updateDoc } = await import("firebase/firestore");
-                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
-                                    "cancellationRequest.status": "approved",
-                                    "cancellationRequest.approvedAt": new Date().toISOString(),
-                                    "cancellationRequest.approvedBy": user?.email || "Owner",
-                                  });
                                   
                                   toast.success("Cancellation request approved!");
                                   loadTransactions();
                                   setOpenDropdown(null);
                                 } catch (error) {
                                   console.error("Approval error:", error);
-                                  toast.error("Failed to approve cancellation");
+                                  toast.error(
+                                    error instanceof Error && error.message
+                                      ? `Failed to approve cancellation: ${error.message}`
+                                      : "Failed to approve cancellation",
+                                  );
                                 }
                               }}
                               className="flex items-center w-full px-4 py-2 text-sm text-green-600 hover:bg-green-50 transition-colors"
@@ -3275,22 +3286,19 @@ function TransactionsPageContent() {
                                 if (!reason) return;
                                 
                                 try {
-                                  const { db } = await import("@/lib/firebase");
-                                  const { doc, updateDoc } = await import("firebase/firestore");
-                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
-                                    cancellationRequest: {
-                                      ...cancelRequest,
-                                      status: "rejected",
-                                      rejectedAt: new Date().toISOString(),
-                                      rejectionReason: reason,
-                                      rejectedBy: user?.email || "Owner",
-                                    },
-                                  });
+                                  await transactionService.rejectCancellationRequest(
+                                    transaction.id!,
+                                    reason,
+                                  );
                                   toast.success("Cancellation request rejected");
                                   loadTransactions();
                                   setOpenDropdown(null);
                                 } catch (error) {
-                                  toast.error("Failed to reject cancellation");
+                                  toast.error(
+                                    error instanceof Error && error.message
+                                      ? `Failed to reject cancellation: ${error.message}`
+                                      : "Failed to reject cancellation",
+                                  );
                                 }
                               }}
                               className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -3350,22 +3358,19 @@ function TransactionsPageContent() {
                                 if (!reason) return;
                                 
                                 try {
-                                  const { db } = await import("@/lib/firebase");
-                                  const { doc, updateDoc } = await import("firebase/firestore");
-                                  await updateDoc(doc(db!, "transactions", transaction.id!), {
-                                    refundRequest: {
-                                      ...refundRequest,
-                                      status: "rejected",
-                                      rejectedAt: new Date().toISOString(),
-                                      rejectionReason: reason,
-                                      rejectedBy: user?.email || "Owner",
-                                    },
-                                  });
+                                  await transactionService.rejectRefundRequest(
+                                    transaction.id!,
+                                    reason,
+                                  );
                                   toast.success("Refund request rejected");
                                   loadTransactions();
                                   setOpenDropdown(null);
                                 } catch (error) {
-                                  toast.error("Failed to reject refund");
+                                  toast.error(
+                                    error instanceof Error && error.message
+                                      ? `Failed to reject refund: ${error.message}`
+                                      : "Failed to reject refund",
+                                  );
                                 }
                               }}
                               className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"

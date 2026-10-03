@@ -7,6 +7,7 @@ import { TopNavBar } from "@/components/ui/TopNavBar";
 import { onlineOrderService, OnlineOrder } from "@/services/onlineOrderService";
 import { SettingsService, ReceiptPaperSize } from "@/services/settingsService";
 import { db } from "@/lib/firebase";
+import { deliveryFeeOf } from "@/lib/deliveryFee";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   MoreVertical,
@@ -745,6 +746,14 @@ function OrderTableRow({
             Ks {Number(row.amountMmk || 0).toLocaleString()}
           </span>
         </div>
+      </td>
+      {/* Included in the amount; not taxed. Older orders have none. */}
+      <td className="px-4 py-4 text-gray-700">
+        {deliveryFeeOf(row) > 0 ? (
+          `฿${deliveryFeeOf(row).toFixed(2)}`
+        ) : (
+          <span className="text-gray-400">-</span>
+        )}
       </td>
       <td className="px-4 py-4 text-gray-700">{paymentMethodLabel}</td>
       <td className="px-4 py-4 text-gray-700">{paymentStatusLabel}</td>
@@ -2212,6 +2221,7 @@ function OnlineOrdersContent() {
                     <th className="px-4 py-3 font-medium">Customer</th>
                     <th className="px-4 py-3 font-medium">Items</th>
                     <th className="px-4 py-3 font-medium">Amount (THB / MMK)</th>
+                    <th className="px-4 py-3 font-medium">Delivery Fee</th>
                     <th className="px-4 py-3 font-medium">Payment Method</th>
                     <th className="px-4 py-3 font-medium">Payment Status</th>
                     <th className="px-4 py-3 font-medium">Order Status</th>
@@ -2225,7 +2235,7 @@ function OnlineOrdersContent() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={11}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         Loading online orders...
@@ -2234,7 +2244,7 @@ function OnlineOrdersContent() {
                   ) : currentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={11}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         No matching online orders found.

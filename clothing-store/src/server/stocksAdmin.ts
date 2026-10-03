@@ -21,11 +21,98 @@ import {
   StockAdjustmentError,
   type EditedVariant,
 } from "@/lib/stockMath";
+import { z } from "zod";
 import { generateEAN13, generateId } from "@/lib/stockIds";
 import { getAdminDb } from "./adminDb";
 import { stripUndefined, timestampToIso, toClientJson } from "./serialize";
 
 const COLLECTION_NAME = "stocks";
+
+// ---- Request validation (POST /api/stocks, PUT /api/stocks/[id]) --------
+
+const MISSING_STOCK_FIELDS =
+  "Missing required fields: groupName, unitPrice, originalPrice";
+const INVALID_STOCK_PRICES =
+  "unitPrice and originalPrice must be non-negative numbers";
+
+/** Parse a price field: a finite number >= 0, or null if invalid. */
+function parsePrice(value: unknown): number | null {
+  const price = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+/**
+ * Present in the old truthy sense: 0, "" and null count as missing, as they
+ * always have for unitPrice/originalPrice (a zero price is refused).
+ */
+const presentValue = z.unknown().refine((value) => Boolean(value), {
+  message: MISSING_STOCK_FIELDS,
+});
+
+const wholesaleTierSchema = z.looseObject({
+  minQuantity: z.number().min(0),
+  price: z.number().min(0),
+});
+
+const sizeQuantitySchema = z.looseObject({
+  size: z.string(),
+  quantity: z.number().int().min(0),
+});
+
+const colorVariantSchema = z.looseObject({
+  color: z.string(),
+  colorCode: z.string(),
+  // Blank barcodes are filled in by withBarcode() on write.
+  barcode: z.string(),
+  sizeQuantities: z.array(sizeQuantitySchema),
+  image: z
+    .string()
+    .nullish()
+    .transform((image) => image ?? undefined),
+  /** Edit form only: index of the loaded variant this one came from. */
+  sourceIndex: z.number().int().min(0).nullish(),
+});
+
+/**
+ * Body shared by create and edit. Field presence is checked before the price
+ * values, matching the order the routes always reported problems in. Variant
+ * and tier objects keep any extra fields (e.g. an existing tier `id`); only
+ * the fields the stock maths depends on are type-checked.
+ */
+export const stockRequestSchema = z
+  .object({
+    groupName: z
+      .string({
+        error: (issue) =>
+          issue.input === undefined || issue.input === null
+            ? MISSING_STOCK_FIELDS
+            : "groupName must be text",
+      })
+      .trim()
+      .min(1, MISSING_STOCK_FIELDS),
+    unitPrice: presentValue,
+    originalPrice: presentValue,
+    category: z.string().nullish(),
+    releaseDate: z.string().optional(),
+    shop: z.string().nullish(),
+    isColorless: z.boolean().nullish(),
+    groupImage: z.string().nullish(),
+    wholesaleTiers: z.array(wholesaleTierSchema).nullish(),
+    colorVariants: z.array(colorVariantSchema).nullish(),
+    /** Edit form only: the variants as loaded, for the quantity merge. */
+    baseColorVariants: z.array(z.looseObject({})).nullish(),
+  })
+  .transform((body, ctx) => {
+    const unitPrice = parsePrice(body.unitPrice);
+    const originalPrice = parsePrice(body.originalPrice);
+    if (unitPrice === null || originalPrice === null) {
+      ctx.addIssue({ code: "custom", message: INVALID_STOCK_PRICES });
+      return z.NEVER;
+    }
+    return { ...body, unitPrice, originalPrice };
+  });
+
+export type StockRequestBody = z.output<typeof stockRequestSchema>;
 
 function stocks() {
   return getAdminDb().collection(COLLECTION_NAME);

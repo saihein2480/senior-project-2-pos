@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CustomerListResponse, CustomerFilters } from '@/types/customer';
 import { ALL_STAFF } from '@/config/rolePermissions';
-import { handleRouteError, jsonError, requireRole } from '@/lib/server/apiAuth';
+import { handleRouteError, requireRole } from '@/lib/server/apiAuth';
 import {
   createCustomer,
+  createCustomerSchema,
   getAllCustomers,
   getCustomersWithFilters,
 } from '@/server/customersAdmin';
+import { parseJson } from '@/server/validation';
 
 // Access: every POS role (Doc: "View Customer List" / "Add New Customers").
 
@@ -59,10 +61,7 @@ export async function POST(request: NextRequest) {
   if ('response' in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return jsonError(400, 'Invalid JSON body');
-    }
+    const body = await parseJson(request, createCustomerSchema);
 
     const customer = await createCustomer(body);
     

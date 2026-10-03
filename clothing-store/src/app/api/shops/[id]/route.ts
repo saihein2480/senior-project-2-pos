@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { UpdateShopRequest, ShopResponse } from '@/types/shop';
 import { OWNER_ONLY } from '@/config/rolePermissions';
 import {
@@ -11,6 +12,7 @@ import {
   getShopById,
   updateShop,
 } from '@/server/shopsAdmin';
+import { parseJson, validate } from '@/server/validation';
 
 // Access:
 //   GET        - public (same reasoning as GET /api/shops).
@@ -56,16 +58,52 @@ export async function GET(
   }
 }
 
-/** Fields PUT accepts; each must be a string when present. */
-const TEXT_FIELDS = [
-  'name',
-  'address',
-  'primaryPhone',
-  'secondaryPhone',
-  'township',
-  'city',
-  'openingHours',
-] as const;
+const INVALID_SHOP_FIELDS = 'Invalid shop fields';
+
+/** A text field PUT accepts: a string when present (null is not "absent"). */
+const shopText = z.string({ error: INVALID_SHOP_FIELDS }).optional();
+
+/** PUT body: only these fields are applied, each optional. */
+const updateShopSchema = z.object(
+  {
+    name: shopText,
+    address: shopText,
+    primaryPhone: shopText,
+    secondaryPhone: shopText,
+    township: shopText,
+    city: shopText,
+    openingHours: shopText,
+    status: z
+      .enum(['active', 'inactive'], { error: INVALID_SHOP_FIELDS })
+      .optional(),
+  },
+  { error: INVALID_SHOP_FIELDS },
+);
+
+/** Edit-form phone format: starts with 09, 9-11 digits. */
+const EDIT_PHONE_PATTERN = /^09\d{7,9}$/;
+
+/**
+ * Phone formats, checked after the shop is known to exist (a missing shop is
+ * a 404 even when the phone is also wrong). Empty values are not checked:
+ * an empty secondaryPhone clears it.
+ */
+const updateShopPhonesSchema = z.object({
+  primaryPhone: z
+    .string()
+    .optional()
+    .refine(
+      (phone) => !phone || EDIT_PHONE_PATTERN.test(phone),
+      'Invalid primary phone number format. Must start with 09 and be 9-11 digits long',
+    ),
+  secondaryPhone: z
+    .string()
+    .optional()
+    .refine(
+      (phone) => !phone || phone.trim() === '' || EDIT_PHONE_PATTERN.test(phone),
+      'Invalid secondary phone number format. Must start with 09 and be 9-11 digits long',
+    ),
+});
 
 // PUT /api/shops/[id] - Update a specific shop
 export async function PUT(
@@ -77,7 +115,6 @@ export async function PUT(
 
   try {
     const { id } = await params;
-    const body = await request.json().catch(() => null);
 
     if (!id) {
       const response: ShopResponse = {
@@ -87,22 +124,9 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (
-      !body ||
-      typeof body !== 'object' ||
-      TEXT_FIELDS.some(
-        (field) => body[field] !== undefined && typeof body[field] !== 'string'
-      ) ||
-      (body.status !== undefined &&
-        body.status !== 'active' &&
-        body.status !== 'inactive')
-    ) {
-      const response: ShopResponse = {
-        success: false,
-        error: 'Invalid shop fields',
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const body = await parseJson(request, updateShopSchema, {
+      invalidBodyMessage: INVALID_SHOP_FIELDS,
+    });
 
     // Check if shop exists
     const existingShop = await getShopById(id);
@@ -114,25 +138,21 @@ export async function PUT(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Validate phone numbers if provided
-    const phoneRegex = /^09\d{7,9}$/;
-    if (body.primaryPhone && !phoneRegex.test(body.primaryPhone)) {
+    validate(body, updateShopPhonesSchema);
+
+    // A blank name would leave the branch unmatchable by name and push the
+    // real name into formerNames, so it is refused rather than stored.
+    if (body.name !== undefined && body.name.trim() === '') {
       const response: ShopResponse = {
         success: false,
-        error: 'Invalid primary phone number format. Must start with 09 and be 9-11 digits long',
+        error: 'Shop name is required',
       };
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (body.secondaryPhone && body.secondaryPhone.trim() !== '' && !phoneRegex.test(body.secondaryPhone)) {
-      const response: ShopResponse = {
-        success: false,
-        error: 'Invalid secondary phone number format. Must start with 09 and be 9-11 digits long',
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Prepare update data (only include fields that are provided)
+    // Prepare update data (only include fields that are provided).
+    // Renames are handled by updateShop: the old name is kept in
+    // `formerNames` and a business default naming this shop follows it.
     const updateData: UpdateShopRequest = {};
 
     if (body.name !== undefined) updateData.name = body.name.trim();

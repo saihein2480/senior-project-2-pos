@@ -103,7 +103,14 @@ export interface ReceiptBreakdown {
   /** Tax charged. */
   tax: number;
 
-  /** What the customer owes. */
+  /**
+   * Flat delivery fee for a COD sale (business_settings/main.deliveryFee),
+   * added after tax: not taxed, not discounted, earns no loyalty points.
+   * Absent or 0 for walk-in cash sales.
+   */
+  deliveryFee?: number;
+
+  /** What the customer owes (`taxableBase + tax + deliveryFee`). */
   total: number;
   /** Every discount and the coupon added together. */
   totalSavings: number;

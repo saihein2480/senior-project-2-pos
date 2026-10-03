@@ -13,7 +13,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
-import { ShopService } from "@/services/shopService";
+import { findBranchById, NO_BRANCH_NAME } from "@/lib/branch";
 import {
   CustomerNotificationService,
   summariseBroadcast,
@@ -99,6 +99,8 @@ interface BusinessSettings {
   enableDarkMode: boolean;
   enableSoundEffects: boolean;
   currencyRate: number;
+  /** Refund returned items' share of tax too. false = keep tax (default). */
+  refundTaxOnReturns?: boolean;
   /** Flat storefront delivery fee in THB. 0 = free delivery. */
   deliveryFee?: number;
   currentBranch?: string;
@@ -112,7 +114,20 @@ function OwnerSettingsContent() {
   const { user } = useAuth();
   const permissions = usePermissions();
   const { refreshCurrencySettings } = useCurrency();
-  const { refreshSettings } = useSettings();
+  /**
+   * Branches come from the settings context, which owns the per-user
+   * selection (stored by shop id) and the business-wide default. This page
+   * never touches localStorage itself.
+   */
+  const {
+    refreshSettings,
+    branch: currentBranch,
+    branches: shops,
+    defaultBranch,
+    selectBranch,
+    setDefaultBranch,
+    businessSettings: liveSettings,
+  } = useSettings();
 
   /**
    * Settings is the one page all three roles can open, but they see different
@@ -131,10 +146,25 @@ function OwnerSettingsContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState<string>("");
-  const [shops, setShops] = useState<Array<{ id: string; name: string }>>([]);
 
   // Helper: true if there are no shops
   const noShops = shops.length === 0;
+
+  /**
+   * The branch picked in this page's "Current Branch/Shop" select, applied to
+   * this user on Save. null = unchanged (show the context's branch).
+   */
+  const [pendingBranchId, setPendingBranchId] = useState<string | null>(null);
+  const selectedBranchId = pendingBranchId ?? currentBranch.id;
+  const [isSettingDefault, setIsSettingDefault] = useState(false);
+
+  /** Label for the empty option when the branch is not a known shop. */
+  const unresolvedBranchLabel =
+    noShops || !currentBranch.name ? NO_BRANCH_NAME : currentBranch.name;
+  const showUnresolvedOption = noShops || !selectedBranchId;
+
+  /** Doc: "Add/Edit/Delete Shop" is owner-only; so is the business default. */
+  const canSetDefaultBranch = permissions.canManageShops;
 
   /**
    * Coupon package ids customers have already been told about.
@@ -171,6 +201,7 @@ function OwnerSettingsContent() {
     enableDarkMode: false,
     enableSoundEffects: false,
     currencyRate: 0,
+    refundTaxOnReturns: false,
     deliveryFee: 0,
     currentBranch: "No Branch",
     hidePosForOwner: false,
@@ -205,24 +236,11 @@ function OwnerSettingsContent() {
             result.data.loyaltySettings?.couponPackages || []
           ).map((pkg: CouponPackage) => pkg.id);
 
-          // For all users, load user-specific branch from localStorage
-          if (user) {
-            const userId = user.uid || user.email;
-            const userBranch = localStorage.getItem(`userBranch_${userId}`);
-            if (userBranch) {
-              setSettings((prev) => ({ ...prev, currentBranch: userBranch }));
-            }
-          }
+          // `settings.currentBranch` stays the business-wide default as
+          // stored. This user's own branch lives in the settings context and
+          // is edited through `pendingBranchId`, never through this field.
         } else {
           setError(result.error || "Failed to load settings");
-        }
-
-        // Fetch shops
-        try {
-          const shopsData = await ShopService.getAllShops();
-          setShops(shopsData || []);
-        } catch (shopError) {
-          console.error("Error fetching shops:", shopError);
         }
       } catch (err) {
         console.error("Error fetching settings:", err);
@@ -235,22 +253,20 @@ function OwnerSettingsContent() {
     fetchSettings();
   }, [user]);
 
-  // When shops change, update currentBranch logic
+  /**
+   * Keep the default carried by the Save payload in step with the live
+   * settings document, so saving this form never puts back a default that
+   * was changed elsewhere (or moved by a shop rename) after the page loaded.
+   */
+  const liveDefaultBranchName = liveSettings ? defaultBranch.name : null;
   useEffect(() => {
-    if (shops.length === 0) {
-      // No shops: set to No Branch
-      setSettings((prev) => ({ ...prev, currentBranch: "No Branch" }));
-    }
-    // Do NOT auto-select the first shop if currentBranch is 'No Branch' and shops exist.
-    // Only update currentBranch if the currentBranch is not in the shops list and is not 'No Branch'.
-    else if (
-      settings.currentBranch !== "No Branch" &&
-      !shops.some((s) => s.name === settings.currentBranch)
-    ) {
-      setSettings((prev) => ({ ...prev, currentBranch: shops[0].name }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shops]);
+    if (liveDefaultBranchName === null) return;
+    setSettings((prev) =>
+      prev.currentBranch === liveDefaultBranchName
+        ? prev
+        : { ...prev, currentBranch: liveDefaultBranchName },
+    );
+  }, [liveDefaultBranchName]);
 
   const currencies = [
     { code: "THB", name: "Thai Baht", symbol: "฿" },
@@ -489,21 +505,61 @@ function OwnerSettingsContent() {
     }
   };
 
+  /** Apply the branch picked in the select to this user (if it changed). */
+  const applyPendingBranch = () => {
+    if (pendingBranchId === null) return;
+    if (pendingBranchId !== currentBranch.id) {
+      const picked = findBranchById(shops, pendingBranchId);
+      // "" (No Branch) clears the user's own choice: follow the default.
+      selectBranch(picked || pendingBranchId);
+    }
+    setPendingBranchId(null);
+  };
+
+  /**
+   * Owner only: make the branch picked in the select the business-wide
+   * default for everyone. Separate from Save on purpose, so choosing your own
+   * branch can never move other users.
+   */
+  const handleSetDefaultBranch = async () => {
+    const picked = findBranchById(shops, selectedBranchId);
+    if (!picked) return;
+    if (
+      !confirm(
+        `Make "${picked.name}" the default branch for every user who has not picked their own?`,
+      )
+    ) {
+      return;
+    }
+
+    setIsSettingDefault(true);
+    try {
+      await setDefaultBranch(picked.id);
+      // Keep the Save payload in step so a later Save doesn't put it back.
+      setSettings((prev) => ({ ...prev, currentBranch: picked.name }));
+      toast.success(`${picked.name} is now the default branch`);
+    } catch (err) {
+      console.error("Error setting default branch:", err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to set the default branch",
+      );
+    } finally {
+      setIsSettingDefault(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setIsLoading(true);
     setError("");
 
     try {
-      // Save branch to localStorage for all users (user-specific)
-      if (user && settings.currentBranch) {
-        const userId = user.uid || user.email;
-        localStorage.setItem(`userBranch_${userId}`, settings.currentBranch);
-      }
+      // This user's own working branch, for every role. Goes through the
+      // context (stored per user by shop id); it never changes the
+      // business-wide default — that is the owner's "Set as default" button.
+      applyPendingBranch();
 
-      // Staff: only save branch (already done above)
+      // Staff: only save branch (done above)
       if (isBranchOnlyView) {
-        // Refresh settings context to reflect the new branch
-        await refreshSettings();
         toast.success("Branch saved successfully!");
       }
       // Owner/Manager: save business settings
@@ -561,7 +617,13 @@ function OwnerSettingsContent() {
         const result = await response.json();
 
         if (result.success) {
-          setSettings(result.data);
+          // Reset does not touch the default branch (the stored document
+          // keeps it), so keep it here too or the next Save would replace
+          // it with "Main Branch".
+          setSettings((prev) => ({
+            ...result.data,
+            currentBranch: result.data?.currentBranch ?? prev.currentBranch,
+          }));
           // Refresh settings context to reflect the reset settings
           await refreshSettings();
           toast.success("Settings reset successfully!");
@@ -679,18 +741,15 @@ function OwnerSettingsContent() {
                         <div className="relative">
                           <select
                             title="CurrentBranch"
-                            value={settings.currentBranch || "No Branch"}
-                            onChange={(e) =>
-                              handleInputChange("currentBranch", e.target.value)
-                            }
+                            value={selectedBranchId}
+                            onChange={(e) => setPendingBranchId(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent appearance-none bg-white text-gray-900"
                           >
-                            {(settings.currentBranch === "No Branch" ||
-                              noShops) && (
-                              <option value="No Branch">No Branch</option>
+                            {showUnresolvedOption && (
+                              <option value="">{unresolvedBranchLabel}</option>
                             )}
                             {shops.map((shop) => (
-                              <option key={shop.id} value={shop.name}>
+                              <option key={shop.id} value={shop.id}>
                                 {shop.name}
                               </option>
                             ))}
@@ -926,22 +985,20 @@ function OwnerSettingsContent() {
                             <div className="relative">
                               <select
                                 title="CurrentBranch"
-                                value={settings.currentBranch || "No Branch"}
+                                value={selectedBranchId}
                                 onChange={(e) =>
-                                  handleInputChange(
-                                    "currentBranch",
-                                    e.target.value,
-                                  )
+                                  setPendingBranchId(e.target.value)
                                 }
                                 className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-transparent appearance-none bg-white text-gray-900"
                               >
-                                {/* Show 'No Branch' if selected, or if there are no shops */}
-                                {(settings.currentBranch === "No Branch" ||
-                                  noShops) && (
-                                  <option value="No Branch">No Branch</option>
+                                {/* Shown when this user's branch is not a known shop, or there are no shops */}
+                                {showUnresolvedOption && (
+                                  <option value="">
+                                    {unresolvedBranchLabel}
+                                  </option>
                                 )}
                                 {shops.map((shop) => (
-                                  <option key={shop.id} value={shop.name}>
+                                  <option key={shop.id} value={shop.id}>
                                     {shop.name}
                                   </option>
                                 ))}
@@ -965,9 +1022,69 @@ function OwnerSettingsContent() {
                             {/* <p className="text-xs text-gray-500 mt-1">
                               Select the branch for new transactions
                             </p> */}
+                            <p className="text-xs text-gray-500 mt-1">
+                              Your own working branch. Saving changes it for
+                              you only.
+                            </p>
+                          </div>
+
+                          {/* Business-wide default: shown to Owner + Manager,
+                              changed only by an explicit owner action. */}
+                          <div>
+                            <span className="block text-sm font-normal text-gray-900 mb-2">
+                              Default Branch
+                            </span>
+                            <div className="px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-900">
+                              {defaultBranch.name || NO_BRANCH_NAME}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Used by everyone who has not picked their own
+                              branch.
+                            </p>
+                            {canSetDefaultBranch && (
+                              <Button
+                                variant="outline"
+                                className="mt-2"
+                                onClick={handleSetDefaultBranch}
+                                loading={isSettingDefault}
+                                disabled={
+                                  isSettingDefault ||
+                                  !findBranchById(shops, selectedBranchId) ||
+                                  selectedBranchId === defaultBranch.id
+                                }
+                              >
+                                Set as default branch
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
+
+                      {/* Refund tax policy, next to the rate it applies to.
+                          Owner + Manager, like the Tax Rate itself. */}
+                      {permissions.canEditTaxRate && (
+                        <div className="flex items-start justify-between gap-6">
+                          <div>
+                            <h3 className="text-sm font-medium text-gray-900">
+                              Refund tax on returns
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                              When on, returned items are refunded with their
+                              share of tax. When off (current behaviour), tax is
+                              kept. Cancellations always refund the full amount.
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 pt-1">
+                            <Toggle
+                              checked={settings.refundTaxOnReturns ?? false}
+                              onChange={(checked) =>
+                                handleInputChange("refundTaxOnReturns", checked)
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Input
@@ -1219,8 +1336,9 @@ function OwnerSettingsContent() {
                   </div>
                 )}
 
-                {/* Delivery Fee - Owner + Manager. Read by the storefront
-                    checkout from business_settings/main.deliveryFee. */}
+                {/* Delivery Fee - Owner + Manager. Read from
+                    business_settings/main.deliveryFee by the storefront
+                    checkout and by the POS Payment Clearance for COD. */}
                 {permissions.canEditBusinessSettings && (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-center mb-6">
@@ -1237,11 +1355,12 @@ function OwnerSettingsContent() {
                             htmlFor="delivery-fee"
                             className="text-sm font-medium text-gray-900"
                           >
-                            Online store delivery fee (฿ THB)
+                            Delivery fee (฿ THB)
                           </label>
                           <p className="text-xs text-gray-500 mt-1">
                             Flat fee added to every storefront order (COD and
-                            QR). Leave empty or 0 for free delivery.
+                            QR) and to COD sales at the POS. Leave empty or 0
+                            for free delivery.
                           </p>
                         </div>
                         <div className="w-32 shrink-0">
@@ -1283,7 +1402,7 @@ function OwnerSettingsContent() {
                             </>
                           ) : (
                             <span className="font-medium">
-                              Free delivery on all online orders
+                              Free delivery on online orders and POS COD sales
                             </span>
                           )}
                         </p>

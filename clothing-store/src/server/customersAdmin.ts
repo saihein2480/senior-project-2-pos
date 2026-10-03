@@ -7,6 +7,7 @@
  */
 
 import { Timestamp, type DocumentSnapshot } from "firebase-admin/firestore";
+import { z } from "zod";
 import type {
   CreateCustomerRequest,
   Customer,
@@ -46,6 +47,63 @@ const EDITABLE_TEXT_FIELDS = [
 ] as const;
 
 const MAX_TEXT_LENGTH = 2000;
+
+// ---- Request validation (POST /api/customers, PUT /api/customers/[id]) ---
+//
+// The same rules createCustomer/updateCustomer apply below, checked at the
+// route boundary with the same messages. Those functions still whitelist
+// what they write, so these schemas only decide what is a 400.
+
+/** Optional profile text: absent or null means "not given". */
+const customerText = (field: string) =>
+  z
+    .string({ error: `${field} must be a string` })
+    .max(MAX_TEXT_LENGTH, `${field} is too long`)
+    .nullish();
+
+/** Optional customer type; "" is treated as not given. */
+const customerTypeField = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.enum(CUSTOMER_TYPES, { error: "Invalid customerType" }).nullish(),
+);
+
+/** POST body (createCustomer checks customerType first, so it leads here). */
+export const createCustomerSchema = z.object({
+  customerType: customerTypeField,
+  email: customerText("email"),
+  displayName: customerText("displayName"),
+  phone: customerText("phone"),
+  address: customerText("address"),
+  secondaryPhone: customerText("secondaryPhone"),
+  township: customerText("township"),
+  city: customerText("city"),
+  customerImage: customerText("customerImage"),
+});
+
+const UPDATE_REQUIRED = "Update data is required";
+
+/**
+ * PUT body. Unknown keys are kept (and later ignored by updateCustomer) so an
+ * object holding only non-editable fields still reaches it and gets "No
+ * editable fields provided"; only an empty object is "Update data is required".
+ */
+export const updateCustomerSchema = z
+  .looseObject(
+    {
+      displayName: customerText("displayName"),
+      phone: customerText("phone"),
+      secondaryPhone: customerText("secondaryPhone"),
+      address: customerText("address"),
+      township: customerText("township"),
+      city: customerText("city"),
+      customerImage: customerText("customerImage"),
+      customerType: customerTypeField,
+    },
+    { error: UPDATE_REQUIRED },
+  )
+  .refine((body) => Object.keys(body).length > 0, {
+    message: UPDATE_REQUIRED,
+  });
 
 function customers() {
   return getAdminDb().collection(CUSTOMERS_COLLECTION);

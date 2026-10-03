@@ -6,7 +6,9 @@ import {
   deleteCustomer,
   getCustomerById,
   updateCustomer,
+  updateCustomerSchema,
 } from "@/server/customersAdmin";
+import { parseJson } from "@/server/validation";
 
 // Access:
 //   GET / PUT - every POS role (Doc: "Edit Customer Info"). PUT only accepts
@@ -76,15 +78,9 @@ export async function PUT(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const body = await request.json().catch(() => null);
-
-    if (!body || typeof body !== "object" || Object.keys(body).length === 0) {
-      const response: CustomerResponse = {
-        success: false,
-        error: "Update data is required",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const body = await parseJson(request, updateCustomerSchema, {
+      invalidBodyMessage: "Update data is required",
+    });
 
     const updatedCustomer = await updateCustomer(id, body);
 

@@ -19,6 +19,13 @@ import type {
 } from "@/types/receipt";
 import { toast } from "react-hot-toast";
 import { authFetch } from "@/lib/authFetch";
+import {
+  nonNegativeMoney,
+  roundMoney,
+  safeDivide,
+  sumMoney,
+  type CurrencyCode,
+} from "@/lib/money";
 
 interface ShoppingCartModalProps {
   isOpen: boolean;
@@ -394,7 +401,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     } else {
       // Custom amount discount — treat as a fixed numeric amount in the currently selected/display currency
       if (value >= 0) {
-        setCartFixedDiscount(value);
+        setCartFixedDiscount(roundMoney(value, selectedCurrency as CurrencyCode));
         // Clear any percentage-based discount
         setCartDiscountPercent(0);
         setDiscountAmount("");
@@ -433,7 +440,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       if (value >= 0) {
         setGroupFixedDiscounts((prev) => ({
           ...prev,
-          [selectedGroupForDiscount]: value,
+          [selectedGroupForDiscount]: roundMoney(
+            value,
+            selectedCurrency as CurrencyCode,
+          ),
         }));
         // remove any percentage discount on the group
         removeGroupDiscount(selectedGroupForDiscount);
@@ -475,7 +485,10 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       if (value >= 0) {
         setVariantFixedDiscounts((prev) => ({
           ...prev,
-          [selectedVariantForDiscount]: value,
+          [selectedVariantForDiscount]: roundMoney(
+            value,
+            selectedCurrency as CurrencyCode,
+          ),
         }));
         // remove any percentage discount on the variant
         removeVariantDiscount(selectedVariantForDiscount);
@@ -611,88 +624,108 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     // Navigation is now handled by PaymentClearanceModal
   };
 
+  // ---- Money ---------------------------------------------------------------
+  //
+  // Every figure below is rounded to its currency's minor unit (THB 2 decimals,
+  // MMK 0) at the point it is produced, so float residue never reaches the
+  // sale document or the receipt. "Base" is the business's default currency;
+  // "display" is the currency the cashier is selling in.
+  const baseCcy = defaultCurrency as CurrencyCode;
+  const displayCcy = selectedCurrency as CurrencyCode;
+
+  const toDisplayCurrency = (baseAmount: number) =>
+    SettingsService.convertPrice(
+      baseAmount,
+      baseCcy,
+      displayCcy,
+      currencyRate,
+      baseCcy,
+    );
+
+  // Fixed discounts are typed by the cashier in the *display* currency, so they
+  // have to come back to base currency before they can sit alongside the item
+  // prices. Percentage savings are already derived from base prices.
+  const toBaseCurrency = (displayAmount: number) =>
+    SettingsService.convertPrice(
+      displayAmount,
+      displayCcy,
+      baseCcy,
+      currencyRate,
+      baseCcy,
+    );
+
+  /** The price percentage discounts are taken from (wholesale when it applies). */
+  const percentBasePrice = (item: (typeof cart.items)[number]) =>
+    item.isWholesalePricing
+      ? (item.wholesalePrice ?? item.unitPrice)
+      : item.unitPrice;
+
   // Calculate subtotal using discounted prices when available
-  const subtotal = cart.items.reduce((total, item) => {
-    const price =
-      item.discountedPrice !== undefined
-        ? item.discountedPrice
-        : item.unitPrice;
-    return total + price * item.quantity;
-  }, 0);
+  const subtotal = sumMoney(
+    cart.items.map((item) =>
+      roundMoney(
+        (item.discountedPrice !== undefined
+          ? item.discountedPrice
+          : item.unitPrice) * item.quantity,
+        baseCcy,
+      ),
+    ),
+    baseCcy,
+  );
 
   // Calculate original subtotal (without any discounts)
-  const originalSubtotal = cart.items.reduce((total, item) => {
-    return total + item.unitPrice * item.quantity;
-  }, 0);
+  const originalSubtotal = sumMoney(
+    cart.items.map((item) => roundMoney(item.unitPrice * item.quantity, baseCcy)),
+    baseCcy,
+  );
 
   // Calculate wholesale pricing savings
-  const wholesaleSavings = cart.items.reduce((total, item) => {
-    if (item.isWholesalePricing) {
-      const wPrice = item.wholesalePrice ?? item.unitPrice;
-      const savings = (item.unitPrice - wPrice) * item.quantity;
-      return total + Math.max(0, savings);
-    }
-    return total;
-  }, 0);
+  const wholesaleSavings = sumMoney(
+    cart.items.map((item) =>
+      item.isWholesalePricing
+        ? nonNegativeMoney(
+            (item.unitPrice - (item.wholesalePrice ?? item.unitPrice)) *
+              item.quantity,
+            baseCcy,
+          )
+        : 0,
+    ),
+    baseCcy,
+  );
 
   // Calculate group discount savings
-  const groupDiscountSavings = cart.items.reduce((total, item) => {
-    if (item.groupDiscount && item.groupDiscount > 0) {
-      const basePrice = item.isWholesalePricing
-        ? (item.wholesalePrice ?? item.unitPrice)
-        : item.unitPrice;
-      const groupDiscountAmount =
-        basePrice * item.quantity * (item.groupDiscount / 100);
-      return total + groupDiscountAmount;
-    }
-    return total;
-  }, 0);
+  const groupDiscountSavings = sumMoney(
+    cart.items.map((item) =>
+      item.groupDiscount && item.groupDiscount > 0
+        ? roundMoney(
+            percentBasePrice(item) * item.quantity * (item.groupDiscount / 100),
+            baseCcy,
+          )
+        : 0,
+    ),
+    baseCcy,
+  );
 
   // Calculate variant discount savings
-  const variantDiscountSavings = cart.items.reduce((total, item) => {
-    if (item.variantDiscount && item.variantDiscount > 0) {
-      const basePrice = item.isWholesalePricing
-        ? (item.wholesalePrice ?? item.unitPrice)
-        : item.unitPrice;
-      const variantDiscountAmount =
-        basePrice * item.quantity * (item.variantDiscount / 100);
-      return total + variantDiscountAmount;
-    }
-    return total;
-  }, 0);
+  const variantDiscountSavings = sumMoney(
+    cart.items.map((item) =>
+      item.variantDiscount && item.variantDiscount > 0
+        ? roundMoney(
+            percentBasePrice(item) *
+              item.quantity *
+              (item.variantDiscount / 100),
+            baseCcy,
+          )
+        : 0,
+    ),
+    baseCcy,
+  );
 
   // Convert base amounts to display (selected) currency for correct fixed-amount behavior
-  const displaySubtotal = SettingsService.convertPrice(
-    subtotal,
-    defaultCurrency as "THB" | "MMK",
-    selectedCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
-
-  const displayGroupPercentSavings = SettingsService.convertPrice(
-    groupDiscountSavings,
-    defaultCurrency as "THB" | "MMK",
-    selectedCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
-
-  const displayVariantPercentSavings = SettingsService.convertPrice(
-    variantDiscountSavings,
-    defaultCurrency as "THB" | "MMK",
-    selectedCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
-
-  const displayWholesaleSavings = SettingsService.convertPrice(
-    wholesaleSavings,
-    defaultCurrency as "THB" | "MMK",
-    selectedCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
+  const displaySubtotal = toDisplayCurrency(subtotal);
+  const displayGroupPercentSavings = toDisplayCurrency(groupDiscountSavings);
+  const displayVariantPercentSavings = toDisplayCurrency(variantDiscountSavings);
+  const displayWholesaleSavings = toDisplayCurrency(wholesaleSavings);
 
   // Group fixed discounts are stored as TOTAL amount per group (display currency).
   // We distribute that amount across all units in the same group for per-item display math.
@@ -704,39 +737,81 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     {} as Record<string, number>,
   );
 
-  const getGroupFixedPerUnit = (groupName: string): number => {
-    const groupTotalFixed = groupFixedDiscounts[groupName] || 0;
-    const totalQty = groupQuantities[groupName] || 0;
-    return totalQty > 0 ? groupTotalFixed / totalQty : 0;
-  };
+  /**
+   * One unit's share of its group's fixed discount (display currency), for the
+   * per-unit "after discount" price. A ratio, rounded when formatted; a group
+   * whose items were all removed has no units and gets 0 rather than NaN.
+   */
+  const getGroupFixedPerUnit = (groupName: string): number =>
+    safeDivide(
+      groupFixedDiscounts[groupName] || 0,
+      groupQuantities[groupName] || 0,
+      0,
+    );
 
-  const groupFixedTotal = Object.entries(groupFixedDiscounts).reduce(
-    (sum, [groupName, fixedAmount]) => {
-      return groupQuantities[groupName] ? sum + fixedAmount : sum;
-    },
-    0,
+  /**
+   * Each cart line's share of its group's fixed discount (display currency),
+   * by quantity and rounded to the currency. The group's last line takes the
+   * rounding remainder, so the shares always add back up to the amount the
+   * cashier typed (100 split over 3 units is 33.33 + 33.33 + 33.34).
+   */
+  const groupFixedShareByItem = (() => {
+    const shares: Record<string, number> = {};
+    const allocated: Record<string, number> = {};
+    const remainingLines: Record<string, number> = {};
+    cart.items.forEach((item) => {
+      remainingLines[item.groupName] = (remainingLines[item.groupName] || 0) + 1;
+    });
+
+    cart.items.forEach((item) => {
+      const group = item.groupName;
+      const groupTotal = groupFixedDiscounts[group] || 0;
+      remainingLines[group] -= 1;
+      if (groupTotal <= 0) return;
+
+      const share =
+        remainingLines[group] === 0
+          ? roundMoney(groupTotal - (allocated[group] || 0), displayCcy)
+          : roundMoney(
+              safeDivide(
+                groupTotal * item.quantity,
+                groupQuantities[group] || 0,
+                0,
+              ),
+              displayCcy,
+            );
+      shares[item.id] = share;
+      allocated[group] = roundMoney((allocated[group] || 0) + share, displayCcy);
+    });
+    return shares;
+  })();
+
+  const groupFixedTotal = sumMoney(
+    Object.entries(groupFixedDiscounts).map(([groupName, fixedAmount]) =>
+      groupQuantities[groupName] ? fixedAmount : 0,
+    ),
+    displayCcy,
   );
 
-  const variantFixedTotal = cart.items.reduce((sum, ci) => {
-    const perItem = variantFixedDiscounts[ci.id] || 0;
-    return sum + perItem * ci.quantity;
-  }, 0);
+  /** A line's fixed variant discount (display currency): per unit x quantity. */
+  const variantFixedLine = (item: (typeof cart.items)[number]) =>
+    roundMoney((variantFixedDiscounts[item.id] || 0) * item.quantity, displayCcy);
+
+  const variantFixedTotal = sumMoney(cart.items.map(variantFixedLine), displayCcy);
 
   // Displayed cart discount (in display currency)
   const displayCartDiscount =
     cartFixedDiscount !== null
-      ? cartFixedDiscount
-      : SettingsService.convertPrice(
-          subtotal * (cartDiscountPercent / 100),
-          defaultCurrency as "THB" | "MMK",
-          selectedCurrency as "THB" | "MMK",
-          currencyRate,
-          defaultCurrency as "THB" | "MMK",
+      ? roundMoney(cartFixedDiscount, displayCcy)
+      : toDisplayCurrency(
+          roundMoney(subtotal * (cartDiscountPercent / 100), baseCcy),
         );
 
   // Subtotal after all discounts (in display currency). Note: percent-based group/variant/wholesale already applied into `displaySubtotal`.
-  const subtotalAfterAllDiscountsDisplay =
-    displaySubtotal - displayCartDiscount - groupFixedTotal - variantFixedTotal;
+  const subtotalAfterAllDiscountsDisplay = roundMoney(
+    displaySubtotal - displayCartDiscount - groupFixedTotal - variantFixedTotal,
+    displayCcy,
+  );
 
   // Loyalty coupon, applied after every other discount and before tax so the
   // cashier's total matches how the storefront prices the same coupon.
@@ -744,97 +819,121 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     const coupon = cart.appliedCoupon;
     if (!coupon) return 0;
 
-    const base = Math.max(0, subtotalAfterAllDiscountsDisplay);
+    const base = nonNegativeMoney(subtotalAfterAllDiscountsDisplay, displayCcy);
 
     if (coupon.discountType === "percentage") {
-      return base * (Number(coupon.discountValue) / 100);
+      return roundMoney(
+        base * ((Number(coupon.discountValue) || 0) / 100),
+        displayCcy,
+      );
     }
 
     // Fixed coupon amounts are configured in the base currency.
-    const fixedInDisplay = SettingsService.convertPrice(
-      Number(coupon.discountValue),
-      defaultCurrency as "THB" | "MMK",
-      selectedCurrency as "THB" | "MMK",
-      currencyRate,
-      defaultCurrency as "THB" | "MMK",
-    );
+    const fixedInDisplay = toDisplayCurrency(Number(coupon.discountValue) || 0);
 
     return Math.min(fixedInDisplay, base);
   })();
 
-  const subtotalAfterCouponDisplay = Math.max(
-    0,
+  const subtotalAfterCouponDisplay = nonNegativeMoney(
     subtotalAfterAllDiscountsDisplay - couponDiscountDisplay,
+    displayCcy,
   );
 
-  const taxDisplay = subtotalAfterCouponDisplay * (taxRate / 100);
-  const grandTotalDisplay = subtotalAfterCouponDisplay + taxDisplay;
+  // The rate actually applied. Passed to the payment modal and the receipt as
+  // is, so neither has to work it back out from the rounded tax amount.
+  const appliedTaxRate = Math.max(0, Number(taxRate) || 0);
+  const taxDisplay = roundMoney(
+    subtotalAfterCouponDisplay * (appliedTaxRate / 100),
+    displayCcy,
+  );
+  const grandTotalDisplay = roundMoney(
+    subtotalAfterCouponDisplay + taxDisplay,
+    displayCcy,
+  );
 
   // Convert display numbers back to base currency for payment/transaction processing
-  const subtotalForPayment = SettingsService.convertPrice(
-    subtotalAfterAllDiscountsDisplay +
-      displayCartDiscount +
-      groupFixedTotal +
-      variantFixedTotal -
-      (displayGroupPercentSavings +
-        displayVariantPercentSavings +
-        displayWholesaleSavings),
-    selectedCurrency as "THB" | "MMK",
-    defaultCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
+  const subtotalForPayment = toBaseCurrency(
+    roundMoney(
+      subtotalAfterAllDiscountsDisplay +
+        displayCartDiscount +
+        groupFixedTotal +
+        variantFixedTotal -
+        (displayGroupPercentSavings +
+          displayVariantPercentSavings +
+          displayWholesaleSavings),
+      displayCcy,
+    ),
   );
 
-  const discountForPayment = SettingsService.convertPrice(
-    displayCartDiscount +
-      groupFixedTotal +
-      variantFixedTotal +
-      couponDiscountDisplay,
-    selectedCurrency as "THB" | "MMK",
-    defaultCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
+  const discountForPayment = toBaseCurrency(
+    sumMoney(
+      [
+        displayCartDiscount,
+        groupFixedTotal,
+        variantFixedTotal,
+        couponDiscountDisplay,
+      ],
+      displayCcy,
+    ),
   );
 
-  const taxForPayment = SettingsService.convertPrice(
-    taxDisplay,
-    selectedCurrency as "THB" | "MMK",
-    defaultCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
+  const taxForPayment = toBaseCurrency(taxDisplay);
 
   // Coupon savings in base currency, recorded on the transaction.
-  const couponDiscountForPayment = SettingsService.convertPrice(
-    couponDiscountDisplay,
-    selectedCurrency as "THB" | "MMK",
-    defaultCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
+  const couponDiscountForPayment = toBaseCurrency(couponDiscountDisplay);
 
-  const grandTotalForPayment = SettingsService.convertPrice(
-    grandTotalDisplay,
-    selectedCurrency as "THB" | "MMK",
-    defaultCurrency as "THB" | "MMK",
-    currencyRate,
-    defaultCurrency as "THB" | "MMK",
-  );
+  const grandTotalForPayment = toBaseCurrency(grandTotalDisplay);
 
-  // Fixed discounts are typed by the cashier in the *display* currency, so they
-  // have to come back to base currency before they can sit alongside the item
-  // prices. Percentage savings are already derived from base prices.
-  const toBaseCurrency = (displayAmount: number) =>
-    SettingsService.convertPrice(
-      displayAmount,
-      selectedCurrency as "THB" | "MMK",
-      defaultCurrency as "THB" | "MMK",
-      currencyRate,
-      defaultCurrency as "THB" | "MMK",
+  /**
+   * Per-line money in base currency. Line totals are rounded first and unit
+   * prices derived from them, so the printed lines add up exactly to the
+   * receipt's items total, and the fixed-discount totals below are the sums of
+   * what the lines carry.
+   */
+  const lineMoney = cart.items.map((item) => {
+    // Unit price after wholesale + group% + variant%, all of which CartContext
+    // folds into `discountedPrice`.
+    const unitAfterPercent =
+      item.discountedPrice !== undefined
+        ? item.discountedPrice
+        : item.unitPrice;
+
+    const lineAfterPercent = roundMoney(
+      unitAfterPercent * item.quantity,
+      baseCcy,
+    );
+    const variantFixed = toBaseCurrency(variantFixedLine(item));
+    const groupFixed = toBaseCurrency(groupFixedShareByItem[item.id] || 0);
+    const lineOriginalTotal = roundMoney(
+      item.unitPrice * item.quantity,
+      baseCcy,
+    );
+    const lineFinalTotal = nonNegativeMoney(
+      lineAfterPercent - variantFixed - groupFixed,
+      baseCcy,
     );
 
-  const groupFixedTotalBase = toBaseCurrency(groupFixedTotal);
-  const variantFixedTotalBase = toBaseCurrency(variantFixedTotal);
+    return {
+      item,
+      variantFixed,
+      groupFixed,
+      lineOriginalTotal,
+      lineFinalTotal,
+      finalUnitPrice: roundMoney(
+        safeDivide(lineFinalTotal, item.quantity, unitAfterPercent),
+        baseCcy,
+      ),
+    };
+  });
+
+  const groupFixedTotalBase = sumMoney(
+    lineMoney.map((line) => line.groupFixed),
+    baseCcy,
+  );
+  const variantFixedTotalBase = sumMoney(
+    lineMoney.map((line) => line.variantFixed),
+    baseCcy,
+  );
   const cartDiscountBase = toBaseCurrency(displayCartDiscount);
 
   const discountBreakdownForPayment = {
@@ -856,30 +955,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
    * listing each saving is what lets the printed figures add up line by line —
    * the collapsed `subtotal`/`discount` pair sent to the transaction cannot.
    */
-  const receiptLineDetails: ReceiptLineDetail[] = cart.items.map((item) => {
-    const originalUnitPrice = item.unitPrice;
-
-    // Unit price after wholesale + group% + variant%, all of which CartContext
-    // folds into `discountedPrice`.
-    const unitAfterPercent =
-      item.discountedPrice !== undefined
-        ? item.discountedPrice
-        : item.unitPrice;
-
-    const variantFixedPerUnit = toBaseCurrency(
-      variantFixedDiscounts[item.id] || 0,
-    );
-    const groupFixedPerUnit = toBaseCurrency(
-      getGroupFixedPerUnit(item.groupName),
-    );
-
-    const finalUnitPrice = Math.max(
-      0,
-      unitAfterPercent - variantFixedPerUnit - groupFixedPerUnit,
-    );
-
-    const lineOriginalTotal = originalUnitPrice * item.quantity;
-    const lineFinalTotal = finalUnitPrice * item.quantity;
+  const receiptLineDetails: ReceiptLineDetail[] = lineMoney.map((line) => {
+    const { item } = line;
 
     const discountLabels: string[] = [];
     if (item.isWholesalePricing) discountLabels.push(t.wholesalePrice);
@@ -889,31 +966,34 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     if (item.variantDiscount && item.variantDiscount > 0) {
       discountLabels.push(`${t.variantLabel} -${item.variantDiscount}%`);
     }
-    if (groupFixedPerUnit > 0) discountLabels.push(t.groupOffer);
-    if (variantFixedPerUnit > 0) discountLabels.push(t.variantOffer);
+    if (line.groupFixed > 0) discountLabels.push(t.groupOffer);
+    if (line.variantFixed > 0) discountLabels.push(t.variantOffer);
 
     return {
       itemId: item.id,
-      originalUnitPrice,
-      finalUnitPrice,
-      lineOriginalTotal,
-      lineFinalTotal,
-      lineSavings: Math.max(0, lineOriginalTotal - lineFinalTotal),
+      originalUnitPrice: item.unitPrice,
+      finalUnitPrice: line.finalUnitPrice,
+      lineOriginalTotal: line.lineOriginalTotal,
+      lineFinalTotal: line.lineFinalTotal,
+      lineSavings: nonNegativeMoney(
+        line.lineOriginalTotal - line.lineFinalTotal,
+        baseCcy,
+      ),
       discountLabels,
     };
   });
 
-  // What the printed lines add up to after their own discounts. Equal to the sum
-  // of `lineFinalTotal` above, so the item lines reconcile with this figure.
-  const itemsTotalBase =
-    originalSubtotal -
-    (wholesaleSavings +
-      groupDiscountSavings +
-      groupFixedTotalBase +
-      variantDiscountSavings +
-      variantFixedTotalBase);
+  // What the printed lines add up to after their own discounts: the sum of
+  // `lineFinalTotal` above, so the item lines reconcile with this figure.
+  const itemsTotalBase = sumMoney(
+    receiptLineDetails.map((line) => line.lineFinalTotal),
+    baseCcy,
+  );
 
-  const subtotalAfterDiscountsBase = itemsTotalBase - cartDiscountBase;
+  const subtotalAfterDiscountsBase = roundMoney(
+    itemsTotalBase - cartDiscountBase,
+    baseCcy,
+  );
 
   const receiptBreakdown: ReceiptBreakdown = {
     grossSubtotal: originalSubtotal,
@@ -928,18 +1008,25 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
     subtotalAfterDiscounts: subtotalAfterDiscountsBase,
     couponCode: cart.appliedCoupon?.code,
     couponDiscount: couponDiscountForPayment,
-    taxableBase: subtotalAfterDiscountsBase - couponDiscountForPayment,
-    taxRate,
+    taxableBase: roundMoney(
+      subtotalAfterDiscountsBase - couponDiscountForPayment,
+      baseCcy,
+    ),
+    taxRate: appliedTaxRate,
     tax: taxForPayment,
     total: grandTotalForPayment,
-    totalSavings:
-      wholesaleSavings +
-      groupDiscountSavings +
-      groupFixedTotalBase +
-      variantDiscountSavings +
-      variantFixedTotalBase +
-      cartDiscountBase +
-      couponDiscountForPayment,
+    totalSavings: sumMoney(
+      [
+        wholesaleSavings,
+        groupDiscountSavings,
+        groupFixedTotalBase,
+        variantDiscountSavings,
+        variantFixedTotalBase,
+        cartDiscountBase,
+        couponDiscountForPayment,
+      ],
+      baseCcy,
+    ),
     lines: receiptLineDetails,
   };
 
@@ -2080,7 +2167,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
                   <div className="flex justify-between text-sm font-medium text-gray-800">
                     <span>
-                      {t.tax} ({taxRate}%):
+                      {t.tax} ({appliedTaxRate}%):
                     </span>
                     <span className="font-bold">
                       {SettingsService.formatPrice(
@@ -2175,6 +2262,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         subtotal={subtotalForPayment}
         discount={discountForPayment}
         tax={taxForPayment}
+        taxRate={appliedTaxRate}
         total={grandTotalForPayment}
         discountBreakdown={discountBreakdownForPayment}
         receiptBreakdown={receiptBreakdown}

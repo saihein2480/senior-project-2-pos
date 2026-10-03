@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { detectColorName } from "@/lib/colorUtils";
 import { authFetch } from "@/lib/authFetch";
+import { branchKey, matchesBranch, resolveBranchFilter } from "@/lib/branch";
+import { deliveryFeeOf } from "@/lib/deliveryFee";
 
 interface ReportData {
   totalRevenue: number;
@@ -81,6 +83,9 @@ interface ReportData {
     expenseMMK: number;
     totalSalesTHB: number;
     totalSalesMMK: number;
+    /** Delivery fees charged that day (COD / online); not goods, not profit. */
+    deliveryFeeTHB?: number;
+    deliveryFeeMMK?: number;
     originalPriceTHB: number;
     originalPriceMMK: number;
     netTHB: number;
@@ -105,7 +110,7 @@ interface Expense {
 
 function ReportsPageContent() {
   const { formatPrice } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { businessSettings, branch: currentBranch, branches } = useSettings();
   const { t } = useLanguage();
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -213,6 +218,7 @@ function ReportsPageContent() {
   }, [
     dateRange,
     filterBranch,
+    branches,
     filterStatus,
     filterPaymentMethod,
     filterWholesale,
@@ -234,11 +240,13 @@ function ReportsPageContent() {
     fetchShops();
   }, []);
 
+  // Default the branch filter to this user's branch (by id when known).
+  const currentBranchKey = branchKey(currentBranch);
   useEffect(() => {
-    if (businessSettings?.currentBranch) {
-      setFilterBranch(businessSettings.currentBranch);
+    if (currentBranchKey) {
+      setFilterBranch(currentBranchKey);
     }
-  }, [businessSettings?.currentBranch]);
+  }, [currentBranchKey]);
 
   // Initialize date filters
   useEffect(() => {
@@ -309,10 +317,11 @@ function ReportsPageContent() {
         );
       }
 
-      // Filter by branch
-      if (filterBranch && filterBranch !== "all") {
-        filteredTransactions = filteredTransactions.filter(
-          (t) => t.branchName === filterBranch,
+      // Filter by branch: id first, legacy names (current or former) as fallback.
+      const branchFilter = resolveBranchFilter(filterBranch, branches);
+      if (branchFilter) {
+        filteredTransactions = filteredTransactions.filter((t) =>
+          matchesBranch(t, branchFilter),
         );
       }
 
@@ -715,6 +724,8 @@ function ReportsPageContent() {
         expenseMMK: number;
         totalSalesTHB: number;
         totalSalesMMK: number;
+        deliveryFeeTHB: number;
+        deliveryFeeMMK: number;
         originalPriceTHB: number;
         originalPriceMMK: number;
       };
@@ -730,6 +741,8 @@ function ReportsPageContent() {
         expenseMMK: 0,
         totalSalesTHB: 0,
         totalSalesMMK: 0,
+        deliveryFeeTHB: 0,
+        deliveryFeeMMK: 0,
         originalPriceTHB: 0,
         originalPriceMMK: 0,
       };
@@ -750,6 +763,17 @@ function ReportsPageContent() {
       const exchangeRate = transaction.exchangeRate || 1;
       const isWholesaleTransaction =
         (transaction.discountBreakdown?.wholesaleSavings || 0) > 0;
+
+      // Delivery fee (THB): charged on top of the goods and kept on returns,
+      // so it is reported on its own, outside sales and profit.
+      const deliveryFee = deliveryFeeOf(transaction);
+      if (deliveryFee > 0) {
+        if (sellingCurrency === "THB") {
+          dailyStatusMap[dateKey].deliveryFeeTHB += deliveryFee;
+        } else {
+          dailyStatusMap[dateKey].deliveryFeeMMK += deliveryFee * exchangeRate;
+        }
+      }
 
       // Compute refunded quantities map for this transaction
       const refundedQuantities: { [itemIndex: number]: number } = {};
@@ -814,6 +838,8 @@ function ReportsPageContent() {
       expenseMMK: v.expenseMMK,
       totalSalesTHB: v.totalSalesTHB,
       totalSalesMMK: v.totalSalesMMK,
+      deliveryFeeTHB: v.deliveryFeeTHB,
+      deliveryFeeMMK: v.deliveryFeeMMK,
       originalPriceTHB: v.originalPriceTHB,
       originalPriceMMK: v.originalPriceMMK,
       netTHB: v.profitTHB - v.expenseTHB,
@@ -917,6 +943,7 @@ function ReportsPageContent() {
       "Profit Margin %",
       "Discount %",
       "Tax",
+      "Delivery Fee",
       "Branch",
       "Selling Currency",
       "Payment Method",
@@ -990,6 +1017,9 @@ function ReportsPageContent() {
         `${profitMarginPct.toFixed(1)}%`,
         `${discountPct.toFixed(1)}%`,
         formatPrice(transaction.tax || 0),
+        deliveryFeeOf(transaction) > 0
+          ? formatPrice(deliveryFeeOf(transaction))
+          : "-",
         transaction.branchName || "N/A",
         transaction.sellingCurrency || "THB",
         transaction.paymentMethod?.toUpperCase() || "N/A",
@@ -1740,7 +1770,7 @@ function ReportsPageContent() {
                     >
                       <option value="all">{t.allBranches}</option>
                       {shops.map((shop) => (
-                        <option key={shop.id} value={shop.name}>
+                        <option key={shop.id} value={shop.id}>
                           {shop.name}
                         </option>
                       ))}
@@ -1869,6 +1899,9 @@ function ReportsPageContent() {
                         {t.totalSale}
                       </th>
                       <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                        {t.deliveryFeeLabel}
+                      </th>
+                      <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         Wholesale Amount
                       </th>
                       <th className="px-4 md:px-6 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
@@ -1918,6 +1951,15 @@ function ReportsPageContent() {
                             <div className="text-xs text-gray-500">
                               {SettingsService.formatPrice(
                                 row.totalSalesMMK || 0,
+                                "MMK",
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 md:px-6 py-3 whitespace-nowrap text-sm text-gray-900">
+                            <div>{formatPrice(row.deliveryFeeTHB || 0)}</div>
+                            <div className="text-xs text-gray-500">
+                              {SettingsService.formatPrice(
+                                row.deliveryFeeMMK || 0,
                                 "MMK",
                               )}
                             </div>
@@ -2361,7 +2403,7 @@ function ReportsPageContent() {
                 >
                   <option value="all">All Branches</option>
                   {shops.map((shop) => (
-                    <option key={shop.id} value={shop.name}>
+                    <option key={shop.id} value={shop.id}>
                       {shop.name}
                     </option>
                   ))}
@@ -2510,6 +2552,9 @@ function ReportsPageContent() {
                       </th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.tax}
+                      </th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+                        {t.deliveryFeeLabel}
                       </th>
                       <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
                         {t.branch}
@@ -2717,6 +2762,13 @@ function ReportsPageContent() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           {formatPrice(transaction.tax || 0)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {deliveryFeeOf(transaction) > 0 ? (
+                            formatPrice(deliveryFeeOf(transaction))
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {transaction.branchName || "Main Branch"}

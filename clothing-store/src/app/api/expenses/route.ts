@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { MANAGEMENT, OWNER_ONLY } from "@/config/rolePermissions";
-import {
-  handleRouteError,
-  jsonError,
-  requireRole,
-} from "@/lib/server/apiAuth";
+import { handleRouteError, requireRole } from "@/lib/server/apiAuth";
+import { parseJson, parseQuery, validate } from "@/server/validation";
 import {
   addExpense,
   getExpenses,
@@ -26,13 +24,11 @@ import {
 //   DELETE expense           - Owner only ("Delete Expense" / "Bulk Delete")
 
 const CURRENCIES = ["THB", "MMK"] as const;
-type Currency = (typeof CURRENCIES)[number];
 
 const MAX_NAME_LENGTH = 200;
 
-function isCurrency(value: unknown): value is Currency {
-  return CURRENCIES.includes(value as Currency);
-}
+const MISSING_FIELDS = "Missing required fields";
+const INVALID_EXPENSE_FIELDS = "Invalid expense fields";
 
 function parseDate(value: unknown): Date | null {
   if (typeof value !== "string" && typeof value !== "number") return null;
@@ -45,16 +41,82 @@ function parseAmount(value: unknown): number | null {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
-function parseName(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const name = value.trim();
-  return name && name.length <= MAX_NAME_LENGTH ? name : null;
-}
+// ---- Request schemas -------------------------------------------------------
 
-function optionalString(value: unknown): string | undefined | null {
-  if (value === undefined || value === null) return undefined;
-  return typeof value === "string" ? value : null;
-}
+/** Category / spending-menu name: trimmed, 1-200 characters. */
+const namedEntrySchema = (message: string) =>
+  z.object({
+    name: z.string({ error: message }).trim().min(1, message).max(MAX_NAME_LENGTH, message),
+  });
+
+/** A date string or timestamp that `new Date` understands. */
+const expenseDate = z.unknown().transform((value, ctx) => {
+  const date = parseDate(value);
+  if (!date) {
+    ctx.addIssue({ code: "custom", message: INVALID_EXPENSE_FIELDS });
+    return z.NEVER;
+  }
+  return date;
+});
+
+/** A finite amount >= 0, given as a number or numeric text. */
+const expenseAmount = z.unknown().transform((value, ctx) => {
+  const amount = parseAmount(value);
+  if (amount === null) {
+    ctx.addIssue({ code: "custom", message: INVALID_EXPENSE_FIELDS });
+    return z.NEVER;
+  }
+  return amount;
+});
+
+const optionalExpenseText = z.string({ error: INVALID_EXPENSE_FIELDS }).nullish();
+
+/** Present in the truthy sense the form check has always used (0 is missing). */
+const presentValue = z.unknown().refine((value) => Boolean(value), {
+  message: MISSING_FIELDS,
+});
+
+/**
+ * POST body for a new expense. Presence is checked before types, so a form
+ * with a blank required field keeps getting "Missing required fields".
+ * spendingMenuId is optional (the feature was removed from the UI).
+ */
+const createExpenseSchema = z
+  .looseObject({
+    categoryId: presentValue,
+    date: presentValue,
+    amount: presentValue,
+    currency: presentValue,
+  })
+  .pipe(
+    z.object({
+      categoryId: z.string({ error: INVALID_EXPENSE_FIELDS }),
+      spendingMenuId: optionalExpenseText,
+      note: optionalExpenseText,
+      imageUrl: optionalExpenseText,
+      date: expenseDate,
+      amount: expenseAmount,
+      currency: z.enum(CURRENCIES, { error: INVALID_EXPENSE_FIELDS }),
+    }),
+  );
+
+/** PUT body: every field optional; a falsy date or "" currency means "unchanged". */
+const updateExpenseSchema = z.object({
+  categoryId: z.string({ error: INVALID_EXPENSE_FIELDS }).optional(),
+  spendingMenuId: optionalExpenseText,
+  note: optionalExpenseText,
+  imageUrl: optionalExpenseText,
+  date: z.preprocess((value) => value || undefined, expenseDate.optional()),
+  amount: expenseAmount.optional(),
+  currency: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.enum(CURRENCIES, { error: INVALID_EXPENSE_FIELDS }).optional(),
+  ),
+});
+
+const expenseIdQuerySchema = z.object({
+  id: z.string({ error: "ID is required" }).min(1, "ID is required"),
+});
 
 export async function GET(request: NextRequest) {
   const auth = await requireRole(request, MANAGEMENT);
@@ -84,68 +146,34 @@ export async function POST(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
-    const { type } = body;
+    // One endpoint, three bodies; `type` picks the schema.
+    const body = await parseJson(request, z.looseObject({}));
 
-    if (type === "category") {
-      const name = parseName(body.name);
-      if (!name) {
-        return jsonError(400, "Category name is required");
-      }
+    if (body.type === "category") {
+      const { name } = validate(
+        body,
+        namedEntrySchema("Category name is required"),
+      );
       const category = await addExpenseCategory(name);
       return NextResponse.json({ success: true, data: category });
-    } else if (type === "spendingMenu") {
-      const name = parseName(body.name);
-      if (!name) {
-        return jsonError(400, "Spending menu name is required");
-      }
+    } else if (body.type === "spendingMenu") {
+      const { name } = validate(
+        body,
+        namedEntrySchema("Spending menu name is required"),
+      );
       const spendingMenu = await addSpendingMenu(name);
       return NextResponse.json({ success: true, data: spendingMenu });
     } else {
-      const {
-        categoryId,
-        spendingMenuId,
-        note,
-        imageUrl,
-        date,
-        amount,
-        currency,
-      } = body;
-
-      // spendingMenuId is optional (feature removed in UI), validate required fields only
-      if (!categoryId || !date || !amount || !currency) {
-        return jsonError(400, "Missing required fields");
-      }
-
-      const parsedDate = parseDate(date);
-      const parsedAmount = parseAmount(amount);
-      const parsedNote = optionalString(note);
-      const parsedImageUrl = optionalString(imageUrl);
-      if (
-        typeof categoryId !== "string" ||
-        (spendingMenuId !== undefined &&
-          spendingMenuId !== null &&
-          typeof spendingMenuId !== "string") ||
-        parsedDate === null ||
-        parsedAmount === null ||
-        !isCurrency(currency) ||
-        parsedNote === null ||
-        parsedImageUrl === null
-      ) {
-        return jsonError(400, "Invalid expense fields");
-      }
+      const input = validate(body, createExpenseSchema);
 
       const expense = await addExpense({
-        categoryId,
-        spendingMenuId: spendingMenuId || undefined,
-        note: parsedNote || "",
-        imageUrl: parsedImageUrl || "",
-        date: parsedDate,
-        amount: parsedAmount,
-        currency,
+        categoryId: input.categoryId,
+        spendingMenuId: input.spendingMenuId || undefined,
+        note: input.note || "",
+        imageUrl: input.imageUrl || "",
+        date: input.date,
+        amount: input.amount,
+        currency: input.currency,
       });
 
       return NextResponse.json({ success: true, data: expense });
@@ -157,17 +185,16 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  // Read before auth: the type decides which roles may delete. Any other
+  // value (or none) deletes an expense, which is Owner only.
   const type = searchParams.get("type");
-  const id = searchParams.get("id");
 
   const isLookup = type === "category" || type === "spendingMenu";
   const auth = await requireRole(request, isLookup ? MANAGEMENT : OWNER_ONLY);
   if ("response" in auth) return auth.response;
 
   try {
-    if (!id) {
-      return jsonError(400, "ID is required");
-    }
+    const { id } = parseQuery(searchParams, expenseIdQuerySchema);
 
     if (type === "category") {
       await deleteExpenseCategory(id);
@@ -188,55 +215,17 @@ export async function PUT(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-
-    if (!id) {
-      return jsonError(400, "ID is required");
-    }
-
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
-
-    const {
-      categoryId,
-      spendingMenuId,
-      note,
-      imageUrl,
-      date,
-      amount,
-      currency,
-    } = body;
-
-    const parsedDate = date ? parseDate(date) : undefined;
-    const parsedAmount = amount !== undefined ? parseAmount(amount) : undefined;
-    const parsedNote = optionalString(note);
-    const parsedImageUrl = optionalString(imageUrl);
-
-    if (
-      (categoryId !== undefined && typeof categoryId !== "string") ||
-      (spendingMenuId !== undefined &&
-        spendingMenuId !== null &&
-        typeof spendingMenuId !== "string") ||
-      parsedDate === null ||
-      parsedAmount === null ||
-      (currency !== undefined && currency !== "" && !isCurrency(currency)) ||
-      parsedNote === null ||
-      parsedImageUrl === null
-    ) {
-      return jsonError(400, "Invalid expense fields");
-    }
+    const { id } = parseQuery(request, expenseIdQuerySchema);
+    const body = await parseJson(request, updateExpenseSchema);
 
     await updateExpense(id, {
-      categoryId,
-      spendingMenuId: spendingMenuId || undefined,
-      note: parsedNote,
-      imageUrl: parsedImageUrl,
-      date: parsedDate,
-      amount: parsedAmount,
-      currency: isCurrency(currency) ? currency : undefined,
+      categoryId: body.categoryId,
+      spendingMenuId: body.spendingMenuId || undefined,
+      note: body.note ?? undefined,
+      imageUrl: body.imageUrl ?? undefined,
+      date: body.date,
+      amount: body.amount,
+      currency: body.currency,
     });
 
     return NextResponse.json({ success: true });

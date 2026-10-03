@@ -1,33 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import {
   CreateStockRequest,
   StockResponse,
   StockListResponse,
 } from "@/types/stock";
 import { ALL_STAFF, MANAGEMENT } from "@/config/rolePermissions";
-import {
-  handleRouteError,
-  jsonError,
-  requireRole,
-} from "@/lib/server/apiAuth";
+import { handleRouteError, requireRole } from "@/lib/server/apiAuth";
 import {
   createStock,
   getAllStocks,
   getRecentStocks,
   getStocksByShop,
+  stockRequestSchema,
 } from "@/server/stocksAdmin";
+import { parseJson, parseQuery } from "@/server/validation";
 
 // Access:
 //   GET  - every POS role (the product grid and cart read stock for sales).
 //   POST - Owner + Manager (Doc: "Add New Products").
 
 const MAX_LIMIT = 1000;
+const LIMIT_MESSAGE = "limit must be a positive integer";
 
-/** Parse a price field: a finite number >= 0, or null if invalid. */
-function parsePrice(value: unknown): number | null {
-  const price = typeof value === "number" ? value : parseFloat(String(value));
-  return Number.isFinite(price) && price >= 0 ? price : null;
-}
+/** GET query. An empty value counts as absent, as it always has. */
+const emptyAsAbsent = (value: unknown) => (value === "" ? undefined : value);
+
+const stockListQuerySchema = z.object({
+  shop: z.string().optional(),
+  recent: z.string().optional(),
+  limit: z.preprocess(
+    emptyAsAbsent,
+    z
+      .string()
+      .regex(/^\d+$/, LIMIT_MESSAGE)
+      .transform(Number)
+      .pipe(z.number().int().positive(LIMIT_MESSAGE))
+      .optional(),
+  ),
+});
 
 // GET /api/stocks - Get all stocks or recent stocks
 export async function GET(request: NextRequest) {
@@ -35,10 +46,7 @@ export async function GET(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const limit = searchParams.get("limit");
-    const shop = searchParams.get("shop");
-    const recent = searchParams.get("recent");
+    const { shop, recent, limit } = parseQuery(request, stockListQuerySchema);
 
     let stocks;
 
@@ -47,12 +55,8 @@ export async function GET(request: NextRequest) {
     } else if (recent === "true") {
       // Get recent stocks (last 20 items by default)
       stocks = await getRecentStocks(20);
-    } else if (limit) {
-      const count = Number.parseInt(limit, 10);
-      if (!Number.isInteger(count) || count <= 0) {
-        return jsonError(400, "limit must be a positive integer");
-      }
-      stocks = await getRecentStocks(Math.min(count, MAX_LIMIT));
+    } else if (limit !== undefined) {
+      stocks = await getRecentStocks(Math.min(limit, MAX_LIMIT));
     } else {
       stocks = await getAllStocks();
     }
@@ -75,38 +79,17 @@ export async function POST(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
-
-    // Basic validation
-    if (!body.groupName || !body.unitPrice || !body.originalPrice) {
-      const response: StockResponse = {
-        success: false,
-        error: "Missing required fields: groupName, unitPrice, originalPrice",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const unitPrice = parsePrice(body.unitPrice);
-    const originalPrice = parsePrice(body.originalPrice);
-    if (unitPrice === null || originalPrice === null) {
-      const response: StockResponse = {
-        success: false,
-        error: "unitPrice and originalPrice must be non-negative numbers",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
+    const body = await parseJson(request, stockRequestSchema);
 
     const stockData: CreateStockRequest = {
       groupName: body.groupName,
-      unitPrice,
-      originalPrice,
-      releaseDate: body.releaseDate,
+      unitPrice: body.unitPrice,
+      originalPrice: body.originalPrice,
+      // Optional on the wire; a missing date is simply not stored, as before.
+      releaseDate: body.releaseDate as string,
       shop: body.shop || "Main Shop",
       isColorless: body.isColorless || false,
-      groupImage: body.groupImage,
+      groupImage: body.groupImage ?? undefined,
       wholesaleTiers: body.wholesaleTiers || [],
       colorVariants: body.colorVariants || [],
     };

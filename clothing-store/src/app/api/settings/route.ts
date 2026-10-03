@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import type {
   BusinessSettings,
   CouponPackage,
+  LoyaltySettings,
   StoreInfoSettings,
 } from "@/services/settingsService";
 import { MANAGEMENT } from "@/config/rolePermissions";
@@ -16,6 +18,8 @@ import {
   resetBusinessSettings,
   saveBusinessSettings,
 } from "@/server/settingsAdmin";
+import { parseJson, parseQuery } from "@/server/validation";
+import { roundMoney } from "@/lib/money";
 
 // Access:
 //   GET   - public. business_settings is public-read, and the storefront
@@ -150,8 +154,115 @@ function sanitizeCouponPackages(input: unknown): CouponPackage[] {
 function sanitizeDeliveryFee(input: unknown): number {
   const fee = Number(input);
   if (!Number.isFinite(fee) || fee <= 0) return 0;
-  return Math.round(fee * 100) / 100;
+  return roundMoney(fee, "THB");
 }
+
+// ---- Request schemas -------------------------------------------------------
+//
+// POST is a whole-document save from the Settings page, and it has always
+// been forgiving: a field of the wrong type falls back to its default rather
+// than failing the save (an odd legacy value must not lock the owner out of
+// their settings). The `.catch(default)` fields below keep exactly that. What
+// is rejected is input that would corrupt money maths: a body that is not an
+// object, a tax rate outside 0-100, or a negative exchange rate.
+
+const RECEIPT_PAPER_SIZES = [
+  "44mm",
+  "57mm",
+  "58mm",
+  "69mm",
+  "76mm",
+  "78mm",
+  "80mm",
+  "82.5mm",
+  "112mm",
+  "114mm",
+  "210mm",
+] as const;
+
+/** Text field: a string, otherwise "" (callers apply their own `||` default). */
+const textOrEmpty = z.string().catch("");
+const flagOr = (fallback: boolean) => z.boolean().catch(fallback);
+const numberOr = (fallback: number) => z.number().catch(fallback);
+/** A number, or 0 when the field is missing or not a number. */
+const numberOrZero = (schema: z.ZodNumber) =>
+  z.preprocess(
+    (value) => (typeof value === "number" && Number.isFinite(value) ? value : 0),
+    schema,
+  );
+
+const defaultLoyaltySettings = () =>
+  ({
+    enabled: false,
+    minimumSpendAmount: 500,
+    pointsPerPurchase: 1,
+    couponPackages: [] as CouponPackage[],
+    pointsForCoupon: 10,
+    couponDiscountType: "percentage" as const,
+    couponDiscountValue: 10,
+    couponValidityDays: 30,
+  }) satisfies LoyaltySettings;
+
+const loyaltySettingsSchema = z
+  .object({
+    enabled: flagOr(false),
+    minimumSpendAmount: numberOr(500),
+    pointsPerPurchase: numberOr(1),
+    couponPackages: z.unknown().transform(sanitizeCouponPackages),
+    pointsForCoupon: numberOr(10),
+    couponDiscountType: z.enum(["percentage", "fixed"]).catch("percentage"),
+    couponDiscountValue: numberOr(10),
+    couponValidityDays: numberOr(30),
+  })
+  // Missing, null or not an object: the default programme (disabled).
+  .catch(defaultLoyaltySettings);
+
+const TAX_RATE_MESSAGE = "taxRate must be between 0 and 100";
+
+const saveSettingsSchema = z.object({
+  businessName: textOrEmpty,
+  shortName: textOrEmpty,
+  defaultCurrency: z.enum(["THB", "MMK"]).catch("THB"),
+  taxRate: numberOrZero(
+    z.number().min(0, TAX_RATE_MESSAGE).max(100, TAX_RATE_MESSAGE),
+  ),
+  registeredBy: textOrEmpty,
+  registeredAt: textOrEmpty,
+  businessLogo: textOrEmpty,
+  showBusinessLogoOnInvoice: flagOr(true),
+  autoPrintReceiptAfterCheckout: flagOr(true),
+  invoiceFooterMessage: textOrEmpty,
+  invoiceFooterImage: textOrEmpty,
+  receiptPaperSize: z.enum(RECEIPT_PAPER_SIZES).catch("80mm"),
+  enableDarkMode: flagOr(false),
+  enableSoundEffects: flagOr(false),
+  currencyRate: numberOrZero(
+    z.number().min(0, "currencyRate must not be negative"),
+  ),
+  // Read by the refund flow: refund the tax share of returned items too.
+  // Booleans only; anything else saves as false (keep tax, the old behaviour).
+  refundTaxOnReturns: flagOr(false),
+  // Flat THB fee the storefront adds to every order. Anything that is not
+  // a finite, non-negative number is stored as 0 (free delivery) rather
+  // than letting NaN or a negative charge reach checkout.
+  deliveryFee: z.unknown().transform(sanitizeDeliveryFee),
+  currentBranch: textOrEmpty,
+  // Owner-only workspace preference; hides Home + cart for the owner.
+  hidePosForOwner: flagOr(false),
+  storeInfo: z.unknown().transform(sanitizeStoreInfo),
+  loyaltySettings: loyaltySettingsSchema,
+});
+
+const BRANCH_REQUIRED = "currentBranch is required";
+
+const patchSettingsSchema = z.object(
+  { currentBranch: z.string({ error: BRANCH_REQUIRED }) },
+  { error: BRANCH_REQUIRED },
+);
+
+const settingsActionSchema = z.object({
+  action: z.literal("reset", { error: "Invalid action" }),
+});
 
 // GET /api/settings - Get business settings (public, see note above)
 export async function GET() {
@@ -209,83 +320,11 @@ export async function POST(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
+    const body = await parseJson(request, saveSettingsSchema);
 
-    // Validate required fields
     const settingsData: Omit<BusinessSettings, "createdAt" | "updatedAt"> = {
-      businessName: body.businessName || "",
-      shortName: body.shortName || "",
-      defaultCurrency: body.defaultCurrency || "THB",
-      taxRate: typeof body.taxRate === "number" ? body.taxRate : 0,
-      registeredBy: body.registeredBy || "",
-      registeredAt: body.registeredAt || "",
-      businessLogo: body.businessLogo || "",
-      showBusinessLogoOnInvoice:
-        typeof body.showBusinessLogoOnInvoice === "boolean"
-          ? body.showBusinessLogoOnInvoice
-          : true,
-      autoPrintReceiptAfterCheckout:
-        typeof body.autoPrintReceiptAfterCheckout === "boolean"
-          ? body.autoPrintReceiptAfterCheckout
-          : true,
-      invoiceFooterMessage: body.invoiceFooterMessage || "",
-      invoiceFooterImage: body.invoiceFooterImage || "",
-      receiptPaperSize: [
-        "44mm",
-        "57mm",
-        "58mm",
-        "69mm",
-        "76mm",
-        "78mm",
-        "80mm",
-        "82.5mm",
-        "112mm",
-        "114mm",
-        "210mm",
-      ].includes(body.receiptPaperSize)
-        ? body.receiptPaperSize
-        : "80mm",
-      enableDarkMode:
-        typeof body.enableDarkMode === "boolean" ? body.enableDarkMode : false,
-      enableSoundEffects:
-        typeof body.enableSoundEffects === "boolean"
-          ? body.enableSoundEffects
-          : false,
-      currencyRate:
-        typeof body.currencyRate === "number" ? body.currencyRate : 0,
-      // Flat THB fee the storefront adds to every order. Anything that is not
-      // a finite, non-negative number is stored as 0 (free delivery) rather
-      // than letting NaN or a negative charge reach checkout.
-      deliveryFee: sanitizeDeliveryFee(body.deliveryFee),
+      ...body,
       currentBranch: body.currentBranch || "Main Branch",
-      // Owner-only workspace preference; hides Home + cart for the owner.
-      hidePosForOwner:
-        typeof body.hidePosForOwner === "boolean"
-          ? body.hidePosForOwner
-          : false,
-      storeInfo: sanitizeStoreInfo(body.storeInfo),
-      loyaltySettings: body.loyaltySettings ? {
-        enabled: typeof body.loyaltySettings.enabled === "boolean" ? body.loyaltySettings.enabled : false,
-        minimumSpendAmount: typeof body.loyaltySettings.minimumSpendAmount === "number" ? body.loyaltySettings.minimumSpendAmount : 500,
-        pointsPerPurchase: typeof body.loyaltySettings.pointsPerPurchase === "number" ? body.loyaltySettings.pointsPerPurchase : 1,
-        couponPackages: sanitizeCouponPackages(body.loyaltySettings.couponPackages),
-        pointsForCoupon: typeof body.loyaltySettings.pointsForCoupon === "number" ? body.loyaltySettings.pointsForCoupon : 10,
-        couponDiscountType: (body.loyaltySettings.couponDiscountType === "percentage" || body.loyaltySettings.couponDiscountType === "fixed") ? body.loyaltySettings.couponDiscountType : "percentage",
-        couponDiscountValue: typeof body.loyaltySettings.couponDiscountValue === "number" ? body.loyaltySettings.couponDiscountValue : 10,
-        couponValidityDays: typeof body.loyaltySettings.couponValidityDays === "number" ? body.loyaltySettings.couponValidityDays : 30,
-      } : {
-        enabled: false,
-        minimumSpendAmount: 500,
-        pointsPerPurchase: 1,
-        couponPackages: [],
-        pointsForCoupon: 10,
-        couponDiscountType: "percentage" as const,
-        couponDiscountValue: 10,
-        couponValidityDays: 30,
-      },
     };
 
     const savedSettings = await saveBusinessSettings(settingsData);
@@ -311,26 +350,17 @@ export async function PUT(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get("action");
+    // Only ?action=reset exists; anything else is a 400 "Invalid action".
+    parseQuery(request, settingsActionSchema);
 
-    if (action === "reset") {
-      const resetSettings = await resetBusinessSettings();
-
-      const response: SettingsResponse = {
-        success: true,
-        data: resetSettings,
-      };
-
-      return NextResponse.json(response);
-    }
+    const resetSettings = await resetBusinessSettings();
 
     const response: SettingsResponse = {
-      success: false,
-      error: "Invalid action",
+      success: true,
+      data: resetSettings,
     };
 
-    return NextResponse.json(response, { status: 400 });
+    return NextResponse.json(response);
   } catch (error) {
     return handleRouteError(
       error,
@@ -346,10 +376,9 @@ export async function PATCH(request: NextRequest) {
   if ("response" in auth) return auth.response;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body.currentBranch !== "string") {
-      return jsonError(400, "currentBranch is required");
-    }
+    const body = await parseJson(request, patchSettingsSchema, {
+      invalidBodyMessage: BRANCH_REQUIRED,
+    });
 
     const current = await getBusinessSettings();
     if (!current) {

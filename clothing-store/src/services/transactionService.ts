@@ -1,22 +1,87 @@
 import {
   collection,
-  addDoc,
   getDocs,
   query,
   orderBy,
   where,
+  limit as limitTo,
   Timestamp,
   doc,
-  updateDoc,
   runTransaction,
   getDoc,
-  setDoc,
-  deleteDoc,
+  serverTimestamp,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { authFetch } from "@/lib/authFetch";
 import { SelectedCustomer, CartItem } from "@/types/cart";
-import { StockService } from "@/services/stockService";
-import type { OrderLineReturn } from "@/lib/stockMath";
+import type { ColorVariant } from "@/types/stock";
+import {
+  deductSaleLines,
+  groupLineAdjustments,
+  isStockAdjustmentError,
+  saleStockMessage,
+  StockAdjustmentError,
+} from "@/lib/stockMath";
+import type {
+  BulkResult,
+  InspectionResult,
+  TransactionActionInput,
+  TransactionActionResult,
+} from "@/server/orders/types";
+import type { ArchiveResult } from "@/server/orders/archive";
+
+export type { TransactionActionResult } from "@/server/orders/types";
+
+/**
+ * POST a JSON body to one of the POS order routes and unwrap
+ * `{ success, data }`. Throws an Error carrying the server's message (e.g.
+ * "This order is already cancelled.") when the route refuses.
+ */
+export async function postOrderApi<T>(path: string, body: unknown): Promise<T> {
+  const response = await authFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let json: { success?: boolean; data?: T; error?: string } | null = null;
+  try {
+    json = await response.json();
+  } catch {
+    json = null;
+  }
+  if (!response.ok || !json || json.success !== true) {
+    throw new Error(json?.error || `Request failed (${response.status})`);
+  }
+  return json.data as T;
+}
+
+/**
+ * Drop `undefined` (Firestore rejects it) from plain objects and arrays,
+ * leaving class instances such as Timestamp untouched. Undefined array
+ * entries become null.
+ */
+function sanitizeForFirestore(value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value)) return value.map((v) => sanitizeForFirestore(v));
+  if (typeof value === "object") {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+    const out: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
+      if (v !== undefined) out[k] = sanitizeForFirestore(v);
+    });
+    return out;
+  }
+  return value;
+}
+
+/** "itemId___3" (the pages' refund-item keys) -> line 3. */
+function lineIndexFromKey(key: string): number {
+  const at = key.lastIndexOf("___");
+  const index = Number.parseInt(at >= 0 ? key.slice(at + 3) : key, 10);
+  return Number.isInteger(index) && index >= 0 ? index : -1;
+}
 
 export interface DiscountBreakdown {
   wholesaleSavings: number;
@@ -89,22 +154,34 @@ export interface Transaction {
   paymentMethod: "cash" | "scan" | "wallet" | "cod";
   timestamp: string;
   createdAt: Timestamp;
+  /**
+   * Legacy status strings. Written only by the order server actions
+   * (src/server/orders) through `legacyStatusFields` in src/lib/orderState.ts,
+   * which keeps status / orderStatus / paymentStatus / deliveryStatus
+   * consistent. Read them through `deriveOrderState` rather than comparing
+   * strings where possible.
+   */
   status:
     | "completed"
     | "pending"
     | "cancelled"
     | "refunded"
-    | "partially_refunded";
+    | "partially_refunded"
+    | "refund_rejected";
   paymentStatus?:
     | "completed"
     | "pending"
     | "cancelled"
     | "refunded"
     | "partially_refunded"
-    | "pending_refund";
+    | "pending_refund"
+    | "refund_rejected"
+    | "SUCCESS"
+    | "PENDING";
   orderStatus?:
     | "pending"
     | "confirmed"
+    | "packaging"
     | "processing"
     | "delivered"
     | "delivering"
@@ -131,9 +208,11 @@ export interface Transaction {
     method?: "cash" | "original_payment" | "bank_transfer" | "pending";
     requestedAt?: Timestamp;
     requestedBy?: string;
+    requestedByUid?: string;
     reason?: string;
     confirmedAt?: Timestamp;
     confirmedBy?: string;
+    confirmedByUid?: string;
     processedBy?: string;
     notes?: string;
     proofUrl?: string;
@@ -188,23 +267,32 @@ export interface RefundItem {
   totalAmount: number;
 }
 
+/**
+ * One entry of `transactions/{id}.refunds[]` — the single record of a refund.
+ * (The separate `refunds` collection is no longer written.)
+ */
 export interface Refund {
+  /** Same as refundId on refunds recorded by the server actions. */
   id?: string;
   transactionId: string;
   refundId: string;
   items: RefundItem[];
+  /** Money given back: itemsSubtotal − cartDiscountRefund + taxRefund. */
   totalAmount: number;
-  itemsSubtotal?: number; // Subtotal of refunded items before cart discount and tax
-  cartDiscountRefund?: number; // Proportional cart discount being refunded
-  taxRefund?: number; // Proportional tax being refunded
+  itemsSubtotal?: number; // Subtotal of refunded items before order-level discounts and tax
+  cartDiscountRefund?: number; // Proportional order-level discount taken off those items
+  /** Tax included in totalAmount (0 unless business_settings refundTaxOnReturns). */
+  taxRefund?: number;
   reason?: string;
   processedBy?: string;
+  processedByUid?: string;
   createdAt: Timestamp;
   status: "pending" | "completed" | "failed";
   // Refund payment tracking
   refundMethod?: "cash" | "original_payment" | "bank_transfer" | "pending";
   refundedAt?: Timestamp;
   refundedBy?: string;
+  refundedByUid?: string;
   refundNotes?: string;
   refundProofUrl?: string; // Receipt or proof of refund
 }
@@ -222,194 +310,281 @@ export interface TransactionSummary {
   };
 }
 
+export type RefundPayoutMethod = "cash" | "original_payment" | "bank_transfer";
+export type ReturnStatusChoice = "fully_returned" | "partially_returned";
+
+/** One inspected line for `completeReturnInspection`. */
+export interface InspectionLine {
+  /** Position of the line in `transaction.items`. */
+  lineIndex: number;
+  /** Units returned on this line. */
+  quantity: number;
+  result: InspectionResult;
+  damageReason?: string;
+}
+
+const actionsPath = (transactionId: string) =>
+  `/api/transactions/${encodeURIComponent(transactionId)}/actions`;
+
 class TransactionService {
   private collectionName = "transactions";
   private counterCollection = "counters";
   private counterDocId = "transactionCounter";
 
   /**
-   * Generate a unique sequential transaction ID
-   * Format: TXN-0000000000001, TXN-0000000000002, etc.
-   * Uses Firestore transaction to ensure atomicity and prevent duplicates
+   * Allocate the next receipt number (TXN-0000000000001 ...).
+   *
+   * @deprecated Use `recordSale`, which allocates the number in the same
+   * transaction that saves the sale, so an abandoned checkout no longer
+   * burns a number. Throws when the counter cannot be advanced; there is no
+   * fallback id any more.
    */
   async generateTransactionId(): Promise<string> {
+    if (!db) throw new Error("Firestore database is not initialized.");
+    const firestore = db;
+    const counterRef = doc(firestore, this.counterCollection, this.counterDocId);
+
     try {
-      const counterRef = doc(db!, this.counterCollection, this.counterDocId);
-
-      const newTransactionId = await runTransaction(
-        db!,
-        async (transaction) => {
-          const counterDoc = await transaction.get(counterRef);
-
-          let newCount: number;
-          if (!counterDoc.exists()) {
-            // Initialize counter if it doesn't exist
-            newCount = 1;
-            transaction.set(counterRef, {
-              count: newCount,
-              lastUpdated: Timestamp.now(),
-            });
-          } else {
-            // Increment existing counter
-            newCount = (counterDoc.data()?.count || 0) + 1;
-            transaction.update(counterRef, {
-              count: newCount,
-              lastUpdated: Timestamp.now(),
-            });
-          }
-
-          // Format: TXN-0000000000001 (13 digits, zero-padded)
-          return `TXN-${newCount.toString().padStart(13, "0")}`;
-        },
-      );
-
-      console.log("Generated transaction ID:", newTransactionId);
-      return newTransactionId;
+      return await runTransaction(firestore, async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+        const next = this.nextCount(counterDoc.exists() ? counterDoc.data() : null);
+        if (next === 1 && !counterDoc.exists()) {
+          transaction.set(counterRef, { count: 1, lastUpdated: serverTimestamp() });
+        } else {
+          transaction.update(counterRef, { count: next, lastUpdated: serverTimestamp() });
+        }
+        return this.formatReceiptNumber(next);
+      });
     } catch (error) {
       console.error("Error generating transaction ID:", error);
-      // Fallback to timestamp-based ID if counter fails
-      const fallbackId = `TXN-${Date.now()}-${Math.random()
-        .toString(36)
-        .substring(2, 8)
-        .toUpperCase()}`;
-      console.warn("Using fallback transaction ID:", fallbackId);
-      return fallbackId;
+      throw new Error(
+        `Could not allocate a receipt number: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
+  }
+
+  private nextCount(counter: Record<string, unknown> | null | undefined): number {
+    if (!counter) return 1;
+    const current = Number(counter.count ?? 0);
+    if (!Number.isInteger(current) || current < 0) {
+      throw new Error("The receipt counter holds an invalid value.");
+    }
+    return current + 1;
+  }
+
+  private formatReceiptNumber(count: number): string {
+    // Format: TXN-0000000000001 (13 digits, zero-padded)
+    return `TXN-${count.toString().padStart(13, "0")}`;
+  }
+
+  /**
+   * Save a confirmed sale, give it its receipt number and take its stock,
+   * atomically.
+   *
+   * In ONE Firestore transaction, reads first: counters/transactionCounter
+   * and every product document the cart touches. Then the writes: count + 1
+   * (only `count` and `lastUpdated`, as firestore.rules allow; the first sale
+   * creates it with count 1), each product's `colorVariants` minus the sold
+   * units, and the sale document with `transactionId = TXN-<13 digits>`,
+   * `createdAt` and `stockDeductedAt`. If a line cannot be matched to its
+   * variant or the shelf is short, it throws a StockAdjustmentError whose
+   * message is meant for the cashier (`Only 2 left of "Shirt" (Red / M)`) and
+   * nothing is saved: no sale, no stock change, no receipt number used.
+   *
+   * The cart no longer reserves stock, so this is the only place a POS sale
+   * takes it; pending (scan / COD) walk-in sales too. Cancelling or rejecting
+   * puts it back through the order actions on the server.
+   *
+   * Afterwards (best effort): redeem the applied loyalty coupon and ask the
+   * server to award loyalty points.
+   */
+  async recordSale(
+    data: Omit<Transaction, "id" | "createdAt" | "transactionId">,
+  ): Promise<{ id: string; transactionId: string }> {
+    const sale = await this.commitSale(data, null);
+    await this.afterSale(data, sale.transactionId, sale.id);
+    return sale;
+  }
+
+  /**
+   * The transaction behind recordSale. With `receiptNumber` null the number
+   * is allocated from the counter; otherwise (legacy recordTransaction) the
+   * given one is used and the counter is left alone.
+   */
+  private async commitSale(
+    data: Omit<Transaction, "id" | "createdAt" | "transactionId">,
+    receiptNumber: string | null,
+  ): Promise<{ id: string; transactionId: string }> {
+    if (!db) {
+      throw new Error(
+        "Firestore database is not initialized. Please check your Firebase configuration.",
+      );
+    }
+    const firestore = db;
+    const counterRef = doc(firestore, this.counterCollection, this.counterDocId);
+    const saleRef = doc(collection(firestore, this.collectionName));
+    const sanitized = sanitizeForFirestore(data) as Record<string, unknown>;
+
+    const { byStock, unlinked } = groupLineAdjustments(data.items || [], -1);
+    if (unlinked.length > 0) {
+      throw new StockAdjustmentError(
+        "stock_not_found",
+        `"${unlinked[0].groupName || "An item"}" is not linked to a product. Remove it from the cart and add it again.`,
+      );
+    }
+    const stockIds = Array.from(byStock.keys());
+    const stockRefs = stockIds.map((stockId) => doc(firestore, "stocks", stockId));
+
+    try {
+      const transactionId = await runTransaction(firestore, async (transaction) => {
+        // Reads: the counter (when allocating) and every product, before any write.
+        const counterDoc = receiptNumber ? null : await transaction.get(counterRef);
+        const stockSnaps = await Promise.all(stockRefs.map((ref) => transaction.get(ref)));
+
+        const stockWrites = stockSnaps.map((snap, index) => {
+          const stockId = stockIds[index];
+          const adjustments = byStock.get(stockId) || [];
+          if (!snap.exists()) {
+            const notFound = new StockAdjustmentError(
+              "stock_not_found",
+              `Stock item ${stockId} not found`,
+              { stockId, label: adjustments[0]?.label },
+            );
+            throw new StockAdjustmentError(
+              notFound.code,
+              saleStockMessage(notFound),
+              notFound.details,
+            );
+          }
+          const colorVariants = deductSaleLines(
+            (snap.data() as { colorVariants?: ColorVariant[] }).colorVariants,
+            stockId,
+            adjustments,
+          );
+          return { ref: stockRefs[index], colorVariants };
+        });
+
+        // Writes.
+        let receipt = receiptNumber;
+        if (!receipt) {
+          const next = this.nextCount(counterDoc?.exists() ? counterDoc.data() : null);
+          if (!counterDoc?.exists()) {
+            transaction.set(counterRef, { count: next, lastUpdated: serverTimestamp() });
+          } else {
+            transaction.update(counterRef, { count: next, lastUpdated: serverTimestamp() });
+          }
+          receipt = this.formatReceiptNumber(next);
+        }
+
+        for (const write of stockWrites) {
+          transaction.update(write.ref, {
+            colorVariants: write.colorVariants,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        const now = Timestamp.now();
+        transaction.set(saleRef, {
+          ...sanitized,
+          transactionId: receipt,
+          createdAt: now,
+          stockDeductedAt: now,
+        });
+        return receipt;
+      });
+      return { id: saleRef.id, transactionId };
+    } catch (error) {
+      console.error("TransactionService: Error recording sale:", error);
+      // Stock problems already carry a message for the cashier.
+      if (isStockAdjustmentError(error)) throw error;
+      throw new Error(
+        `Failed to record transaction: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
+      );
     }
   }
 
   /**
-   * Record a completed transaction
+   * Coupon redemption + loyalty points. Never fails or holds up the sale.
+   *
+   * `transactionId` is the receipt number (what the coupon is redeemed
+   * against); `saleDocId` is the Firestore document id the loyalty route
+   * takes.
+   */
+  private async afterSale(
+    transactionData: Pick<Transaction, "customer" | "couponId" | "status">,
+    transactionId: string,
+    saleDocId: string,
+  ): Promise<void> {
+    // Consume the applied loyalty coupon, which also spends its points.
+    // Done before awarding so the new balance reflects the redemption.
+    if (transactionData.customer?.uid && transactionData.couponId) {
+      try {
+        const { LoyaltyService } = await import("./loyaltyService");
+        const redeemResult = await LoyaltyService.redeemCoupon({
+          customerId: transactionData.customer.uid,
+          couponId: transactionData.couponId,
+          transactionId,
+        });
+
+        if (!redeemResult.success) {
+          console.error("Coupon not redeemed:", redeemResult.error);
+        }
+      } catch (couponError) {
+        // Don't fail the sale if coupon bookkeeping fails.
+        console.error("Error redeeming coupon:", couponError);
+      }
+    }
+
+    // Loyalty points are awarded by the server (idempotent route), and only
+    // for a completed sale: pending scan / COD sales earn them on approval.
+    // Not awaited, so a slow or failing call never holds up the receipt.
+    if (
+      transactionData.customer?.uid &&
+      transactionData.status === "completed" &&
+      saleDocId
+    ) {
+      void postOrderApi<{ awarded: boolean; points: number }>(
+        `/api/transactions/${encodeURIComponent(saleDocId)}/award-loyalty`,
+        {},
+      )
+        .then((result) => {
+          console.log("Loyalty points:", result);
+        })
+        .catch((loyaltyError) => {
+          console.error("Error awarding loyalty points:", loyaltyError);
+        });
+    }
+  }
+
+  /**
+   * Record a completed transaction.
+   *
+   * Without a `transactionId` this is `recordSale` (receipt number allocated
+   * with the save) and resolves to the new document id. With one (the old
+   * generateTransactionId-first flow) the sale is saved under that number,
+   * still taking its stock in the same transaction, and gets the same coupon
+   * and loyalty follow-up.
    */
   async recordTransaction(
     transactionData: Omit<Transaction, "id" | "createdAt">,
   ): Promise<string> {
-    try {
-      console.log("TransactionService: Starting transaction recording...");
-      console.log("TransactionService: Database instance check:", {
-        dbExists: !!db,
-      });
-
-      if (!db) {
-        console.error("TransactionService: Firestore instance is null");
-        throw new Error(
-          "Firestore database is not initialized. Please check your Firebase configuration.",
-        );
-      }
-
-      console.log("TransactionService: Preparing transaction data...");
-      const dataToRecord = {
-        ...transactionData,
-        createdAt: Timestamp.now(),
-      };
-
-      // Sanitize data: remove or convert undefined values recursively so Firestore doesn't reject the document
-      const sanitize = (val: unknown): unknown => {
-        if (val === undefined) return null;
-        if (val === null) return null;
-        if (Array.isArray(val)) return val.map((v) => sanitize(v));
-        if (typeof val === "object" && val !== null) {
-          const out: Record<string, unknown> = {};
-          Object.entries(val as Record<string, unknown>).forEach(([k, v]) => {
-            if (v !== undefined) {
-              out[k] = sanitize(v);
-            }
-          });
-          return out;
-        }
-        return val;
-      };
-
-      const sanitizedData = sanitize(dataToRecord);
-
-      console.log("TransactionService: Transaction data prepared:", {
-        transactionId: dataToRecord.transactionId,
-        itemCount: dataToRecord.items?.length || 0,
-        total: dataToRecord.total,
-        paymentMethod: dataToRecord.paymentMethod,
-      });
-
-      console.log(
-        "TransactionService: Adding document to collection:",
-        this.collectionName,
-      );
-      const docRef = await addDoc(
-        collection(db, this.collectionName),
-        sanitizedData,
-      );
-
-      console.log(
-        "TransactionService: Transaction recorded successfully with ID:",
-        docRef.id,
-      );
-
-      // Consume the applied loyalty coupon, which also spends its points.
-      // Done before awarding so the new balance reflects the redemption.
-      if (transactionData.customer?.uid && transactionData.couponId) {
-        try {
-          const { LoyaltyService } = await import("./loyaltyService");
-          const redeemResult = await LoyaltyService.redeemCoupon({
-            customerId: transactionData.customer.uid,
-            couponId: transactionData.couponId,
-            transactionId: transactionData.transactionId,
-          });
-
-          if (!redeemResult.success) {
-            console.error("Coupon not redeemed:", redeemResult.error);
-          }
-        } catch (couponError) {
-          // Don't fail the sale if coupon bookkeeping fails.
-          console.error("Error redeeming coupon:", couponError);
-        }
-      }
-
-      // Award loyalty points if customer is provided and loyalty is enabled
-      if (transactionData.customer?.uid) {
-        try {
-          const { LoyaltyService } = await import("./loyaltyService");
-          const loyaltyResult = await LoyaltyService.awardPoints({
-            customerId: transactionData.customer.uid,
-            transactionId: transactionData.transactionId,
-            transactionAmount: transactionData.total,
-            source: 'pos',
-            description: `Purchase at ${transactionData.branchName || 'POS'}`,
-          });
-
-          if (loyaltyResult.success) {
-            console.log("Loyalty points awarded:", {
-              points: loyaltyResult.pointsAwarded,
-              newTotal: loyaltyResult.newTotalPoints,
-              coupons: loyaltyResult.couponsGenerated.length,
-            });
-          } else if (loyaltyResult.message) {
-            console.log("Loyalty points not awarded:", loyaltyResult.message);
-          }
-        } catch (loyaltyError) {
-          // Don't fail the transaction if loyalty fails
-          console.error("Error awarding loyalty points:", loyaltyError);
-        }
-      }
-
-      return docRef.id;
-    } catch (error) {
-      console.error("TransactionService: Error recording transaction:", error);
-      console.error("TransactionService: Error details:", {
-        message: error instanceof Error ? error.message : "Unknown error",
-        code: (error as { code?: string })?.code,
-        stack: error instanceof Error ? error.stack : undefined,
-        collectionName: this.collectionName,
-        dbExists: !!db,
-      });
-
-      if (error instanceof Error) {
-        throw new Error(`Failed to record transaction: ${error.message}`);
-      } else {
-        throw new Error("Failed to record transaction: Unknown error occurred");
-      }
+    const { transactionId: givenReceipt, ...rest } = transactionData;
+    if (!givenReceipt) {
+      const sale = await this.recordSale(rest);
+      return sale.id;
     }
+
+    const sale = await this.commitSale(rest, givenReceipt);
+    await this.afterSale(rest, sale.transactionId, sale.id);
+    return sale.id;
   }
 
   /**
-   * Get all transactions with optional filtering
+   * Transactions, newest first, filtered and limited by Firestore itself.
+   *
+   * Index note: `shopId ==` combined with the `createdAt` order/range needs
+   * the composite index transactions(shopId ASC, createdAt DESC). Without
+   * `shopId` the single-field createdAt index is enough.
    */
   async getTransactions(
     shopId?: string,
@@ -418,34 +593,25 @@ class TransactionService {
     limit?: number,
   ): Promise<Transaction[]> {
     try {
-      let q = query(
-        collection(db!, this.collectionName),
-        orderBy("createdAt", "desc"),
-      );
-
-      if (shopId) {
-        q = query(q, where("shopId", "==", shopId));
-      }
-
+      const constraints: QueryConstraint[] = [];
+      if (shopId) constraints.push(where("shopId", "==", shopId));
       if (startDate) {
-        q = query(q, where("createdAt", ">=", Timestamp.fromDate(startDate)));
+        constraints.push(where("createdAt", ">=", Timestamp.fromDate(startDate)));
       }
-
       if (endDate) {
-        q = query(q, where("createdAt", "<=", Timestamp.fromDate(endDate)));
+        constraints.push(where("createdAt", "<=", Timestamp.fromDate(endDate)));
+      }
+      constraints.push(orderBy("createdAt", "desc"));
+      if (limit !== undefined && Number.isFinite(limit) && limit > 0) {
+        constraints.push(limitTo(Math.floor(limit)));
       }
 
-      const querySnapshot = await getDocs(q);
-      const transactions: Transaction[] = [];
-
-      querySnapshot.forEach((doc) => {
-        transactions.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Transaction);
-      });
-
-      return limit ? transactions.slice(0, limit) : transactions;
+      const querySnapshot = await getDocs(
+        query(collection(db!, this.collectionName), ...constraints),
+      );
+      return querySnapshot.docs.map(
+        (snapshot) => ({ id: snapshot.id, ...snapshot.data() }) as Transaction,
+      );
     } catch (error) {
       console.error("Error fetching transactions:", error);
       throw new Error("Failed to fetch transactions");
@@ -568,23 +734,6 @@ class TransactionService {
   }
 
   /**
-   * Update transaction status
-   */
-  async updateTransactionStatus(
-    transactionId: string,
-    status: Transaction["status"],
-  ): Promise<void> {
-    try {
-      const transactionRef = doc(db!, this.collectionName, transactionId);
-      await updateDoc(transactionRef, { status });
-      console.log("Transaction status updated:", transactionId, status);
-    } catch (error) {
-      console.error("Error updating transaction status:", error);
-      throw new Error("Failed to update transaction status");
-    }
-  }
-
-  /**
    * Get revenue for a specific date range
    */
   async getRevenue(
@@ -620,85 +769,55 @@ class TransactionService {
     }
   }
 
-  /**
-   * Put a transaction's stock back through the shared returns ledger.
-   *
-   * Online orders keep their ledger on `onlineOrders/{onlineOrderId}`, which
-   * the online-orders page uses too, so the two screens cannot both restock
-   * one order. In-store sales keep it on the transaction itself.
-   *
-   * Stock is only returned if it was taken: in-store sales always take it at
-   * the till, online orders only once `stockDeductedAt` is set (COD orders
-   * placed before the storefront deducted stock never had any taken).
-   */
-  private async returnTransactionStock(
+  // -------------------------------------------------------------------------
+  // Order state changes. Every method below calls a server action
+  // (POST /api/transactions/[id]/actions, src/server/orders) that re-reads
+  // the order, checks the state machine (src/lib/orderState.ts) and writes
+  // everything in one Firestore transaction with an audit entry. The
+  // `transaction` snapshot and the "...By" name parameters the pages pass are
+  // ignored: the server reads fresh data and records the signed-in caller.
+  // -------------------------------------------------------------------------
+
+  /** Run one order action. Throws with the server's message when refused. */
+  async runAction(
     transactionId: string,
-    transaction: Transaction,
-    lines: Array<{ lineIndex: number; quantity: number; restock: boolean }>,
-  ): Promise<void> {
-    const returns: OrderLineReturn[] = lines
-      .filter((line) => line.quantity > 0)
-      .map((line) => {
-        const item = transaction.items[line.lineIndex];
-        return {
-          lineIndex: line.lineIndex,
-          quantity: line.quantity,
-          restock: line.restock,
-          stockId: item?.stockId || "",
-          colorName: item?.selectedColor || "",
-          size: item?.selectedSize || "",
-          variantHint: item?.id || "",
-        };
-      })
-      .filter((line) => !!line.stockId);
-
-    if (returns.length === 0) {
-      console.log(`No stock to return for transaction ${transactionId}`);
-      return;
-    }
-
-    const isOnline =
-      !!transaction.onlineOrderId ||
-      transaction.source === "online" ||
-      transaction.orderSource === "web_storefront";
-
-    let guard: Parameters<typeof StockService.returnOrderLines>[1] = {
-      collection: "transactions",
-      docId: transactionId,
-      source: "transaction",
-      requireField: isOnline ? "stockDeductedAt" : undefined,
-    };
-
-    if (transaction.onlineOrderId && db) {
-      const onlineSnap = await getDoc(
-        doc(db, "onlineOrders", transaction.onlineOrderId),
-      );
-      if (onlineSnap.exists()) {
-        guard = {
-          collection: "onlineOrders",
-          docId: transaction.onlineOrderId,
-          source: "onlineOrder",
-          requireField: "stockDeductedAt",
-          extraUpdatesWhenComplete: (current) =>
-            current.stockReservationStatus === "reserved"
-              ? {
-                  stockReservationStatus: "released",
-                  stockReleaseReason: "cancelled_in_pos",
-                }
-              : {},
-        };
-      }
-    }
-
-    const result = await StockService.returnOrderLines(returns, guard);
-    console.log(
-      `Stock return for transaction ${transactionId}: restocked ${result.restocked}, accounted ${result.accounted}` +
-        (result.skippedReason ? ` (${result.skippedReason})` : ""),
-    );
+    input: TransactionActionInput,
+  ): Promise<TransactionActionResult> {
+    if (!transactionId) throw new Error("Transaction id is required");
+    return postOrderApi<TransactionActionResult>(actionsPath(transactionId), input);
   }
 
   /**
-   * Process a refund for a transaction
+   * Restricted: only "completed" (= approve a pending order) and "cancelled"
+   * (= cancel, returning stock) are accepted; refund statuses come from the
+   * refund actions.
+   * @deprecated No callers; use approveTransaction / cancelTransaction.
+   */
+  async updateTransactionStatus(
+    transactionId: string,
+    status: Transaction["status"],
+  ): Promise<void> {
+    if (status === "refund_rejected") {
+      throw new Error("This status can't be set directly.");
+    }
+    await this.runAction(transactionId, { action: "setStatus", status });
+  }
+
+  /**
+   * Refund items of a transaction (server action "processRefund").
+   *
+   * `refundItems` keys are the pages' `${item.id}___${lineIndex}`; values are
+   * quantities. The amount is computed on the server from the stored order:
+   * line amounts − proportional order-level discount (+ proportional tax only
+   * when business_settings refundTaxOnReturns is on); never the delivery fee.
+   * Paid orders get a pending refund (confirm it with confirmRefundPayment).
+   *
+   * @param transaction ignored (the server re-reads the order)
+   * @param processedBy ignored (the server records the signed-in user)
+   * @param options.approveRefundRequest also mark a pending refundRequest
+   *   "approved" in the same transaction (replaces the follow-up updateDoc at
+   *   transactions/page.tsx ~L1045 and requests/refunds/page.tsx ~L245)
+   * @returns the new refund's id (REF-...)
    */
   async processRefund(
     transactionId: string,
@@ -706,296 +825,54 @@ class TransactionService {
     transaction: Transaction,
     reason?: string,
     processedBy?: string,
-    refundMethod?: "cash" | "original_payment" | "bank_transfer",
-    inspectionResults?: { [itemIndex: number]: "accepted" | "damaged" },
+    refundMethod?: RefundPayoutMethod,
+    inspectionResults?: { [itemIndex: number]: InspectionResult },
     returnStatus?: "refunded" | "partially_refunded",
+    options?: { approveRefundRequest?: boolean },
   ): Promise<string> {
-    try {
-      // Generate unique refund ID
-      const refundId = `REF-${Date.now()}-${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+    void transaction;
+    void processedBy;
 
-      // Process refund items with validation
-      const processedRefundItems: RefundItem[] = [];
-      let totalItemRefundAmount = 0;
-
-      // Calculate already refunded quantities for each item
-      const alreadyRefunded: { [itemIndex: number]: number } = {};
-      if (transaction.refunds) {
-        transaction.refunds.forEach((refund) => {
-          refund.items.forEach((refundItem) => {
-            alreadyRefunded[refundItem.itemIndex] =
-              (alreadyRefunded[refundItem.itemIndex] || 0) +
-              refundItem.quantity;
-          });
-        });
-      }
-
-      // Calculate transaction totals for proportional calculations
-      // Note: transaction.subtotal already includes item-level discounts (group/variant)
-      const transactionSubtotal = transaction.subtotal || 0;
-      const transactionCartDiscount = transaction.discount || 0;
-      const transactionTax = transaction.tax || 0;
-      const subtotalAfterCartDiscount =
-        transactionSubtotal - transactionCartDiscount;
-
-      let totalProportionalCartDiscount = 0;
-      let totalProportionalTax = 0;
-
-      Object.entries(refundItems).forEach(([key, quantity]) => {
-        if (quantity > 0) {
-          const [, index] = key.split("___");
-          const itemIndex = parseInt(index);
-          const item = transaction.items[itemIndex];
-
-          if (
-            item &&
-            !isNaN(itemIndex) &&
-            itemIndex >= 0 &&
-            itemIndex < transaction.items.length
-          ) {
-            // Check if refund quantity exceeds available quantity
-            const alreadyRefundedQty = alreadyRefunded[itemIndex] || 0;
-            const availableToRefund = item.quantity - alreadyRefundedQty;
-
-            if (quantity > availableToRefund) {
-              throw new Error(
-                `Cannot refund ${quantity} of item "${item.groupName}". Only ${availableToRefund} available to refund (${alreadyRefundedQty} already refunded).`,
-              );
-            }
-
-            // Use the actual price paid (discounted price if available, otherwise unitPrice)
-            const actualPricePaid =
-              item.discountedPrice !== undefined
-                ? item.discountedPrice
-                : item.unitPrice;
-            const itemRefundAmount = actualPricePaid * quantity;
-
-            // Calculate proportional cart discount for this item
-            // Cart discount should be calculated based on the item's contribution to the transaction subtotal
-            // Since both itemRefundAmount and transactionSubtotal use the same pricing basis (discounted prices),
-            // the proportion is correct for calculating the cart discount
-            let proportionalCartDiscount = 0;
-            if (transactionSubtotal > 0 && transactionCartDiscount > 0) {
-              // Calculate the proportion this item represents of the total subtotal
-              const itemProportion = itemRefundAmount / transactionSubtotal;
-              proportionalCartDiscount =
-                itemProportion * transactionCartDiscount;
-              totalProportionalCartDiscount += proportionalCartDiscount;
-            }
-
-            // Calculate proportional tax for this item
-            // Tax is calculated on the amount after cart discount
-            let proportionalTax = 0;
-            if (subtotalAfterCartDiscount > 0 && transactionTax > 0) {
-              const itemAmountAfterCartDiscount =
-                itemRefundAmount - proportionalCartDiscount;
-              proportionalTax =
-                (itemAmountAfterCartDiscount / subtotalAfterCartDiscount) *
-                transactionTax;
-              totalProportionalTax += proportionalTax;
-            }
-
-            processedRefundItems.push({
-              itemId: item.id,
-              itemIndex,
-              quantity,
-              unitPrice: actualPricePaid, // Store the actual price paid for refund records
-              totalAmount: itemRefundAmount,
-            });
-            totalItemRefundAmount += itemRefundAmount;
-          }
-        }
-      });
-
-      if (processedRefundItems.length === 0) {
-        throw new Error("No valid items to refund");
-      }
-
-      // Calculate total refund amount (items minus cart discount, but NOT including tax)
-      // Tax should not be refunded to the customer - it was paid to the government
-      const totalRefundAmount =
-        totalItemRefundAmount - totalProportionalCartDiscount;
-
-      // Check if total refund amount would exceed the refundable amount (subtotal after cart discount, excluding tax)
-      const maxRefundableAmount = subtotalAfterCartDiscount; // This is the amount customers actually paid for items (excluding tax)
-      const currentTotalRefunded =
-        transaction.refunds?.reduce(
-          (sum, refund) => sum + refund.totalAmount,
-          0,
-        ) || 0;
-      const newTotalRefunded = currentTotalRefunded + totalRefundAmount;
-
-      if (newTotalRefunded > maxRefundableAmount) {
-        throw new Error(
-          `Cannot process refund. Total refund amount (${newTotalRefunded.toFixed(
-            2,
-          )}) would exceed refundable amount (${maxRefundableAmount.toFixed(
-            2,
-          )}, excluding tax)`,
-        );
-      }
-
-      // Create refund record with comprehensive breakdown
-      // COD orders are considered "paid" once delivered (customer paid cash on delivery)
-      const isPaidOrder = transaction.paymentMethod === "cash" || 
-                         transaction.paymentMethod === "scan" || 
-                         transaction.paymentMethod === "wallet" ||
-                         (transaction.paymentMethod === "cod" && 
-                          (transaction.deliveryStatus === "delivered" || 
-                           transaction.orderStatus === "delivered" ||
-                           transaction.orderStatus === "fully_returned" ||
-                           transaction.orderStatus === "partially_returned"));
-      
-      const refund: Refund = {
-        transactionId,
-        refundId,
-        items: processedRefundItems,
-        totalAmount: totalRefundAmount,
-        itemsSubtotal: totalItemRefundAmount,
-        cartDiscountRefund: totalProportionalCartDiscount,
-        taxRefund: totalProportionalTax,
-        reason: reason || undefined,
-        processedBy: processedBy || undefined,
-        createdAt: Timestamp.now(),
-        status: isPaidOrder ? "pending" : "completed", // Paid orders need refund confirmation
-      };
-      
-      // Only add optional fields if they have valid values (not undefined)
-      if (refundMethod) {
-        refund.refundMethod = refundMethod;
-      }
-      if (!isPaidOrder) {
-        refund.refundedAt = Timestamp.now();
-        refund.refundedBy = processedBy || undefined;
-      }
-
-      // Add refund to refunds collection
-      const refundDocRef = await addDoc(collection(db!, "refunds"), refund);
-
-      // Restore inventory for refunded items (only accepted items if inspection
-      // was done). Damaged units are still recorded in the returns ledger, so
-      // a later cancellation of the same order does not shelve them.
-      try {
-        await this.returnTransactionStock(
-          transactionId,
-          transaction,
-          processedRefundItems.map((refundItem) => ({
-            lineIndex: refundItem.itemIndex,
-            quantity: refundItem.quantity,
-            restock: inspectionResults
-              ? inspectionResults[refundItem.itemIndex] === "accepted"
-              : true,
-          })),
-        );
-      } catch (inventoryError) {
-        console.error("Error restoring inventory for refund:", inventoryError);
-        // Continue with refund processing even if inventory restoration fails
-      }
-
-      // Update transaction with refund information
-      const transactionRef = doc(db!, this.collectionName, transactionId);
-      const currentRefunds = transaction.refunds || [];
-      const updatedRefunds = [
-        ...currentRefunds,
-        { ...refund, id: refundDocRef.id },
-      ];
-
-      // Calculate total refunded amount
-      const totalRefunded = updatedRefunds.reduce(
-        (sum, r) => sum + r.totalAmount,
-        0,
-      );
-
-      // Determine new transaction status
-      // If returnStatus is provided (from inspection), use it directly
-      // Otherwise calculate based on total refunded amount
-      let newStatus: Transaction["status"];
-      if (returnStatus) {
-        newStatus = returnStatus;
-      } else {
-        // Compare against subtotalAfterCartDiscount (the maximum refundable amount, excluding tax)
-        // Tax is not refundable to customers, so we shouldn't include it in the comparison
-        if (totalRefunded >= subtotalAfterCartDiscount) {
-          // All refundable amount has been refunded (tax is not refundable)
-          newStatus = "refunded";
-        } else if (totalRefunded > 0) {
-          newStatus = "partially_refunded";
-        } else {
-        // Keep original status if no refunds
-        newStatus = transaction.status;
-      }
-      }
-
-      // Determine orderStatus based on return status
-      const currentOrderStatus = transaction.orderStatus || "pending";
-      const refundRequest = (transaction as any).refundRequest;
-      const isReturnType = refundRequest?.type === "return";
-      const wasDelivered = currentOrderStatus === "delivered" || currentOrderStatus === "delivering";
-      let newOrderStatus = currentOrderStatus;
-      
-      // Update order status for returns - ALWAYS update if returnStatus is provided
-      if (returnStatus) {
-        // Use provided return status for delivered orders or return-type refunds
-        if (returnStatus === "refunded") {
-          newOrderStatus = "fully_returned";
-        } else if (returnStatus === "partially_refunded") {
-          newOrderStatus = "partially_returned";
-        }
-      } else if (wasDelivered || isReturnType) {
-        // If no returnStatus but it's a return, infer from payment status
-        if (newStatus === "refunded") {
-          newOrderStatus = "fully_returned";
-        } else if (newStatus === "partially_refunded") {
-          newOrderStatus = "partially_returned";
-        }
-      }
-
-      // Prepare update object
-      const updateData: any = {
-        refunds: updatedRefunds,
-        status: newStatus,
-      };
-
-      // Always update orderStatus if it changed
-      if (newOrderStatus !== currentOrderStatus) {
-        updateData.orderStatus = newOrderStatus;
-      }
-
-      await updateDoc(transactionRef, updateData);
-
-      console.log("Refund processed successfully:", refundId);
-      console.log("Updated status:", newStatus, "orderStatus:", newOrderStatus);
-      return refundId;
-    } catch (error) {
-      console.error("Error processing refund:", error);
-      throw new Error("Failed to process refund");
+    const byLine = new Map<number, number>();
+    for (const [key, quantity] of Object.entries(refundItems)) {
+      const lineIndex = lineIndexFromKey(key);
+      const qty = Math.floor(Number(quantity));
+      if (lineIndex < 0 || !(qty > 0)) continue;
+      byLine.set(lineIndex, (byLine.get(lineIndex) || 0) + qty);
     }
+    if (byLine.size === 0) throw new Error("No valid items to refund");
+
+    const result = await this.runAction(transactionId, {
+      action: "processRefund",
+      items: Array.from(byLine.entries()).map(([lineIndex, quantity]) => ({ lineIndex, quantity })),
+      reason,
+      refundMethod,
+      inspectionResults: inspectionResults
+        ? Object.entries(inspectionResults).map(([lineIndex, result]) => ({
+            lineIndex: Number(lineIndex),
+            result,
+          }))
+        : undefined,
+      returnStatus,
+      approveRefundRequest: options?.approveRefundRequest,
+    });
+    return result.refundId ?? "";
   }
 
   /**
-   * Get refunds for a transaction
+   * Refunds recorded on one transaction (`refunds[]`, newest first).
+   * The separate `refunds` collection is no longer written.
    */
   async getTransactionRefunds(transactionId: string): Promise<Refund[]> {
     try {
-      const q = query(
-        collection(db!, "refunds"),
-        where("transactionId", "==", transactionId),
-        orderBy("createdAt", "desc"),
+      const snapshot = await getDoc(doc(db!, this.collectionName, transactionId));
+      if (!snapshot.exists()) return [];
+      const refunds = ((snapshot.data().refunds as Refund[] | undefined) || []).map(
+        (refund) => ({ ...refund, id: refund.id || refund.refundId }),
       );
-
-      const querySnapshot = await getDocs(q);
-      const refunds: Refund[] = [];
-
-      querySnapshot.forEach((doc) => {
-        refunds.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Refund);
-      });
-
-      return refunds;
+      return refunds.sort(
+        (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0),
+      );
     } catch (error) {
       console.error("Error fetching refunds:", error);
       throw new Error("Failed to fetch refunds");
@@ -1003,497 +880,121 @@ class TransactionService {
   }
 
   /**
-   * Get all refunds with optional filtering
+   * Refunds across transactions, from each transaction's `refunds[]`,
+   * filtered by refund date.
+   * @deprecated No callers. Reads every transaction of the shop created up
+   * to `endDate`; prefer reading refunds off the transactions already loaded.
    */
   async getRefunds(
     shopId?: string,
     startDate?: Date,
     endDate?: Date,
   ): Promise<Refund[]> {
-    try {
-      let q = query(collection(db!, "refunds"), orderBy("createdAt", "desc"));
-
-      if (startDate) {
-        q = query(q, where("createdAt", ">=", Timestamp.fromDate(startDate)));
-      }
-
-      if (endDate) {
-        q = query(q, where("createdAt", "<=", Timestamp.fromDate(endDate)));
-      }
-
-      const querySnapshot = await getDocs(q);
-      const refunds: Refund[] = [];
-
-      querySnapshot.forEach((doc) => {
-        refunds.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Refund);
-      });
-
-      return refunds;
-    } catch (error) {
-      console.error("Error fetching refunds:", error);
-      throw new Error("Failed to fetch refunds");
-    }
+    const transactions = await this.getTransactions(shopId, undefined, endDate);
+    const from = startDate?.getTime() ?? -Infinity;
+    const to = endDate?.getTime() ?? Infinity;
+    return transactions
+      .flatMap((transaction) =>
+        (transaction.refunds || []).map((refund) => ({
+          ...refund,
+          id: refund.id || refund.refundId,
+        })),
+      )
+      .filter((refund) => {
+        const at = refund.createdAt?.toMillis?.() ?? 0;
+        return at >= from && at <= to;
+      })
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
   }
 
   /**
-   * Cancel a transaction and restore all inventory
-   */
-  /**
-   * Confirm return status ONLY (Step 1: Owner confirms items received)
-   * This updates ONLY orderStatus, NOT payment status
+   * Set the order's return status (orderStatus fully_returned /
+   * partially_returned) without touching payment status.
+   * @param confirmedBy ignored (the server records the signed-in user)
    */
   async confirmReturnStatus(
     transactionId: string,
-    returnStatus: "fully_returned" | "partially_returned",
+    returnStatus: ReturnStatusChoice,
     confirmedBy: string,
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      console.log("confirmReturnStatus called with:", {
-        transactionId,
-        returnStatus,
-        confirmedBy,
-      });
-
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      const transactionDoc = await getDoc(transactionRef);
-      
-      if (!transactionDoc.exists()) {
-        throw new Error("Transaction not found");
-      }
-
-      const transaction = transactionDoc.data() as Transaction;
-      const refundRequest = (transaction as any).refundRequest;
-      
-      if (!refundRequest) {
-        throw new Error("No refund request found for this transaction");
-      }
-
-      // Update ONLY orderStatus, do NOT touch status (payment status)
-      const updateData: any = {
-        orderStatus: returnStatus,
-        "refundRequest.returnStatusConfirmedAt": Timestamp.now(),
-        "refundRequest.returnStatusConfirmedBy": confirmedBy,
-      };
-
-      await updateDoc(transactionRef, updateData);
-
-      console.log(`Return status confirmed for ${transactionId}. Order status: ${returnStatus}. Payment status unchanged.`);
-    } catch (error) {
-      console.error("Error confirming return status:", error);
-      throw new Error(`Failed to confirm return status: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
+    void confirmedBy;
+    await this.runAction(transactionId, { action: "confirmReturnStatus", returnStatus });
   }
 
   /**
-   * Confirm refund payment for paid orders (cash/scan)
-   * This updates ONLY payment status, NOT orderStatus
+   * Confirm the payout of a pending refund (refunds[].status pending ->
+   * completed) exactly once. status/paymentStatus become refunded or
+   * partially_refunded from the recorded refunds; the online order is
+   * mirrored and the customer gets a `refund_completed` notification.
+   * @param confirmedBy ignored (the server records the signed-in user)
+   * @param refundStatus ignored: full vs partial is derived from the refunds
    */
   async confirmRefundPayment(
     transactionId: string,
     refundId: string,
-    refundMethod: "cash" | "original_payment" | "bank_transfer",
+    refundMethod: RefundPayoutMethod,
     confirmedBy: string,
     refundNotes?: string,
     refundProofUrl?: string,
     refundStatus?: "refunded" | "partially_refunded",
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      const transactionDoc = await getDoc(transactionRef);
-      
-      if (!transactionDoc.exists()) {
-        throw new Error("Transaction not found");
-      }
-
-      const transaction = transactionDoc.data() as Transaction;
-      const refunds = transaction.refunds || [];
-      
-      // Find the refund to confirm
-      const refundIndex = refunds.findIndex(r => r.refundId === refundId);
-      if (refundIndex === -1) {
-        throw new Error("Refund not found");
-      }
-
-      // Update refund status - only include fields with values
-      const updatedRefund: any = {
-        ...refunds[refundIndex],
-        status: "completed",
-        refundMethod,
-        refundedAt: Timestamp.now(),
-        refundedBy: confirmedBy,
-      };
-      
-      // Only add optional fields if they have values
-      if (refundNotes) {
-        updatedRefund.refundNotes = refundNotes;
-      }
-      if (refundProofUrl) {
-        updatedRefund.refundProofUrl = refundProofUrl;
-      }
-      
-      refunds[refundIndex] = updatedRefund;
-
-      // Calculate total refunded amount (including this refund)
-      const totalRefunded = refunds
-        .filter(r => r.status === "completed")
-        .reduce((sum, r) => sum + r.totalAmount, 0);
-      
-      // Use provided refund status or calculate automatically
-      let newPaymentStatus = transaction.status;
-      
-      if (refundStatus) {
-        // Use the explicitly provided refund status
-        console.log("Using provided refund status:", refundStatus);
-        newPaymentStatus = refundStatus;
-      } else {
-        // Fallback to automatic calculation
-        console.log("Calculating refund status automatically");
-        const isFullyRefunded = totalRefunded >= transaction.total;
-        const isPartiallyRefunded = totalRefunded > 0 && totalRefunded < transaction.total;
-
-        if (isFullyRefunded) {
-          newPaymentStatus = "refunded";
-        } else if (isPartiallyRefunded) {
-          newPaymentStatus = "partially_refunded";
-        }
-      }
-
-      console.log(`Transaction ${transactionId}: Setting payment status to ${newPaymentStatus}`);
-
-      // STEP 2: Update ONLY payment status, do NOT change orderStatus
-      // orderStatus should have been set in Step 1 (confirmReturnStatus)
-
-      await updateDoc(transactionRef, {
-        refunds,
-        status: newPaymentStatus,
-        paymentStatus: newPaymentStatus, // Also update paymentStatus field
-        // Do NOT update orderStatus - it was already set in confirmReturnStatus
-      });
-
-      console.log(`Transaction ${transactionId}: Updated status and paymentStatus fields to ${newPaymentStatus}`);
-
-      // STEP 3: Update onlineOrders collection if this is an online order
-      if (transaction.onlineOrderId) {
-        const onlineOrderRef = doc(db, "onlineOrders", transaction.onlineOrderId);
-        await updateDoc(onlineOrderRef, {
-          paymentStatus: newPaymentStatus,
-          lastUpdated: new Date().toISOString(),
-        });
-        console.log(`Updated onlineOrders ${transaction.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
-      }
-
-      // STEP 4: Send notification to customer about refund completion
-      const customer = (transaction as any).customer;
-      if (customer?.uid) {
-        try {
-          const notificationsRef = collection(db, "notifications");
-          
-          const refundAmount = refunds[refundIndex].totalAmount;
-          const statusLabel = refundStatus === "partially_refunded" ? "Partial Refund" : "Full Refund";
-          
-          const notificationData: any = {
-            userId: customer.uid,
-            type: "refund_completed",
-            title: `${statusLabel} Completed`,
-            message: `Your refund for order ${transaction.transactionId || transactionId} has been processed.\n\nAmount: ${refundAmount.toFixed(2)} ${transaction.sellingCurrency || 'THB'}\nMethod: ${refundMethod === "cash" ? "Cash" : refundMethod === "bank_transfer" ? "Bank Transfer" : "Original Payment Method"}${refundNotes ? `\n\nNote: ${refundNotes}` : ''}`,
-            orderId: transaction.transactionId || transactionId,
-            transactionId: transactionId,
-            amount: refundAmount,
-            refundMethod: refundMethod,
-            read: false,
-            createdAt: Timestamp.now(),
-          };
-          
-          // Only add optional fields if they have values
-          if (transaction.onlineOrderId) {
-            notificationData.onlineOrderId = transaction.onlineOrderId;
-          }
-          if ((transaction as any).branchId) {
-            notificationData.branchId = (transaction as any).branchId;
-          }
-          
-          await addDoc(notificationsRef, notificationData);
-          console.log(`Notification sent to customer ${customer.uid} for refund completion`);
-        } catch (notifError) {
-          console.error("Error sending refund completion notification:", notifError);
-          // Don't throw - notification failure shouldn't stop refund confirmation
-        }
-      }
-
-      console.log(`Refund ${refundId} payment confirmed. Payment status: ${newPaymentStatus}. Order status unchanged.`);
-    } catch (error) {
-      console.error("Error confirming refund payment:", error);
-      throw new Error("Failed to confirm refund payment");
-    }
+    void confirmedBy;
+    void refundStatus;
+    await this.runAction(transactionId, {
+      action: "confirmRefundPayment",
+      refundId,
+      refundMethod,
+      notes: refundNotes,
+      proofUrl: refundProofUrl,
+    });
   }
 
   /**
-   * Cancel transaction for paid orders (cash/scan) with refund processing
+   * Cancel an order. Same server action as cancelTransaction: a paid order
+   * gets a pending cancellationRefund of total − already refunded (incl. tax
+   * and delivery fee); stock not yet returned goes back through the ledger.
+   * Refused if already cancelled, fully refunded or delivered.
+   * @param transaction ignored · @param cancelledBy ignored
    */
   async cancelPaidTransaction(
     transactionId: string,
     transaction: Transaction,
     reason?: string,
     cancelledBy?: string,
-    refundMethod?: "cash" | "original_payment" | "bank_transfer",
+    refundMethod?: RefundPayoutMethod,
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      const isPaidOrder = transaction.paymentMethod === "cash" || transaction.paymentMethod === "scan" || transaction.paymentMethod === "wallet";
-      
-      if (!isPaidOrder) {
-        // Use regular cancellation for non-paid orders
-        return this.cancelTransaction(transactionId, transaction, reason, cancelledBy);
-      }
-
-      console.log(`Cancelling paid order ${transactionId} with refund`);
-
-      // Calculate already refunded quantities
-      const alreadyRefunded: { [itemIndex: number]: number } = {};
-      if (transaction.refunds) {
-        transaction.refunds.forEach((refund) => {
-          refund.items.forEach((refundItem) => {
-            alreadyRefunded[refundItem.itemIndex] =
-              (alreadyRefunded[refundItem.itemIndex] || 0) +
-              refundItem.quantity;
-          });
-        });
-      }
-
-      // Restore inventory for remaining items (through the shared returns
-      // ledger, so cancelling from another screen as well cannot double it)
-      await this.returnTransactionStock(
-        transactionId,
-        transaction,
-        transaction.items.map((item, index) => ({
-          lineIndex: index,
-          quantity: item.quantity - (alreadyRefunded[index] || 0),
-          restock: true,
-        })),
-      );
-
-      // Calculate refund amount (total minus already refunded)
-      const totalAlreadyRefunded = transaction.refunds?.reduce(
-        (sum, refund) => sum + refund.totalAmount,
-        0,
-      ) || 0;
-      const refundAmount = transaction.total - totalAlreadyRefunded;
-
-      // Update transaction with cancellation and refund info
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      await updateDoc(transactionRef, {
-        status: "cancelled",
-        // `orderStatus` has to be written here as well, exactly like
-        // `cancelTransaction` does for COD. The storefront's purchases table
-        // reads `orderStatus` first, so leaving it on its old value (usually
-        // "pending") made an approved cancellation still read as Pending —
-        // and step 2 then overwrites `status` with "refunded", so the
-        // fallback could never recover the cancelled state either.
-        orderStatus: "cancelled",
-        cancelledAt: Timestamp.now(),
-        cancelReason: reason,
-        cancelledBy: cancelledBy,
-        cancellationRefund: {
-          amount: refundAmount,
-          method: refundMethod || "pending",
-          status: "pending",
-          requestedAt: Timestamp.now(),
-          requestedBy: cancelledBy,
-        },
-      });
-
-      // Mirror the cancellation onto the online order so any reader that goes
-      // through `onlineOrders` (rather than the transaction) agrees.
-      if (transaction.onlineOrderId) {
-        try {
-          await updateDoc(doc(db, "onlineOrders", transaction.onlineOrderId), {
-            status: "cancelled",
-            orderStatus: "cancelled",
-            lastUpdated: new Date().toISOString(),
-          });
-        } catch (mirrorError) {
-          console.error("Error mirroring cancellation to onlineOrders:", mirrorError);
-        }
-      }
-
-      // Create an owner-facing notification for the pending refund payment
-      try {
-        const notificationsRef = collection(db, "notifications");
-        await addDoc(notificationsRef, {
-          type: "refund_payment",
-          title: "Refund Payment Pending",
-          message: `Refund payment pending for cancelled order #${transaction.transactionId || transactionId}`,
-          link: "/owner/requests/pending-refunds",
-          metadata: {
-            transactionId,
-            orderId: transaction.transactionId || transactionId,
-          },
-          read: false,
-          createdAt: Timestamp.now(),
-        });
-      } catch (notifError) {
-        console.error("Error creating owner notification for pending cancellation refund:", notifError);
-      }
-
-      console.log(`Paid order cancelled - Refund of ${refundAmount} pending confirmation`);
-    } catch (error) {
-      console.error("Error cancelling paid transaction:", error);
-      throw new Error("Failed to cancel paid transaction");
-    }
+    void transaction;
+    void cancelledBy;
+    await this.runAction(transactionId, { action: "cancel", reason, refundMethod });
   }
 
   /**
-   * Confirm cancellation refund payment
-   * This updates ONLY payment status, NOT orderStatus
+   * Confirm a cancellation refund payout exactly once
+   * (cancellationRefund.status pending -> completed; status/paymentStatus
+   * "refunded"; customer `refund_completed` notification).
+   * @param confirmedBy ignored · @param refundStatus ignored
    */
   async confirmCancellationRefund(
     transactionId: string,
-    refundMethod: "cash" | "original_payment" | "bank_transfer",
+    refundMethod: RefundPayoutMethod,
     confirmedBy: string,
     refundNotes?: string,
     refundProofUrl?: string,
     refundStatus?: "refunded" | "partially_refunded",
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      console.log("confirmCancellationRefund called with:", {
-        transactionId,
-        refundMethod,
-        confirmedBy,
-        refundNotes,
-      });
-
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      
-      // First, check if the transaction exists and has a cancellationRefund
-      const { getDoc } = await import("firebase/firestore");
-      const transactionDoc = await getDoc(transactionRef);
-      
-      if (!transactionDoc.exists()) {
-        throw new Error(`Transaction ${transactionId} not found`);
-      }
-      
-      const data = transactionDoc.data();
-      if (!data.cancellationRefund) {
-        throw new Error(`Transaction ${transactionId} does not have a cancellationRefund field`);
-      }
-      
-      if (data.cancellationRefund.status !== "pending") {
-        throw new Error(`Cancellation refund status is ${data.cancellationRefund.status}, expected "pending"`);
-      }
-      
-      console.log("Transaction found, updating cancellation refund...");
-      console.log("Current cancellationRefund:", data.cancellationRefund);
-      
-      // Use provided refund status or default to "refunded" for cancellations
-      let newPaymentStatus = refundStatus || "refunded";
-      console.log("Using refund status:", newPaymentStatus);
-      
-      // Build update object with only defined values
-      // STEP 2: Update ONLY payment status, do NOT change orderStatus
-      const updateData: any = {
-        "cancellationRefund.status": "completed",
-        "cancellationRefund.method": refundMethod,
-        "cancellationRefund.confirmedAt": Timestamp.now(),
-        "cancellationRefund.confirmedBy": confirmedBy,
-        // Update both status and paymentStatus fields
-        "status": newPaymentStatus,
-        "paymentStatus": newPaymentStatus,
-        // Do NOT update orderStatus - it was already set in Step 1
-      };
-      
-      if (refundNotes) {
-        updateData["cancellationRefund.notes"] = refundNotes;
-      }
-      if (refundProofUrl) {
-        updateData["cancellationRefund.proofUrl"] = refundProofUrl;
-      }
-      
-      await updateDoc(transactionRef, updateData);
-
-      console.log(`Transaction ${transactionId}: Updated status and paymentStatus fields to ${newPaymentStatus}`);
-
-      // STEP 3: Update onlineOrders collection if this is an online order
-      if (data.onlineOrderId) {
-        const onlineOrderRef = doc(db, "onlineOrders", data.onlineOrderId);
-        await updateDoc(onlineOrderRef, {
-          paymentStatus: newPaymentStatus,
-          lastUpdated: new Date().toISOString(),
-        });
-        console.log(`Updated onlineOrders ${data.onlineOrderId} with paymentStatus: ${newPaymentStatus}`);
-      }
-
-      // STEP 4: Send notification to customer about refund completion
-      const customer = (data as any).customer;
-      if (customer?.uid) {
-        try {
-          const notificationsRef = collection(db, "notifications");
-          
-          const refundAmount = data.cancellationRefund.amount;
-          const statusLabel = refundStatus === "partially_refunded" ? "Partial Refund" : "Full Refund";
-          
-          const notificationData: any = {
-            userId: customer.uid,
-            type: "refund_completed",
-            title: `Cancellation ${statusLabel} Completed`,
-            message: `Your cancellation refund for order ${data.transactionId || transactionId} has been processed.\n\nAmount: ${refundAmount.toFixed(2)} ${data.sellingCurrency || 'THB'}\nMethod: ${refundMethod === "cash" ? "Cash" : refundMethod === "bank_transfer" ? "Bank Transfer" : "Original Payment Method"}${refundNotes ? `\n\nNote: ${refundNotes}` : ''}`,
-            orderId: data.transactionId || transactionId,
-            transactionId: transactionId,
-            amount: refundAmount,
-            refundMethod: refundMethod,
-            read: false,
-            createdAt: Timestamp.now(),
-          };
-          
-          // Only add optional fields if they have values
-          if (data.onlineOrderId) {
-            notificationData.onlineOrderId = data.onlineOrderId;
-          }
-          if ((data as any).branchId) {
-            notificationData.branchId = (data as any).branchId;
-          }
-          
-          await addDoc(notificationsRef, notificationData);
-          console.log(`Notification sent to customer ${customer.uid} for cancellation refund completion`);
-        } catch (notifError) {
-          console.error("Error sending cancellation refund notification:", notifError);
-          // Don't throw - notification failure shouldn't stop refund confirmation
-        }
-      }
-
-      console.log(`Cancellation refund for ${transactionId} confirmed successfully. Payment status: ${newPaymentStatus}. Order status unchanged.`);
-    } catch (error) {
-      console.error("Error confirming cancellation refund:", error);
-      console.error("Error details:", {
-        transactionId,
-        refundMethod,
-        errorMessage: error instanceof Error ? error.message : "Unknown",
-        errorCode: (error as any)?.code,
-        errorStack: error instanceof Error ? error.stack : undefined,
-      });
-      throw new Error(`Failed to confirm cancellation refund: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
+    void confirmedBy;
+    void refundStatus;
+    await this.runAction(transactionId, {
+      action: "confirmCancellationRefund",
+      refundMethod,
+      notes: refundNotes,
+      proofUrl: refundProofUrl,
+    });
   }
 
   /**
-   * Cancel transaction (original method for unpaid orders)
+   * Cancel an order (see cancelPaidTransaction; one server action for both).
+   * @param transaction ignored · @param cancelledBy ignored
    */
   async cancelTransaction(
     transactionId: string,
@@ -1501,97 +1002,25 @@ class TransactionService {
     reason?: string,
     cancelledBy?: string,
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      console.log(
-        `Starting cancellation for transaction ${transactionId} with ${transaction.items.length} items`,
-      );
-      console.log(
-        "Transaction items:",
-        transaction.items.map((item) => ({
-          id: item.id,
-          stockId: item.stockId,
-          name: item.groupName,
-          selectedColor: item.selectedColor,
-          selectedSize: item.selectedSize,
-          quantity: item.quantity,
-        })),
-      );
-
-      // Calculate already refunded quantities for each item
-      const alreadyRefunded: { [itemIndex: number]: number } = {};
-      if (transaction.refunds) {
-        transaction.refunds.forEach((refund) => {
-          refund.items.forEach((refundItem) => {
-            alreadyRefunded[refundItem.itemIndex] =
-              (alreadyRefunded[refundItem.itemIndex] || 0) +
-              refundItem.quantity;
-          });
-        });
-      }
-
-      // Restore inventory only for remaining items (not already refunded).
-      // Goes through the shared returns ledger: an online order also
-      // cancelled from the online-orders page is not restocked twice, and a
-      // COD order whose stock was never taken is not restocked at all.
-      await this.returnTransactionStock(
-        transactionId,
-        transaction,
-        transaction.items.map((item, index) => ({
-          lineIndex: index,
-          quantity: item.quantity - (alreadyRefunded[index] || 0),
-          restock: true,
-        })),
-      );
-
-      // Update transaction status to cancelled
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      await updateDoc(transactionRef, {
-        status: "cancelled",
-        orderStatus: "cancelled",
-        cancelledAt: Timestamp.now(),
-        cancelReason: reason,
-        cancelledBy: cancelledBy,
-      });
-
-      console.log("Transaction cancelled successfully:", transactionId);
-    } catch (error) {
-      console.error("Error cancelling transaction:", error);
-      throw new Error("Failed to cancel transaction");
-    }
+    void transaction;
+    void cancelledBy;
+    await this.runAction(transactionId, { action: "cancel", reason });
   }
 
   /**
-   * Approve a pending COD transaction
+   * Approve an order awaiting approval (status pending -> completed).
+   * Refused for anything else, e.g. a cancelled or refunded order.
+   * @param approvedBy ignored
    */
-  async approveTransaction(
-    transactionId: string,
-    approvedBy?: string,
-  ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      await updateDoc(transactionRef, {
-        status: "completed",
-        approvedAt: Timestamp.now(),
-        approvedBy: approvedBy,
-      });
-
-      console.log("Transaction approved successfully:", transactionId);
-    } catch (error) {
-      console.error("Error approving transaction:", error);
-      throw new Error("Failed to approve transaction");
-    }
+  async approveTransaction(transactionId: string, approvedBy?: string): Promise<void> {
+    void approvedBy;
+    await this.runAction(transactionId, { action: "approve" });
   }
 
   /**
-   * Reject a pending COD transaction and restore inventory
+   * Reject an order awaiting approval: status and orderStatus "cancelled",
+   * stock returned through the ledger.
+   * @param transaction ignored · @param rejectedBy ignored
    */
   async rejectTransaction(
     transactionId: string,
@@ -1599,127 +1028,184 @@ class TransactionService {
     reason?: string,
     rejectedBy?: string,
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      console.log(
-        `Starting rejection for transaction ${transactionId} with ${transaction.items.length} items`,
-      );
-
-      // Restore inventory for all items, through the shared returns ledger.
-      await this.returnTransactionStock(
-        transactionId,
-        transaction,
-        transaction.items.map((item, index) => ({
-          lineIndex: index,
-          quantity: item.quantity,
-          restock: true,
-        })),
-      );
-
-      // Update transaction status to cancelled
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      await updateDoc(transactionRef, {
-        status: "cancelled",
-        rejectedAt: Timestamp.now(),
-        rejectReason: reason,
-        rejectedBy: rejectedBy,
-      });
-
-      console.log("Transaction rejected successfully:", transactionId);
-    } catch (error) {
-      console.error("Error rejecting transaction:", error);
-      throw new Error("Failed to reject transaction");
-    }
+    void transaction;
+    void rejectedBy;
+    await this.runAction(transactionId, { action: "reject", reason });
   }
 
   /**
-   * Delete a transaction by ID
-   * This permanently removes the transaction from the database
+   * "Delete" a transaction (owner only): moved to transactions_archive/{id}
+   * with an audit entry. Nothing is destroyed.
    */
   async deleteTransaction(transactionId: string): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-
-    try {
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      const transactionDoc = await getDoc(transactionRef);
-
-      if (!transactionDoc.exists()) {
-        throw new Error("Transaction not found");
-      }
-
-      // Permanently delete the transaction document
-      await deleteDoc(transactionRef);
-
-      console.log("Transaction deleted successfully:", transactionId);
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-      throw new Error("Failed to delete transaction");
-    }
+    const result = await this.archiveTransactions([transactionId]);
+    const failed = result.results.find((r) => !r.ok);
+    if (failed && !failed.ok) throw new Error(failed.error);
   }
 
   /**
-   * Update delivery status for COD/Scan orders
+   * Move delivery forward (pending -> confirmed -> shipped -> delivered).
+   * "delivered" completes an order still awaiting approval but leaves a
+   * refunded/partially refunded one as it is; "cancelled" runs the cancel
+   * path (stock back, cancellation refund for a paid order). Re-sending the
+   * current status is a no-op.
+   * @param updatedBy ignored
    */
   async updateDeliveryStatus(
     transactionId: string,
     deliveryStatus: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled",
     updatedBy?: string,
   ): Promise<void> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
+    void updatedBy;
+    await this.runAction(transactionId, { action: "updateDeliveryStatus", deliveryStatus });
+  }
 
+  /** Bulk "delete" (archive), one transaction per id. */
+  async deleteTransactions(
+    transactionIds: string[],
+  ): Promise<{ successCount: number; failCount: number }> {
+    if (transactionIds.length === 0) return { successCount: 0, failCount: 0 };
     try {
-      const transactionRef = doc(db, this.collectionName, transactionId);
-      const updateData: Record<string, unknown> = {
-        deliveryStatus,
-        deliveryStatusUpdatedAt: Timestamp.now(),
-        deliveryStatusUpdatedBy: updatedBy || "System",
-      };
-
-      // If marking as delivered, also update transaction status to completed
-      if (deliveryStatus === "delivered") {
-        updateData.status = "completed";
-        updateData.approvedAt = Timestamp.now();
-        updateData.approvedBy = updatedBy || "System";
-      }
-
-      await updateDoc(transactionRef, updateData);
-
-      console.log(
-        `Delivery status updated for transaction ${transactionId}: ${deliveryStatus}`,
-      );
+      const result = await this.archiveTransactions(transactionIds);
+      return { successCount: result.successCount, failCount: result.failCount };
     } catch (error) {
-      console.error("Error updating delivery status:", error);
-      throw new Error("Failed to update delivery status");
+      console.error("Failed to delete transactions:", error);
+      return { successCount: 0, failCount: transactionIds.length };
     }
   }
 
   /**
-   * Bulk delete multiple transactions
+   * Archive transactions (owner only) via POST /api/transactions/archive.
+   * Each id is moved to transactions_archive/{id} in its own Firestore
+   * transaction, with archivedAt/By/ByRole, `reason` and an audit entry.
    */
-  async deleteTransactions(
+  async archiveTransactions(
     transactionIds: string[],
-  ): Promise<{ successCount: number; failCount: number }> {
-    let successCount = 0;
-    let failCount = 0;
+    reason?: string,
+  ): Promise<BulkResult<ArchiveResult>> {
+    return postOrderApi<BulkResult<ArchiveResult>>("/api/transactions/archive", {
+      ids: transactionIds,
+      reason,
+    });
+  }
 
-    for (const transactionId of transactionIds) {
-      try {
-        await this.deleteTransaction(transactionId);
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to delete transaction ${transactionId}:`, error);
-        failCount++;
-      }
-    }
+  // -------------------------------------------------------------------------
+  // Customer request handling (replaces the pages' direct updateDoc calls)
+  // -------------------------------------------------------------------------
 
-    return { successCount, failCount };
+  /**
+   * Approve a customer's cancellation request: cancels the order (stock back
+   * through the ledger; a paid order gets a pending cancellationRefund of
+   * total − already refunded and an owner `refund_payment` notification) AND
+   * sets cancellationRequest.status "approved" / approvedAt / approvedBy, in
+   * one transaction. Reason = the customer's request reason.
+   *
+   * Replaces: requests/cancellations/page.tsx ~L108-L133 (cancelPaidTransaction
+   * or cancelTransaction, then updateDoc cancellationRequest.status
+   * "approved") and sales/transactions/page.tsx ~L3241-L3256 (cancelTransaction
+   * then the same updateDoc).
+   */
+  async approveCancellationRequest(
+    transactionId: string,
+    options: { refundMethod?: RefundPayoutMethod } = {},
+  ): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, {
+      action: "approveCancellationRequest",
+      refundMethod: options.refundMethod,
+    });
+  }
+
+  /**
+   * Reject a pending cancellation request (cancellationRequest.status
+   * "rejected", rejectedAt, rejectionReason, rejectedBy).
+   *
+   * Replaces: requests/cancellations/page.tsx ~L166 and
+   * sales/transactions/page.tsx ~L3280 (updateDoc cancellationRequest {...,
+   * status: "rejected"}).
+   */
+  async rejectCancellationRequest(
+    transactionId: string,
+    reason: string,
+  ): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, { action: "rejectCancellationRequest", reason });
+  }
+
+  /**
+   * Approve a pending refund request (refundRequest.status "approved",
+   * approvedAt, approvedBy).
+   *   - type "return": the customer may now bring the items back (no refund yet).
+   *   - type "cancellation" (an order cancelled without a recorded refund):
+   *     also records the pending cancellationRefund (total − already refunded)
+   *     and the owner `refund_payment` notification.
+   *
+   * Replaces: requests/refunds/page.tsx ~L120 (handleApproveReturn's updateDoc).
+   * For a "cancellation"-type request on a cancelled order use this instead
+   * of processRefund (which refuses cancelled orders).
+   */
+  async approveRefundRequest(transactionId: string): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, { action: "approveRefundRequest" });
+  }
+
+  /**
+   * Reject a refund request (pending, or an approved return whose items were
+   * not received yet): refundRequest.status "rejected", rejectedAt,
+   * rejectionReason, rejectedBy.
+   *
+   * Replaces: requests/refunds/page.tsx ~L714 and sales/transactions/page.tsx
+   * ~L3355 (updateDoc refundRequest {..., status: "rejected"}).
+   */
+  async rejectRefundRequest(
+    transactionId: string,
+    reason: string,
+  ): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, { action: "rejectRefundRequest", reason });
+  }
+
+  /**
+   * The customer brought the items back: refundRequest.returnReceived true,
+   * returnReceivedAt/By, returnStatus; orderStatus = returnStatus; the
+   * online order's status/orderStatus mirrored.
+   *
+   * Replaces: requests/refunds/page.tsx ~L322-L341 (handleMarkReturnReceived's
+   * two updateDoc calls).
+   */
+  async markReturnReceived(
+    transactionId: string,
+    returnStatus: ReturnStatusChoice,
+  ): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, { action: "markReturnReceived", returnStatus });
+  }
+
+  /**
+   * Finish the inspection of returned items in ONE transaction:
+   * confirmReturnStatus + inspection results + either
+   *   - all damaged: status/paymentStatus "refund_rejected",
+   *     refundRequest.status "completed_no_refund", customer `refund_rejected`
+   *     notification; or
+   *   - some accepted: a pending refund for the accepted units only,
+   *     paymentStatus "pending_refund", refundRequest.status "completed",
+   *     owner `refund_payment` notification, and a customer
+   *     `partial_refund_with_damaged_items` notification when some were damaged.
+   * Accepted units are restocked; damaged units are written off in the ledger.
+   * `outcome` in the result says which branch ran.
+   *
+   * Build `lines` from the page's state: for each inspected line index,
+   * `{ lineIndex, quantity: <requested quantity>, result: inspectionResults[i],
+   * damageReason: damageReasons[i] }`.
+   *
+   * Replaces: requests/refunds/page.tsx handleCompleteInspection ~L501-L670
+   * (confirmReturnStatus, updateDoc ~L512/~L525 or ~L581/~L593, notification
+   * addDoc ~L554/~L602/~L670 and processRefund ~L633).
+   */
+  async completeReturnInspection(
+    transactionId: string,
+    params: { lines: InspectionLine[]; returnStatus?: ReturnStatusChoice },
+  ): Promise<TransactionActionResult> {
+    return this.runAction(transactionId, {
+      action: "completeReturnInspection",
+      lines: params.lines,
+      returnStatus: params.returnStatus,
+    });
   }
 }
 

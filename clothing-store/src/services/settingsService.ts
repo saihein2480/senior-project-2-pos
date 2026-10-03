@@ -7,6 +7,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
+import { CURRENCY_DECIMALS, convertMoney, roundMoney } from "@/lib/money";
 
 const COLLECTION_NAME = "business_settings";
 const SETTINGS_DOC_ID = "main"; // Single document for business settings
@@ -140,6 +141,13 @@ export interface BusinessSettings {
   enableSoundEffects: boolean;
   currencyRate: number;
   /**
+   * Refund policy for returned items. When true, a return refunds the items'
+   * share of tax as well; when false (the default, and the behaviour before
+   * this setting existed) the tax is kept. Cancelling a whole order always
+   * refunds the full amount regardless.
+   */
+  refundTaxOnReturns?: boolean;
+  /**
    * Flat delivery fee in THB (the base currency), charged on every storefront
    * order. 0 means free delivery. Not taxed, not discounted by promotions or
    * coupons, and not counted towards loyalty points.
@@ -209,6 +217,7 @@ export function mapSettingsDoc(data: Record<string, any>): BusinessSettings {
     enableDarkMode: data.enableDarkMode ?? false,
     enableSoundEffects: data.enableSoundEffects ?? false,
     currencyRate: data.currencyRate || 0,
+    refundTaxOnReturns: data.refundTaxOnReturns === true,
     deliveryFee:
       Number.isFinite(Number(data.deliveryFee)) && Number(data.deliveryFee) > 0
         ? Number(data.deliveryFee)
@@ -345,6 +354,7 @@ export class SettingsService {
       enableDarkMode: false,
       enableSoundEffects: false,
       currencyRate: 0,
+      refundTaxOnReturns: false,
       deliveryFee: 0,
     };
 
@@ -359,25 +369,36 @@ export class SettingsService {
   }
 
   /**
-   * Format price with currency symbol
+   * Format price with currency symbol.
+   *
+   * Shows at most the currency's own minor unit (CURRENCY_DECIMALS): up to two
+   * decimals for THB, none for MMK, which has no minor unit in practice. The
+   * amount is rounded first, so float residue (or a non-finite value) never
+   * reaches the screen or a receipt.
    */
   static formatPrice(amount: number, currencyCode: "THB" | "MMK"): string {
     const currency = this.getCurrencyInfo(currencyCode);
+    const decimals = CURRENCY_DECIMALS[currencyCode] ?? 2;
 
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currencyCode,
       currencyDisplay: "symbol",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: decimals,
     })
-      .format(amount)
+      .format(roundMoney(amount, currencyCode))
       .replace(currencyCode, currency.symbol);
   }
 
   /**
-   * Convert price between currencies using the exchange rate
+   * Convert price between currencies using the exchange rate.
    * The exchange rate is always interpreted as: 1 [defaultCurrency] = exchangeRate [otherCurrency]
+   *
+   * Delegates to convertMoney: the result is rounded to the target currency's
+   * minor unit, and a missing, zero or negative rate returns the amount
+   * unchanged instead of 0 / Infinity / NaN (an unset rate used to divide by
+   * zero on the way back to the base currency).
    */
   static convertPrice(
     amount: number,
@@ -386,27 +407,12 @@ export class SettingsService {
     exchangeRate: number,
     defaultCurrency: "THB" | "MMK" = "THB",
   ): number {
-    if (fromCurrency === toCurrency) {
-      return amount;
-    }
-
-    // Determine the exchange rate interpretation based on default currency
-    if (defaultCurrency === "THB") {
-      // Rate means: 1 THB = exchangeRate MMK
-      if (fromCurrency === "THB" && toCurrency === "MMK") {
-        return amount * exchangeRate;
-      } else if (fromCurrency === "MMK" && toCurrency === "THB") {
-        return amount / exchangeRate;
-      }
-    } else if (defaultCurrency === "MMK") {
-      // Rate means: 1 MMK = exchangeRate THB
-      if (fromCurrency === "MMK" && toCurrency === "THB") {
-        return amount * exchangeRate;
-      } else if (fromCurrency === "THB" && toCurrency === "MMK") {
-        return amount / exchangeRate;
-      }
-    }
-
-    return amount;
+    return convertMoney(
+      amount,
+      fromCurrency,
+      toCurrency,
+      exchangeRate,
+      defaultCurrency,
+    );
   }
 }

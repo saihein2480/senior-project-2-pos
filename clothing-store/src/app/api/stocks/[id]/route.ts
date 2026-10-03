@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StockItem, StockResponse } from "@/types/stock";
+import type {
+  ColorVariant,
+  StockItem,
+  StockResponse,
+  WholesaleTier,
+} from "@/types/stock";
 import { isStockAdjustmentError, type EditedVariant } from "@/lib/stockMath";
 import {
   ALL_STAFF,
@@ -14,20 +19,16 @@ import {
 import {
   deleteStock,
   getStockById,
+  stockRequestSchema,
   updateStock,
   updateStockWithMerge,
 } from "@/server/stocksAdmin";
+import { parseJson } from "@/server/validation";
 
 // Access:
 //   GET    - every POS role.
 //   PUT    - Owner + Manager (Doc: "Edit Product Details" / "Manage Stock").
 //   DELETE - Owner only (Doc: "Delete Products").
-
-/** Parse a price field: a finite number >= 0, or null if invalid. */
-function parsePrice(value: unknown): number | null {
-  const price = typeof value === "number" ? value : parseFloat(String(value));
-  return Number.isFinite(price) && price >= 0 ? price : null;
-}
 
 // GET /api/stocks/[id] - Get a specific stock item
 export async function GET(
@@ -76,41 +77,22 @@ export async function PUT(
   const { id } = await params;
 
   try {
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return jsonError(400, "Invalid JSON body");
-    }
+    const body = await parseJson(request, stockRequestSchema);
 
-    // Basic validation
-    if (!body.groupName || !body.unitPrice || !body.originalPrice) {
-      const response: StockResponse = {
-        success: false,
-        error: "Missing required fields: groupName, unitPrice, originalPrice",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const unitPrice = parsePrice(body.unitPrice);
-    const originalPrice = parsePrice(body.originalPrice);
-    if (unitPrice === null || originalPrice === null) {
-      const response: StockResponse = {
-        success: false,
-        error: "unitPrice and originalPrice must be non-negative numbers",
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Prepare update data
+    // Prepare update data. Fields the form left out stay undefined and are
+    // not written (stripUndefined), so they keep their stored values.
     const updateData: Partial<StockItem> = {
       groupName: body.groupName,
-      unitPrice,
-      originalPrice,
+      unitPrice: body.unitPrice,
+      originalPrice: body.originalPrice,
       releaseDate: body.releaseDate,
-      shop: body.shop,
-      isColorless: body.isColorless,
-      groupImage: body.groupImage,
-      wholesaleTiers: body.wholesaleTiers || [],
-      colorVariants: body.colorVariants || [],
+      shop: body.shop ?? undefined,
+      isColorless: body.isColorless ?? undefined,
+      groupImage: body.groupImage ?? undefined,
+      // Tiers and variants are written as the form sent them (validated, but
+      // the form does not send tier ids), exactly as before.
+      wholesaleTiers: (body.wholesaleTiers || []) as unknown as WholesaleTier[],
+      colorVariants: (body.colorVariants || []) as unknown as ColorVariant[],
     };
 
     // Only include category if it has a value (Firestore doesn't accept undefined)
@@ -121,35 +103,31 @@ export async function PUT(
     // The edit page sends the variants it was loaded from. With that we can
     // merge quantities as changes against the live document, so a sale made
     // while the form was open is not overwritten by the form's stale numbers.
-    if (Array.isArray(body.baseColorVariants)) {
+    if (body.baseColorVariants) {
       const { colorVariants: _ignored, ...otherFields } = updateData;
       void _ignored;
 
-      const editedVariants: EditedVariant[] = (
-        Array.isArray(body.colorVariants) ? body.colorVariants : []
-      ).map((variant: Record<string, unknown>) => ({
-        sourceIndex:
-          typeof variant.sourceIndex === "number" ? variant.sourceIndex : null,
-        color: String(variant.color ?? ""),
-        colorCode: String(variant.colorCode ?? ""),
-        barcode: String(variant.barcode ?? ""),
-        ...(typeof variant.image === "string" ? { image: variant.image } : {}),
-        sizeQuantities: Array.isArray(variant.sizeQuantities)
-          ? (variant.sizeQuantities as Array<Record<string, unknown>>).map(
-              (sq) => ({
-                size: String(sq.size ?? ""),
-                quantity: Number(sq.quantity ?? 0),
-              }),
-            )
-          : [],
-      }));
+      const editedVariants: EditedVariant[] = (body.colorVariants || []).map(
+        (variant) => ({
+          sourceIndex: variant.sourceIndex ?? null,
+          color: variant.color,
+          colorCode: variant.colorCode,
+          barcode: variant.barcode,
+          ...(variant.image !== undefined ? { image: variant.image } : {}),
+          sizeQuantities: variant.sizeQuantities.map((sq) => ({
+            size: sq.size,
+            quantity: sq.quantity,
+          })),
+        }),
+      );
 
       try {
         await updateStockWithMerge(
           id,
           otherFields,
           editedVariants,
-          body.baseColorVariants,
+          // The loaded snapshot, as stored; mergeOwnerEdit reads it defensively.
+          body.baseColorVariants as unknown as ColorVariant[],
         );
       } catch (error) {
         if (isStockAdjustmentError(error)) {

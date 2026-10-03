@@ -1,31 +1,15 @@
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   orderBy,
   query,
-  updateDoc,
-  where,
-  writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { StockService } from "@/services/stockService";
-import { CustomerNotificationService } from "@/services/customerNotificationService";
-import type { OrderLineReturn } from "@/lib/stockMath";
-
-/**
- * Online order status -> the customer notification it should trigger.
- *
- * Statuses that are not here (`pending`, `confirmed`) are internal bookkeeping
- * the customer has already been told about at checkout, so they stay silent.
- */
-const STATUS_NOTIFICATION: Record<string, string> = {
-  packaging: "order_packaging",
-  delivering: "order_shipped",
-  shipped: "order_shipped",
-  delivered: "order_delivered",
-};
+import { postOrderApi } from "@/services/transactionService";
+import type {
+  BulkResult,
+  OnlineOrderActionResult,
+} from "@/server/orders/types";
 
 export interface OnlineOrder {
   id: string;
@@ -171,6 +155,28 @@ export interface OnlineTransaction {
   branchName?: string;
 }
 
+export type { OnlineOrderActionResult } from "@/server/orders/types";
+
+/** Statuses the online-orders page offers. */
+export type OnlineOrderStatusValue =
+  | "pending"
+  | "packaging"
+  | "delivering"
+  | "delivered"
+  | "cancelled"
+  | "fully_returned"
+  | "partially_returned";
+
+const ONLINE_STATUSES: readonly string[] = [
+  "pending",
+  "packaging",
+  "delivering",
+  "delivered",
+  "cancelled",
+  "fully_returned",
+  "partially_returned",
+];
+
 function normalizeDate(input: unknown): string {
   if (!input) return "";
   if (typeof input === "string") return input;
@@ -188,110 +194,16 @@ function normalizeDate(input: unknown): string {
   return "";
 }
 
+function toStatusValue(status: string): OnlineOrderStatusValue {
+  const value = (status || "").trim().toLowerCase();
+  if (value === "canceled") return "cancelled";
+  if (!ONLINE_STATUSES.includes(value)) {
+    throw new Error(`Unsupported order status "${status}".`);
+  }
+  return value as OnlineOrderStatusValue;
+}
+
 class OnlineOrderService {
-  private isCancelledStatus(value: string): boolean {
-    return /cancelled|canceled|void/i.test(value || "");
-  }
-
-  /**
-   * One return line per order line, keeping each line's position so it lines
-   * up with the transaction's `items` and the returns ledger.
-   */
-  private buildStockReturnLines(
-    order: OnlineOrder,
-    alreadyRefunded: Record<number, number>,
-  ): OrderLineReturn[] {
-    const rows =
-      order.cartItems && order.cartItems.length > 0
-        ? order.cartItems
-        : order.product
-          ? [order.product]
-          : [];
-
-    return rows
-      .map((item, index) => ({
-        lineIndex: index,
-        quantity:
-          Math.max(0, Number(item.quantity || 0)) -
-          (alreadyRefunded[index] || 0),
-        restock: true,
-        stockId: String(item.productId || "").trim(),
-        colorName: String(item.color || "").trim(),
-        size: String(item.size || "").trim(),
-        variantHint: String(item.variantId || "").trim() || undefined,
-      }))
-      .filter((line) => line.stockId && line.quantity > 0);
-  }
-
-  /**
-   * Units already refunded on the order's transaction, per line.
-   *
-   * Refunds made since the returns ledger existed are in the ledger anyway;
-   * this covers older ones, so cancelling an order that was partly refunded
-   * earlier does not shelve the refunded units a second time.
-   */
-  private async refundedQuantitiesFor(
-    orderId: string,
-  ): Promise<Record<number, number>> {
-    const refunded: Record<number, number> = {};
-    if (!db) return refunded;
-
-    try {
-      const snap = await getDocs(
-        query(collection(db, "transactions"), where("onlineOrderId", "==", orderId)),
-      );
-      const refunds = (snap.docs[0]?.data()?.refunds || []) as Array<{
-        items?: Array<{ itemIndex?: number; quantity?: number }>;
-      }>;
-      for (const refund of refunds) {
-        for (const item of refund.items || []) {
-          if (typeof item.itemIndex !== "number") continue;
-          refunded[item.itemIndex] =
-            (refunded[item.itemIndex] || 0) + Number(item.quantity || 0);
-        }
-      }
-    } catch (error) {
-      console.error(`Could not read refunds for order ${orderId}:`, error);
-    }
-
-    return refunded;
-  }
-
-  private async restoreStockIfNeeded(order: OnlineOrder): Promise<boolean> {
-    // Fast exit; both conditions are checked again inside the transaction.
-    if (!order.stockDeductedAt || order.stockRestoredAt) {
-      return false;
-    }
-
-    const lines = this.buildStockReturnLines(
-      order,
-      await this.refundedQuantitiesFor(order.id),
-    );
-    if (lines.length === 0) {
-      return false;
-    }
-
-    // Shares the returns ledger on this order with the transactions page and
-    // the cancellation/refund screens, and the storefront releases unpaid
-    // reservations through `stockRestoredAt`, so no combination of those can
-    // put the same stock back twice.
-    const result = await StockService.returnOrderLines(lines, {
-      collection: "onlineOrders",
-      docId: order.id,
-      source: "onlineOrder",
-      requireField: "stockDeductedAt",
-      extraUpdatesWhenComplete: (current) =>
-        current.stockReservationStatus === "reserved"
-          ? {
-              stockReservationStatus: "released",
-              stockReleaseReason: "cancelled_in_pos",
-            }
-          : {},
-    });
-
-    return result.accounted > 0;
-  }
-
   async getOnlineOrders(): Promise<OnlineOrder[]> {
     if (!db) return [];
 
@@ -331,207 +243,68 @@ class OnlineOrderService {
   }
 
   /**
-   * Tell the customer their order moved on, by email and Telegram.
+   * Change one online order's status (server action; POST
+   * /api/online-orders/[id]/actions { action: "setStatus" }).
    *
-   * Best-effort and never throws: the status change is the operation that must
-   * succeed, and the owner should not see a failed save because the storefront
-   * notification service was unreachable.
+   * Guarded like the transactions page: forward only (pending -> packaging ->
+   * delivering -> delivered), returned statuses only after delivery, nothing
+   * on a cancelled order, payment-failed orders can only be cancelled.
+   * "cancelled" runs the full cancel path on the linked transaction (stock
+   * back through the returns ledger, pending cancellation refund when paid),
+   * all in one Firestore transaction. Re-saving the current status is a
+   * no-op. Throws with the server's message when refused.
+   *
+   * The customer's email/Telegram message is queued and sent by the server
+   * (notificationOutbox), so nothing is left for the browser to do.
    */
-  private async notifyStatusChange(
-    order: OnlineOrder,
-    status: string,
-  ): Promise<void> {
-    const customerId = order.customer?.uid;
-    if (!customerId) return;
+  async updateOnlineOrderStatus(orderId: string, status: string): Promise<void> {
+    if (!orderId || !status) return;
+    await postOrderApi<OnlineOrderActionResult>(
+      `/api/online-orders/${encodeURIComponent(orderId)}/actions`,
+      { action: "setStatus", status: toStatusValue(status) },
+    );
+  }
 
-    const normalised = (status || "").toLowerCase();
-    const type = this.isCancelledStatus(status)
-      ? "order_cancelled"
-      : STATUS_NOTIFICATION[normalised];
+  /**
+   * Bulk status change (POST /api/online-orders/bulk-status): one Firestore
+   * transaction per order. Orders that were updated are kept even when
+   * others are refused; if any were refused this throws an Error listing
+   * them. Customers of the orders that moved are notified by the server.
+   */
+  async updateOnlineOrderStatuses(orderIds: string[], status: string): Promise<void> {
+    if (!orderIds.length || !status) return;
+    const result = await postOrderApi<BulkResult<OnlineOrderActionResult>>(
+      "/api/online-orders/bulk-status",
+      { ids: orderIds, status: toStatusValue(status) },
+    );
 
-    if (!type) return;
-
-    try {
-      await CustomerNotificationService.notifyOrderEvent({
-        customerId,
-        type,
-        order: {
-          orderRef: order.orderId || order.id,
-          totalAmount: Number(order.total || 0),
-          paymentMethod: order.paymentMethod || order.provider || "",
-          paymentStatus: order.paymentStatus || "",
-          items: (order.items || []).map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-          })),
-        },
-      });
-    } catch (error) {
-      // notifyOrderEvent already swallows its own errors; this guards against
-      // anything unexpected while building the payload.
-      console.error(
-        `Failed to notify customer about order ${order.id} -> ${status}:`,
-        error,
+    const failed = result.results.filter((r) => !r.ok);
+    if (failed.length > 0) {
+      const details = failed
+        .slice(0, 5)
+        .map((r) => (r.ok ? "" : `${r.id}: ${r.error}`))
+        .join("\n");
+      throw new Error(
+        `${failed.length} of ${result.results.length} order(s) were not updated:\n${details}${failed.length > 5 ? "\n..." : ""}`,
       );
     }
   }
 
-  async updateOnlineOrderStatus(
-    orderId: string,
-    status: string,
-  ): Promise<void> {
-    if (!db || !orderId || !status) return;
-
-    const orderRef = doc(db, "onlineOrders", orderId);
-    const nextStatusIsCancelled = this.isCancelledStatus(status);
-
-    const snap = await getDoc(orderRef);
-    if (!snap.exists()) return;
-
-    const current = {
-      id: snap.id,
-      ...(snap.data() as Omit<OnlineOrder, "id">),
-    } as OnlineOrder;
-
-    // Only worth a message when something actually moved; owners re-save the
-    // same status often enough that this matters.
-    const statusChanged =
-      (current.status || "").toLowerCase() !== (status || "").toLowerCase();
-
-    if (nextStatusIsCancelled) {
-      // Sets `stockRestoredAt` itself, atomically with the stock writes.
-      await this.restoreStockIfNeeded(current);
+  /**
+   * Mark a cash-on-delivery order paid ("SUCCESS") or unpaid ("PENDING"),
+   * with its transaction (status completed/pending + paymentStatus), in one
+   * Firestore transaction. Refused for non-COD, cancelled or refunded
+   * orders, and "PENDING" once refunds exist.
+   */
+  async updateOnlineOrderPaymentStatus(orderId: string, paymentStatus: string): Promise<void> {
+    const value = (paymentStatus || "").trim().toUpperCase();
+    if (value !== "SUCCESS" && value !== "PENDING") {
+      throw new Error(`Unsupported payment status "${paymentStatus}".`);
     }
-
-    await updateDoc(orderRef, {
-      status,
-      updatedAt: new Date().toISOString(),
-    });
-
-    // If this is a COD order with a linked transaction, update the transaction too
-    const isCOD = (current.paymentMethod || "").toLowerCase() === "cod";
-    if (isCOD && orderId) {
-      try {
-        // COD orders use the same ID for both onlineOrder and transaction
-        const transactionRef = doc(db, "transactions", orderId);
-        const txSnap = await getDoc(transactionRef);
-        
-        if (txSnap.exists()) {
-          // Map online order status to transaction delivery status AND orderStatus
-          let deliveryStatus = status;
-          if (status === "packaging") deliveryStatus = "confirmed";
-          if (status === "delivering") deliveryStatus = "shipped";
-          
-          await updateDoc(transactionRef, {
-            deliveryStatus,
-            orderStatus: status, // Add orderStatus field for purchases page
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      } catch (error) {
-        console.error("Failed to update linked COD transaction:", error);
-      }
-    }
-
-    if (statusChanged) {
-      await this.notifyStatusChange({ ...current, status }, status);
-    }
-  }
-
-  async updateOnlineOrderStatuses(
-    orderIds: string[],
-    status: string,
-  ): Promise<void> {
-    if (!db || !orderIds.length || !status) return;
-    const firestore = db;
-
-    if (this.isCancelledStatus(status)) {
-      for (const orderId of orderIds) {
-        await this.updateOnlineOrderStatus(orderId, status);
-      }
-      return;
-    }
-
-    // Read the orders before the write so we can tell which ones actually
-    // changed status, and so we have the customer and totals for the messages.
-    const before = await Promise.all(
-      orderIds.map(async (orderId) => {
-        const snap = await getDoc(doc(firestore, "onlineOrders", orderId));
-        if (!snap.exists()) return null;
-        return {
-          id: snap.id,
-          ...(snap.data() as Omit<OnlineOrder, "id">),
-        } as OnlineOrder;
-      }),
+    await postOrderApi<OnlineOrderActionResult>(
+      `/api/online-orders/${encodeURIComponent(orderId)}/actions`,
+      { action: "setPaymentStatus", paymentStatus: value },
     );
-
-    const batch = writeBatch(firestore);
-    const updatedAt = new Date().toISOString();
-
-    orderIds.forEach((orderId) => {
-      batch.update(doc(firestore, "onlineOrders", orderId), {
-        status,
-        updatedAt,
-      });
-    });
-
-    await batch.commit();
-
-    for (const order of before) {
-      if (!order) continue;
-      if ((order.status || "").toLowerCase() === (status || "").toLowerCase()) {
-        continue;
-      }
-      await this.notifyStatusChange({ ...order, status }, status);
-    }
-  }
-
-  async updateOnlineOrderPaymentStatus(
-    orderId: string,
-    paymentStatus: string,
-  ): Promise<void> {
-    if (!db) throw new Error("Database not initialized");
-
-    const ref = doc(db, "onlineOrders", orderId);
-    const snap = await getDoc(ref);
-    
-    if (!snap.exists()) throw new Error("Order not found");
-    
-    const order = snap.data() as Omit<OnlineOrder, "id">;
-    
-    await updateDoc(ref, {
-      paymentStatus,
-      updatedAt: new Date().toISOString(),
-    });
-
-    // If this is a COD order, update the transaction status too
-    const isCOD = (order.paymentMethod || "").toLowerCase() === "cod";
-    if (isCOD && orderId) {
-      try {
-        // Query transactions collection to find the transaction with matching onlineOrderId
-        const transactionsRef = collection(db, "transactions");
-        const q = query(transactionsRef, where("onlineOrderId", "==", orderId));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          // Update the first matching transaction (should only be one)
-          const transactionDoc = querySnapshot.docs[0];
-          const txStatus = paymentStatus === "SUCCESS" ? "completed" : "pending";
-          
-          await updateDoc(doc(db, "transactions", transactionDoc.id), {
-            status: txStatus,
-            paymentStatus, // Also add paymentStatus field
-            updatedAt: new Date().toISOString(),
-          });
-          
-          console.log(`Updated COD transaction ${transactionDoc.id} payment status to ${paymentStatus}`);
-        } else {
-          console.warn(`No transaction found with onlineOrderId: ${orderId}`);
-        }
-      } catch (error) {
-        console.error("Failed to update linked COD transaction payment status:", error);
-      }
-    }
   }
 }
 

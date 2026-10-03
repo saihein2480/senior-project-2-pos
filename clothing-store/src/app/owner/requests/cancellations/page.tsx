@@ -6,7 +6,6 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
-import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { 
@@ -31,7 +30,6 @@ export default function CancellationRequestsPage() {
 }
 
 function CancellationRequestsContent() {
-  const { user } = useAuth();
   const permissions = usePermissions();
   const { formatPrice } = useCurrency();
   const [requests, setRequests] = useState<Transaction[]>([]);
@@ -105,32 +103,11 @@ function CancellationRequestsContent() {
     setProcessing(transaction.id);
     
     try {
-      // Use appropriate cancellation method based on payment status
-      if (isPaidOrder) {
-        // For paid orders (cash/scan/wallet), use cancelPaidTransaction which creates refund
-        await transactionService.cancelPaidTransaction(
-          transaction.id,
-          transaction,
-          (transaction as any).cancellationRequest?.reason || "Approved by owner",
-          user?.email || "Owner"
-        );
-      } else {
-        // For COD orders, use regular cancellation
-        await transactionService.cancelTransaction(
-          transaction.id,
-          transaction,
-          (transaction as any).cancellationRequest?.reason || "Approved by owner",
-          user?.email || "Owner"
-        );
-      }
-      
-      // Update cancellation request status
-      const { doc, updateDoc } = await import("firebase/firestore");
-      await updateDoc(doc(db!, "transactions", transaction.id), {
-        "cancellationRequest.status": "approved",
-        "cancellationRequest.approvedAt": new Date().toISOString(),
-        "cancellationRequest.approvedBy": user?.email || "Owner",
-      });
+      // One server action: cancels the order (stock back), creates the pending
+      // cancellation refund for a paid order, and marks the request approved
+      // (approvedAt/approvedBy = the signed-in user) atomically. The reason
+      // recorded is the customer's request reason.
+      await transactionService.approveCancellationRequest(transaction.id);
       
       if (isPaidOrder) {
         toast.success("Cancellation approved! Refund payment confirmation needed.");
@@ -139,7 +116,11 @@ function CancellationRequestsContent() {
       }
     } catch (error) {
       console.error("Error approving cancellation:", error);
-      toast.error("Failed to approve cancellation");
+      toast.error(
+        error instanceof Error && error.message
+          ? `Failed to approve cancellation: ${error.message}`
+          : "Failed to approve cancellation",
+      );
     } finally {
       setProcessing(null);
     }
@@ -160,23 +141,18 @@ function CancellationRequestsContent() {
     setProcessing(transaction.id);
     
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
-      const cancellationRequest = (transaction as any).cancellationRequest;
-      
-      await updateDoc(doc(db!, "transactions", transaction.id), {
-        cancellationRequest: {
-          ...cancellationRequest,
-          status: "rejected",
-          rejectedAt: new Date().toISOString(),
-          rejectionReason: reason,
-          rejectedBy: user?.email || "Owner",
-        },
-      });
+      // Server sets cancellationRequest.status "rejected", rejectedAt,
+      // rejectionReason and rejectedBy (the signed-in user).
+      await transactionService.rejectCancellationRequest(transaction.id, reason);
       
       toast.success("Cancellation rejected");
     } catch (error) {
       console.error("Error rejecting cancellation:", error);
-      toast.error("Failed to reject cancellation");
+      toast.error(
+        error instanceof Error && error.message
+          ? `Failed to reject cancellation: ${error.message}`
+          : "Failed to reject cancellation",
+      );
     } finally {
       setProcessing(null);
     }

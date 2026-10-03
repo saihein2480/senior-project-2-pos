@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { transactionService, Transaction } from "@/services/transactionService";
 import { ShopService } from "@/services/shopService";
+import { branchKey, matchesBranch, resolveBranchFilter } from "@/lib/branch";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import {
@@ -47,7 +48,7 @@ interface PaymentStats {
 function PaymentsPageContent() {
   const permissions = usePermissions();
   const { formatPrice } = useCurrency();
-  const { businessSettings } = useSettings();
+  const { branch: currentBranch, branches } = useSettings();
   const { t } = useLanguage();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,10 +130,11 @@ function PaymentsPageContent() {
         );
       }
 
-      // Filter by branch
-      if (filterBranch && filterBranch !== "all") {
-        filteredData = filteredData.filter(
-          (t) => t.branchName === filterBranch,
+      // Filter by branch: id first, legacy names (current or former) as fallback.
+      const branchFilter = resolveBranchFilter(filterBranch, branches);
+      if (branchFilter) {
+        filteredData = filteredData.filter((t) =>
+          matchesBranch(t, branchFilter),
         );
       }
 
@@ -142,7 +144,7 @@ function PaymentsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, filterBranch, startDate, endDate]);
+  }, [dateRange, filterBranch, startDate, endDate, branches]);
 
   // Load shops and set initial branch filter
   useEffect(() => {
@@ -157,11 +159,13 @@ function PaymentsPageContent() {
     fetchShops();
   }, []);
 
+  // Default the branch filter to this user's branch (by id when known).
+  const currentBranchKey = branchKey(currentBranch);
   useEffect(() => {
-    if (businessSettings?.currentBranch) {
-      setFilterBranch(businessSettings.currentBranch);
+    if (currentBranchKey) {
+      setFilterBranch(currentBranchKey);
     }
-  }, [businessSettings?.currentBranch]);
+  }, [currentBranchKey]);
 
   // Initialize date filters
   useEffect(() => {
@@ -910,7 +914,7 @@ function PaymentsPageContent() {
                   >
                     <option value="all">{t.allBranches}</option>
                     {shops.map((shop) => (
-                      <option key={shop.id} value={shop.name}>
+                      <option key={shop.id} value={shop.id}>
                         {shop.name}
                       </option>
                     ))}

@@ -70,6 +70,7 @@ export async function resetBusinessSettings(): Promise<BusinessSettings> {
     enableDarkMode: false,
     enableSoundEffects: false,
     currencyRate: 0,
+    refundTaxOnReturns: false,
     deliveryFee: 0,
   };
 

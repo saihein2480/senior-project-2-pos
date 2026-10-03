@@ -3,14 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePermissions } from "@/hooks/usePermissions";
 import { usePosSurfaceVisibility } from "@/hooks/usePosSurfaceVisibility";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useViewMode } from "@/contexts/ViewModeContext";
-import { ShopService } from "@/services/shopService";
+import { type BranchRef, NO_BRANCH_NAME } from "@/lib/branch";
 import { toast } from "react-hot-toast";
 import { RoleViewSwitcher } from "./RoleViewSwitcher";
 import {
@@ -47,7 +46,6 @@ export function TopNavBar({
   onMenuToggle,
 }: TopNavBarProps) {
   const { user, logout } = useAuth();
-  const permissions = usePermissions();
   // Paired with the Home menu entry in the Sidebar - one owner setting drives both.
   const { isPosSurfaceVisible } = usePosSurfaceVisibility();
   const { getCartItemCount } = useCart();
@@ -57,15 +55,19 @@ export function TopNavBar({
     defaultCurrency,
     getCurrencySymbol,
   } = useCurrency();
-  const { currentBranch, setCurrentBranch } = useSettings();
+  const {
+    branch: currentBranch,
+    branches: shops,
+    branchesLoaded,
+    selectBranch,
+  } = useSettings();
+  const isLoadingShops = !branchesLoaded;
   const { language, setLanguage, t } = useLanguage();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-  const [shops, setShops] = useState<Array<{ id: string; name: string }>>([]);
-  const [isLoadingShops, setIsLoadingShops] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const currencyDropdownRef = useRef<HTMLDivElement>(null);
@@ -113,11 +115,13 @@ export function TopNavBar({
    * call `router.refresh()`, which reloaded the whole route and still left
    * anything reading cached settings a step behind.
    *
-   * Doc: "Branch Selection" is available to all roles, but only a role that can
-   * edit business settings persists it as the business-wide default. Staff keep
-   * their branch choice local to their own device.
+   * Doc: "Branch Selection" is available to all roles. It only ever changes
+   * this user's own working branch (stored per user, by shop id); the
+   * business-wide default is changed separately by the owner in Settings.
+   * The branch list comes live from the settings context (oldest first), so
+   * renames and new branches appear without a reload.
    */
-  const handleBranchChange = (branchName: string) => {
+  const handleBranchChange = (branch: BranchRef) => {
     if (!user?.uid && !user?.email) {
       toast.error(t.userNotAuthenticated, {
         duration: 2000,
@@ -126,37 +130,15 @@ export function TopNavBar({
       return;
     }
 
-    setCurrentBranch(branchName, permissions.canEditBusinessSettings);
+    selectBranch(branch);
     setIsBranchDropdownOpen(false);
 
     // Branch name leads so the sentence reads naturally in both languages.
-    toast.success(`${branchName} ${t.branchSelected}`, {
+    toast.success(`${branch.name} ${t.branchSelected}`, {
       duration: 2000,
       position: "top-right",
     });
   };
-
-  // Load shops on component mount
-  useEffect(() => {
-    const loadShops = async () => {
-      try {
-        setIsLoadingShops(true);
-        console.log("Loading shops...");
-        const shopsData = await ShopService.getAllShops();
-        console.log("Shops loaded:", shopsData);
-        // Order comes from ShopService.getAllShops (createdAt ascending), so
-        // the first branch created stays at the top of the dropdown.
-        setShops(shopsData || []);
-      } catch (error) {
-        console.error("Error loading shops:", error);
-        setShops([]);
-      } finally {
-        setIsLoadingShops(false);
-      }
-    };
-
-    loadShops();
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -240,7 +222,9 @@ export function TopNavBar({
               >
                 <Store className="w-4 h-4 text-gray-900" />
                 <span className="text-xs sm:text-sm font-medium text-gray-900 max-w-[80px] sm:max-w-none truncate">
-                  {currentBranch === "No Branch" ? t.noBranch : currentBranch}
+                  {currentBranch.name === NO_BRANCH_NAME
+                    ? t.noBranch
+                    : currentBranch.name}
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 text-gray-900 transition-transform ${
@@ -268,7 +252,7 @@ export function TopNavBar({
                   ) : (
                     <>
                       {shops.map((shop) => {
-                        const isSelected = currentBranch === shop.name;
+                        const isSelected = currentBranch.id === shop.id;
                         return (
                           <button
                             key={shop.id}
@@ -277,7 +261,7 @@ export function TopNavBar({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              handleBranchChange(shop.name);
+                              handleBranchChange(shop);
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors cursor-pointer ${
                               isSelected

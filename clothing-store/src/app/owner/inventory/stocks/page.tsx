@@ -36,6 +36,13 @@ import { CategoryService } from "@/services/categoryService";
 import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { authFetch } from "@/lib/authFetch";
+import {
+  NO_BRANCH_NAME,
+  branchKey,
+  matchesBranch,
+  resolveBranchFilter,
+  toBranchRefs,
+} from "@/lib/branch";
 
 function InventoryStocksContent() {
   const router = useRouter();
@@ -49,7 +56,7 @@ function InventoryStocksContent() {
   const tRef = useRef(t);
   tRef.current = t;
   const permissions = usePermissions();
-  const { businessSettings } = useSettings();
+  const { businessSettings, branch: currentBranch } = useSettings();
   const [activeItem, setActiveItem] = useState("stocks");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
@@ -211,19 +218,20 @@ function InventoryStocksContent() {
     fetchStocks();
   }, []);
 
-  // Set shop filter to current branch from settings
+  // Set shop filter to this user's branch (by id; an unresolved legacy branch
+  // falls back to its name, which still matches name-tagged stock rows).
+  const currentBranchKey =
+    currentBranch.name === NO_BRANCH_NAME && !currentBranch.id
+      ? ""
+      : branchKey(currentBranch);
   useEffect(() => {
-    if (businessSettings?.currentBranch && shops.length > 0) {
-      // Find the shop that matches the current branch name
-      const currentShop = shops.find((s) => s.name === businessSettings.currentBranch);
-      if (currentShop) {
-        setSelectedShop(currentShop.id);
-      } else if (businessSettings.currentBranch !== "No Branch") {
-        // If branch name doesn't match a shop ID, try setting it directly (might be the shop ID)
-        setSelectedShop(businessSettings.currentBranch);
-      }
+    if (currentBranchKey && shops.length > 0) {
+      setSelectedShop(currentBranchKey);
     }
-  }, [businessSettings?.currentBranch, shops]);
+  }, [currentBranchKey, shops.length]);
+
+  /** The shop filter as a branch (null = all shops). */
+  const shopFilter = resolveBranchFilter(selectedShop, toBranchRefs(shops));
 
   // Reload stocks when branch changes
   useEffect(() => {
@@ -287,7 +295,8 @@ function InventoryStocksContent() {
       );
 
     // Shop filter
-    const matchesShop = selectedShop === "all" || group.shop === selectedShop;
+    // Stock `shop` holds a shop id, or a branch name on older rows.
+    const matchesShop = !shopFilter || matchesBranch(group, shopFilter);
 
     // Category filter
     const matchesCategory =
