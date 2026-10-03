@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -8,18 +8,58 @@ import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { transactionService, Transaction } from "@/services/transactionService";
-import { 
-  XCircle, 
-  CheckCircle, 
-  Clock, 
+import {
+  XCircle,
+  CheckCircle,
+  Clock,
   User,
   Calendar,
   Package,
-  AlertCircle,
   X,
+  Eye,
+  Wallet,
+  Banknote,
+  Coins,
+  QrCode,
+  SearchX,
+  FileText,
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  RequestPageHeader,
+  LiveIndicator,
+  StatGrid,
+  StatCard,
+  RequestToolbar,
+  Badge,
+  RequestCard,
+  NoteBlock,
+  ActionButton,
+  LoadingList,
+  EmptyState,
+  RequestModal,
+  ModalSection,
+  KeyValueList,
+  type FilterOption,
+} from "@/components/requests/RequestUI";
+
+/** Shape of the cancellation request stored on a transaction (read-only, for display). */
+interface CancellationRequestView {
+  status?: string;
+  reason?: string;
+  requestedAt?: string;
+  qrCodeImage?: string;
+}
+
+/** Read the cancellation request off a transaction for rendering. */
+const getCancelReq = (t: Transaction): CancellationRequestView =>
+  (t as unknown as { cancellationRequest?: CancellationRequestView }).cancellationRequest ?? {};
+
+/** Same definition as the approve handler: cash/scan orders need a refund. */
+const needsRefund = (t: Transaction) => t.paymentMethod === "cash" || t.paymentMethod === "scan";
+
+type RefundFilter = "all" | "refund" | "no-refund";
 
 export default function CancellationRequestsPage() {
   return (
@@ -37,6 +77,10 @@ function CancellationRequestsContent() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<Transaction | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  // UI-only state: in-memory search and filter
+  const [search, setSearch] = useState("");
+  const [refundFilter, setRefundFilter] = useState<RefundFilter>("all");
 
   // Layout state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -168,6 +212,57 @@ function CancellationRequestsContent() {
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Derived UI state (in memory, from the already-loaded list)
+  // ---------------------------------------------------------------------------
+
+  const stats = useMemo(() => {
+    const paid = requests.filter(needsRefund);
+    return {
+      pending: requests.length,
+      paid: paid.length,
+      paidValue: paid.reduce((sum, r) => sum + (r.total || 0), 0),
+      unpaid: requests.length - paid.length,
+      totalValue: requests.reduce((sum, r) => sum + (r.total || 0), 0),
+    };
+  }, [requests]);
+
+  const filterOptions: ReadonlyArray<FilterOption<RefundFilter>> = [
+    { value: "all", label: "All", count: stats.pending },
+    { value: "refund", label: "Needs refund", count: stats.paid },
+    { value: "no-refund", label: "No refund", count: stats.unpaid },
+  ];
+
+  const visibleRequests = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return requests.filter((r) => {
+      if (refundFilter === "refund" && !needsRefund(r)) return false;
+      if (refundFilter === "no-refund" && needsRefund(r)) return false;
+      if (!term) return true;
+      const haystack = [
+        r.transactionId,
+        r.customer?.displayName,
+        r.customer?.email,
+        r.customer?.phone,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [requests, search, refundFilter]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setRefundFilter("all");
+  };
+
+  const closeDetails = useCallback(() => setShowDetailsModal(false), []);
+
+  const selectedCancelReq = selectedRequest ? getCancelReq(selectedRequest) : null;
+  const selectedQr =
+    selectedRequest?.paymentMethod === "scan" ? selectedCancelReq?.qrCodeImage : undefined;
+
   return (
     <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Desktop sidebar */}
@@ -201,214 +296,153 @@ function CancellationRequestsContent() {
 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-                      Order Cancellation Requests
-                    </h1>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Review and process customer cancellations
-                    </p>
-                  </div>
-                </div>
-                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  <span className="text-sm font-medium text-amber-900">
-                    {requests.length} Pending
-                  </span>
-                </div>
-              </div>
-            </div>
+            <RequestPageHeader
+              icon={XCircle}
+              title="Cancellation Requests"
+              description="Review customer cancellations. Approving cancels the order and restores stock."
+              actions={<LiveIndicator />}
+            />
 
-            {/* Stats */}
-            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pending</p>
-                    <p className="text-3xl font-bold text-amber-600 mt-2">
-                      {requests.length}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl">
-                    <Clock className="w-6 h-6 text-amber-600" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <StatGrid>
+              <StatCard label="Pending" value={stats.pending} hint="Awaiting a decision" icon={Clock} tone="amber" />
+              <StatCard
+                label="Needs refund"
+                value={stats.paid}
+                hint={`Paid (cash/scan) · ${formatPrice(stats.paidValue)}`}
+                icon={Banknote}
+                tone="rose"
+              />
+              <StatCard label="Unpaid / COD" value={stats.unpaid} hint="No refund needed" icon={Wallet} tone="blue" />
+              <StatCard
+                label="Value pending"
+                value={formatPrice(stats.totalValue)}
+                hint="Total of all pending orders"
+                icon={Coins}
+                tone="emerald"
+              />
+            </StatGrid>
+
+            {!loading && requests.length > 0 && (
+              <RequestToolbar
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search by order, customer, email or phone"
+                filters={filterOptions}
+                filterValue={refundFilter}
+                onFilterChange={setRefundFilter}
+                filterLabel="Filter by refund requirement"
+                trailing={
+                  <span className="px-1 text-xs text-gray-500" aria-live="polite">
+                    {visibleRequests.length} of {requests.length} shown
+                  </span>
+                }
+              />
+            )}
 
             {/* Requests List */}
             {loading ? (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-3 border-rose-200 border-t-rose-500 mx-auto"></div>
-                <p className="mt-4 text-gray-600 font-medium">Loading requests...</p>
-              </div>
+              <LoadingList />
             ) : requests.length === 0 ? (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl shadow-sm border-2 border-dashed border-gray-300 p-12 text-center">
-                <div className="inline-flex p-4 bg-white rounded-full shadow-sm mb-4">
-                  <XCircle className="w-12 h-12 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Pending Requests</h3>
-                <p className="text-gray-500">All cancellation requests have been processed</p>
-              </div>
+              <EmptyState
+                icon={XCircle}
+                title="No pending requests"
+                description="All cancellation requests have been processed."
+              />
+            ) : visibleRequests.length === 0 ? (
+              <EmptyState
+                icon={SearchX}
+                title="No matching requests"
+                description="Nothing matches the current search or filter."
+                action={
+                  <ActionButton variant="secondary" icon={X} onClick={clearFilters} className="lg:w-auto">
+                    Clear filters
+                  </ActionButton>
+                }
+              />
             ) : (
-              <div className="space-y-4">
-                {requests.map((request) => {
-                  const cancelReq = (request as any).cancellationRequest;
+              <div className="space-y-3">
+                {visibleRequests.map((request) => {
+                  const cancelReq = getCancelReq(request);
                   const isProcessing = processing === request.id;
-                  const isPaidOrder = request.paymentMethod === "cash" || request.paymentMethod === "scan";
-                  
+                  const isPaidOrder = needsRefund(request);
+                  const hasQr = request.paymentMethod === "scan" && !!cancelReq.qrCodeImage;
+                  const itemCount = request.items.length;
+
                   return (
-                    <div
+                    <RequestCard
                       key={request.id}
-                      className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all duration-200 overflow-hidden"
+                      tone="amber"
+                      title={request.transactionId}
+                      badges={
+                        <>
+                          <Badge tone="amber" dot>
+                            Pending
+                          </Badge>
+                          {isPaidOrder && <Badge tone="rose">Refund required</Badge>}
+                          {request.paymentMethod && (
+                            <Badge tone="gray">
+                              <span className="capitalize">{request.paymentMethod}</span>
+                            </Badge>
+                          )}
+                        </>
+                      }
+                      meta={[
+                        { icon: User, label: "Customer", value: request.customer?.displayName || "Walk-in" },
+                        { icon: Package, label: "Items", value: `${itemCount} item${itemCount !== 1 ? "s" : ""}` },
+                        {
+                          icon: Calendar,
+                          label: "Requested",
+                          value: cancelReq.requestedAt
+                            ? new Date(cancelReq.requestedAt).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "—",
+                        },
+                        { icon: Coins, label: "Total", value: formatPrice(request.total) },
+                      ]}
+                      actions={
+                        <>
+                          <ActionButton
+                            variant="secondary"
+                            icon={Eye}
+                            onClick={() => {
+                              setSelectedRequest(request);
+                              setShowDetailsModal(true);
+                            }}
+                            aria-label={`View details for ${request.transactionId}`}
+                          >
+                            View details
+                          </ActionButton>
+                          <ActionButton
+                            variant="approve"
+                            icon={CheckCircle}
+                            loading={isProcessing}
+                            onClick={() => handleApprove(request)}
+                            aria-label={`Approve cancellation for ${request.transactionId}`}
+                          >
+                            Approve
+                          </ActionButton>
+                          <ActionButton
+                            variant="danger"
+                            icon={X}
+                            disabled={isProcessing}
+                            onClick={() => handleReject(request)}
+                            aria-label={`Reject cancellation for ${request.transactionId}`}
+                          >
+                            Reject
+                          </ActionButton>
+                        </>
+                      }
                     >
-                      <div className="p-4">
-                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                          {/* Left: Request Info */}
-                          <div className="flex-1">
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg flex-shrink-0">
-                                <AlertCircle className="w-5 h-5 text-amber-600" />
-                              </div>
-                              
-                              <div className="flex-1 min-w-0">
-                                {/* Header */}
-                                <div className="flex items-center gap-2 flex-wrap mb-2">
-                                  <h3 className="text-base font-bold text-gray-900">
-                                    {request.transactionId}
-                                  </h3>
-                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full border border-amber-200">
-                                    PENDING
-                                  </span>
-                                  {isPaidOrder && (
-                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded-full border border-rose-200">
-                                      REFUND REQUIRED
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                {/* Details Grid */}
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-gray-100 rounded-md">
-                                      <User className="w-3.5 h-3.5 text-gray-600" />
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-gray-500">Customer</p>
-                                      <p className="text-xs font-semibold text-gray-900 truncate">
-                                        {request.customer?.displayName || "Walk-in"}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-gray-100 rounded-md">
-                                      <Package className="w-3.5 h-3.5 text-gray-600" />
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-gray-500">Items</p>
-                                      <p className="text-xs font-semibold text-gray-900">
-                                        {request.items.length} item{request.items.length !== 1 ? 's' : ''}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-gray-100 rounded-md">
-                                      <Calendar className="w-3.5 h-3.5 text-gray-600" />
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-gray-500">Requested</p>
-                                      <p className="text-xs font-semibold text-gray-900">
-                                        {new Date(cancelReq.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-gray-100 rounded-md">
-                                      <svg className="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-gray-500">Total</p>
-                                      <p className="text-xs font-bold text-gray-900">
-                                        {formatPrice(request.total)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Reason */}
-                                {cancelReq.reason && (
-                                  <div className="mt-2 p-2.5 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Cancellation Reason</p>
-                                    <p className="text-xs text-gray-700 leading-relaxed">{cancelReq.reason}</p>
-                                  </div>
-                                )}
-
-                                {/* QR Code Preview for Scan */}
-                                {(request.paymentMethod === "scan") && cancelReq.qrCodeImage && (
-                                  <div className="mt-2 p-2.5 bg-rose-50 rounded-lg border border-rose-200">
-                                    <div className="flex items-center gap-1.5">
-                                      <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                      </svg>
-                                      <p className="text-xs font-semibold text-rose-900">Customer Payment Account Attached</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right: Actions */}
-                          <div className="flex flex-row sm:flex-row lg:flex-col gap-2 lg:min-w-[140px]">
-                            <button
-                              onClick={() => {
-                                setSelectedRequest(request);
-                                setShowDetailsModal(true);
-                              }}
-                              className="flex-1 lg:w-full px-3 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all text-xs"
-                            >
-                              View Details
-                            </button>
-                            
-                            <button
-                              onClick={() => handleApprove(request)}
-                              disabled={isProcessing}
-                              className="flex-1 lg:w-full px-3 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-semibold transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-lg shadow-green-500/30"
-                            >
-                              {isProcessing ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
-                                  <span>Processing...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="w-3.5 h-3.5" />
-                                  <span>Approve</span>
-                                </>
-                              )}
-                            </button>
-                            
-                            <button
-                              onClick={() => handleReject(request)}
-                              disabled={isProcessing}
-                              className="flex-1 lg:w-full px-3 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-lg shadow-red-500/30"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                              <span>Reject</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      {cancelReq.reason && <NoteBlock label="Cancellation reason">{cancelReq.reason}</NoteBlock>}
+                      {hasQr && (
+                        <p className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200">
+                          <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+                          Customer payment QR attached
+                        </p>
+                      )}
+                    </RequestCard>
                   );
                 })}
               </div>
@@ -418,157 +452,129 @@ function CancellationRequestsContent() {
       </div>
 
       {/* Details Modal */}
-      {showDetailsModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-fit max-h-[95vh] flex flex-col">
-            {/* Header */}
-            <div className="px-3 py-1.5 bg-gradient-to-r from-rose-500 to-pink-500 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <h2 className="text-xs font-bold text-white">
-                  Order #{selectedRequest.transactionId}
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="p-1 hover:bg-white/20 rounded transition-colors text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+      {selectedRequest && (
+        <RequestModal
+          open={showDetailsModal}
+          onClose={closeDetails}
+          title={`Order #${selectedRequest.transactionId}`}
+          subtitle={
+            selectedCancelReq?.requestedAt
+              ? `Cancellation requested ${formatDate(selectedCancelReq.requestedAt)}`
+              : "Cancellation request"
+          }
+          icon={FileText}
+          size="xl"
+          footer={
+            <ActionButton variant="secondary" onClick={closeDetails}>
+              Close
+            </ActionButton>
+          }
+        >
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <ModalSection title="Customer">
+                <KeyValueList
+                  rows={[
+                    { label: "Name", value: selectedRequest.customer?.displayName || "Walk-in" },
+                    ...(selectedRequest.customer?.email
+                      ? [{ label: "Email", value: selectedRequest.customer.email }]
+                      : []),
+                    ...(selectedRequest.customer?.phone
+                      ? [{ label: "Phone", value: selectedRequest.customer.phone }]
+                      : []),
+                    {
+                      label: "Payment",
+                      value: <span className="capitalize">{selectedRequest.paymentMethod}</span>,
+                    },
+                  ]}
+                />
+              </ModalSection>
+
+              <ModalSection title={`Items (${selectedRequest.items.length})`}>
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                  {selectedRequest.items.map((item, index) => (
+                    <li key={index} className="flex items-center gap-3 px-3 py-2">
+                      {item.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.image}
+                          alt={item.groupName}
+                          className="h-10 w-10 flex-shrink-0 rounded-lg border border-gray-200 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
+                          <Package className="h-4 w-4" aria-hidden="true" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">{item.groupName}</p>
+                        <p className="truncate text-xs text-gray-500">
+                          {item.selectedColor && `${item.selectedColor}`}
+                          {item.selectedColor && item.selectedSize && " · "}
+                          {item.selectedSize && `${item.selectedSize}`}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0 text-right text-sm">
+                        <p className="text-xs text-gray-500">
+                          {item.quantity} × {formatPrice(item.unitPrice)}
+                        </p>
+                        <p className="font-semibold text-gray-900">{formatPrice(item.quantity * item.unitPrice)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </ModalSection>
+
+              <ModalSection title="Totals">
+                <KeyValueList
+                  rows={[
+                    { label: "Subtotal", value: formatPrice(selectedRequest.subtotal) },
+                    { label: "Tax", value: formatPrice(selectedRequest.tax) },
+                    {
+                      label: "Total",
+                      value: <span className="text-rose-600">{formatPrice(selectedRequest.total)}</span>,
+                      strong: true,
+                    },
+                  ]}
+                />
+              </ModalSection>
             </div>
 
-            {/* Content */}
-            <div className="p-2.5 bg-gray-50">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-                {/* Transaction Info - Compact Inline */}
-                <div className="bg-white rounded p-2 border border-gray-200 col-span-2">
-                  <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
-                    <h3 className="text-xs font-bold text-gray-700">Transaction</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                    <div>
-                      <span className="text-gray-500 text-xs">Customer</span>
-                      <p className="font-semibold text-gray-900 truncate">
-                        {selectedRequest.customer?.displayName || "Walk-in"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 text-xs">Payment</span>
-                      <p className="font-semibold text-gray-900 capitalize">
-                        {selectedRequest.paymentMethod}
-                      </p>
-                    </div>
-                  </div>
+            <div>
+              <ModalSection title="Status">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="amber" dot>
+                    Pending
+                  </Badge>
+                  {needsRefund(selectedRequest) && <Badge tone="rose">Refund required</Badge>}
                 </div>
+              </ModalSection>
 
-                {/* Order Summary - Compact */}
-                <div className="bg-white rounded p-2 border border-gray-200 col-span-2">
-                  <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
-                    <h3 className="text-xs font-bold text-gray-700">Summary</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-2 text-xs">
-                    <div className="space-y-0.5">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Subtotal</span>
-                        <span className="font-semibold">{formatPrice(selectedRequest.subtotal)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Tax</span>
-                        <span className="font-semibold">{formatPrice(selectedRequest.tax)}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col justify-center items-end">
-                      <span className="text-xs text-gray-500">Total</span>
-                      <span className="text-sm font-bold text-rose-600">{formatPrice(selectedRequest.total)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {selectedCancelReq?.reason && (
+                <ModalSection title="Reason">
+                  <NoteBlock label="Cancellation reason">{selectedCancelReq.reason}</NoteBlock>
+                </ModalSection>
+              )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                {/* Items - Left side */}
-                <div className="bg-white rounded p-2 border border-gray-200 lg:col-span-2">
-                  <div className="flex items-center gap-1 mb-1.5">
-                    <div className="w-0.5 h-2.5 bg-gradient-to-b from-rose-500 to-pink-500 rounded"></div>
-                    <h3 className="text-xs font-bold text-gray-700">Items ({selectedRequest.items.length})</h3>
-                  </div>
-                  <div className="space-y-1">
-                    {selectedRequest.items.map((item, index) => (
-                      <div
-                        key={index}
-                        className="bg-gray-50 rounded px-2 py-1.5 flex items-center gap-2 border border-gray-200"
-                      >
-                        {item.image && (
-                          <img
-                            src={item.image}
-                            alt={item.groupName}
-                            className="w-8 h-8 object-cover rounded border border-gray-300 flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 text-xs truncate leading-tight">
-                            {item.groupName}
-                          </h4>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <p className="text-xs text-gray-600 truncate">
-                              {item.selectedColor && `${item.selectedColor}`}
-                              {item.selectedColor && item.selectedSize && " · "}
-                              {item.selectedSize && `${item.selectedSize}`}
-                            </p>
-                            <div className="flex items-center gap-1 text-xs flex-shrink-0">
-                              <span className="text-gray-600">{item.quantity}</span>
-                              <span className="text-gray-400">×</span>
-                              <span className="font-bold text-gray-900">{formatPrice(item.quantity * item.unitPrice)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* QR Code - Right side (if exists) */}
-                {(selectedRequest.paymentMethod === "scan") && (selectedRequest as any).cancellationRequest?.qrCodeImage ? (
-                  <div className="bg-white rounded p-2 border border-rose-200">
-                    <div className="flex items-center gap-1 mb-1.5">
-                      <svg className="w-3 h-3 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                      <div>
-                        <p className="text-xs font-bold text-rose-900 leading-tight">Refund QR</p>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-1.5 border border-gray-200">
-                      <img
-                        src={(selectedRequest as any).cancellationRequest.qrCodeImage}
-                        alt="QR Code"
-                        className="w-full rounded"
-                      />
-                    </div>
+              <ModalSection title="Refund QR">
+                {selectedQr ? (
+                  <div className="rounded-xl border border-rose-200 bg-gray-50 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={selectedQr}
+                      alt={`Customer refund payment QR code for order ${selectedRequest.transactionId}`}
+                      className="w-full rounded-lg"
+                    />
                   </div>
                 ) : (
-                  <div className="bg-white rounded p-2 border border-gray-200 flex items-center justify-center">
-                    <p className="text-xs text-gray-500 text-center">No QR code required for {selectedRequest.paymentMethod} payment</p>
-                  </div>
+                  <p className="rounded-xl border border-gray-200 px-3 py-4 text-center text-sm text-gray-500">
+                    No QR code required for {selectedRequest.paymentMethod} payment
+                  </p>
                 )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-3 py-1.5 bg-white border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="px-3 py-1 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white rounded font-semibold transition-all text-xs"
-              >
-                Close
-              </button>
+              </ModalSection>
             </div>
           </div>
-        </div>
+        </RequestModal>
       )}
     </div>
   );

@@ -398,7 +398,7 @@ export function Sidebar({
         },
         {
           id: "refund-requests",
-          label: "Return Requests",
+          label: "Refund & Return Requests",
           icon: "RotateCcw",
           href: "/owner/requests/refunds",
           roles: ["owner", "manager"],

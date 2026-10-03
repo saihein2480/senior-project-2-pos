@@ -938,18 +938,18 @@ function TransactionsPageContent() {
     const confirmed = window.confirm(
       `Are you sure you want to approve this COD transaction?\n\nTransaction ID: ${
         transaction.transactionId
-      }\nTotal: ${formatPrice(transaction.total)}\n\nThe delivery status will be set to Confirmed.`,
+      }\nTotal: ${formatPrice(transaction.total)}\n\nThe delivery status will be set to Shipped.`,
     );
 
     if (!confirmed) return;
 
     try {
-      // The server also confirms a pending COD delivery in the same step.
+      // The server also marks the COD delivery as shipped in the same step.
       await transactionService.approveTransaction(
         transaction.id,
         user?.email || "Admin",
       );
-      toast.success("Transaction approved and delivery confirmed!");
+      toast.success("Transaction approved and marked as shipped!");
       loadTransactions(); // Reload transactions
     } catch (error) {
       console.error("Error approving transaction:", error);

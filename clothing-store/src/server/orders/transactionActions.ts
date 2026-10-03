@@ -84,6 +84,22 @@ function onlineOrderEvent(
   return [customerEvent(ctx, type, { paymentStatus: state.moneyReceived ? "paid" : "pending", ...extra })];
 }
 
+/**
+ * A walk-in sale paid at the till (cash or scan, not COD): the customer is
+ * standing at the counter, so the money goes back there and then. Its refunds
+ * and cancellation refunds are settled when they are recorded instead of
+ * waiting on the Pending Refund Payments page.
+ */
+function isCounterRefund(state: OrderState): boolean {
+  return state.channel === "walk_in" && state.paymentMethod !== "cod" && state.moneyReceived;
+}
+
+/** How a counter refund is paid back: what the caller chose, else cash for cash sales. */
+function counterRefundMethod(state: OrderState, chosen?: RefundMethod): RefundMethod {
+  if (chosen) return chosen;
+  return state.paymentMethod === "cash" ? "cash" : "original_payment";
+}
+
 /** A refunds[] entry, in the shape the pages and the storefront read. */
 function buildRefundEntry(
   ctx: OrderContext,
@@ -159,6 +175,8 @@ export async function cancelInContext(
   options: CancelOptions,
 ): Promise<{ finished: ReturnType<typeof finishAction>; refundAmount: number }> {
   const refundAmount = state.moneyReceived ? state.money.cancellationRefundable : 0;
+  // A walk-in sale cancelled at the till is paid back on the spot.
+  const counter = refundAmount > 0 && isCounterRefund(state);
 
   const updates: Record<string, unknown> = {
     cancelledAt: ctx.now,
@@ -169,12 +187,20 @@ export async function cancelInContext(
   if (refundAmount > 0) {
     updates.cancellationRefund = stripUndefined({
       amount: refundAmount,
-      method: options.refundMethod || "pending",
-      status: "pending",
+      method: counter ? counterRefundMethod(state, options.refundMethod) : options.refundMethod || "pending",
+      status: counter ? "completed" : "pending",
       requestedAt: ctx.now,
       requestedBy: ctx.actor.label,
       requestedByUid: ctx.actor.uid,
       reason: options.reason || undefined,
+      ...(counter
+        ? {
+            confirmedAt: ctx.now,
+            confirmedBy: ctx.actor.label,
+            confirmedByUid: ctx.actor.uid,
+            paidAtCounter: true,
+          }
+        : {}),
     });
   }
 
@@ -189,8 +215,11 @@ export async function cancelInContext(
     prepared,
     reason: options.reason ?? null,
     requestedOnlineStatus: options.requestedOnlineStatus,
-    details: { cancellationRefundAmount: refundAmount },
-    notifications: refundAmount > 0 ? [ownerRefundPaymentNotification(ctx.data, ctx.id, true)] : [],
+    forcePaymentStatus: counter,
+    details: { cancellationRefundAmount: refundAmount, ...(counter ? { paidAtCounter: true } : {}) },
+    // Nothing left to pay out for a counter refund, so no "refund payment" alert.
+    notifications:
+      refundAmount > 0 && !counter ? [ownerRefundPaymentNotification(ctx.data, ctx.id, true)] : [],
     customerEvents: options.customerEvents,
   });
 
@@ -233,11 +262,15 @@ const processRefund: ActionFn<"processRefund"> = async (ctx, input) => {
   assertCanApply("refund", state);
 
   const computed = computeReturnRefund(ctx.data, input.items, opts(ctx));
+  // Walk-in refunds are paid at the counter now, so they are recorded as
+  // completed rather than queued for Pending Refund Payments.
+  const counter = isCounterRefund(state);
   const entry = buildRefundEntry(ctx, computed, {
     reason: input.reason,
-    refundMethod: input.refundMethod,
-    needsPayout: state.moneyReceived,
+    refundMethod: counter ? counterRefundMethod(state, input.refundMethod) : input.refundMethod,
+    needsPayout: state.moneyReceived && !counter,
   });
+  if (counter) entry.refundedByUid = ctx.actor.uid;
   const refunds = [...refundsOf(ctx.data), entry];
   const updates: Record<string, unknown> = { refunds };
 
@@ -280,7 +313,15 @@ const processRefund: ActionFn<"processRefund"> = async (ctx, input) => {
     updates,
     prepared,
     reason: input.reason ?? null,
-    details: { refundId: entry.refundId, amount: computed.totalAmount, items: computed.items },
+    // A settled counter refund moves the payment status on, as a payout
+    // confirmation would.
+    forcePaymentStatus: counter,
+    details: {
+      refundId: entry.refundId,
+      amount: computed.totalAmount,
+      items: computed.items,
+      ...(counter ? { paidAtCounter: true, refundMethod: entry.refundMethod } : {}),
+    },
   });
 
   return result("processRefund", finished, ctx, {
@@ -408,16 +449,16 @@ const approve: ActionFn<"approve"> = async (ctx) => {
   const state = stateOf(ctx);
   assertCanApply("approve", state);
 
-  // Approving a COD order also confirms its delivery (pending → confirmed),
-  // in the same transaction, so staff don't have to do it as a second step.
-  // A delivery that has already moved on (shipped, delivered) is left alone.
+  // Approving a COD order also ships it (pending/confirmed → shipped), in the
+  // same transaction, so staff don't have to do it as a second step. A
+  // delivery that is already shipped or delivered is left alone.
   const currentDelivery =
     typeof ctx.data.deliveryStatus === "string"
       ? ctx.data.deliveryStatus.trim().toLowerCase()
       : "";
-  const confirmDelivery =
+  const shipDelivery =
     String(ctx.data.paymentMethod || "").toLowerCase() === "cod" &&
-    (currentDelivery === "" || currentDelivery === "pending");
+    (currentDelivery === "" || currentDelivery === "pending" || currentDelivery === "confirmed");
 
   const finished = finishAction(ctx, {
     action: "approve",
@@ -425,13 +466,13 @@ const approve: ActionFn<"approve"> = async (ctx) => {
       status: "completed",
       approvedAt: ctx.now,
       ...by(ctx, "approved"),
-      ...(confirmDelivery ? deliveryUpdates(ctx, state, "confirmed") : {}),
+      ...(shipDelivery ? deliveryUpdates(ctx, state, "shipped") : {}),
     },
-    ...(confirmDelivery
+    ...(shipDelivery
       ? {
-          details: { deliveryStatus: "confirmed" },
+          details: { deliveryStatus: "shipped" },
           customerEvents: (_after: unknown, afterState: OrderState) =>
-            onlineOrderEvent(ctx, afterState, DELIVERY_EVENT.confirmed),
+            onlineOrderEvent(ctx, afterState, DELIVERY_EVENT.shipped),
         }
       : {}),
   });
