@@ -23,8 +23,9 @@ import {
   SizeQuantity,
 } from "@/types/stock";
 import { Shop, ShopListResponse } from "@/types/shop";
-import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
+import { CurrencyPriceInput } from "@/components/ui/CurrencyPriceInput";
+import { usePriceEntryCurrency } from "@/hooks/usePriceEntryCurrency";
 import { detectColorName, extractColorsFromImage } from "@/lib/colorUtils";
 import { authFetch } from "@/lib/authFetch";
 
@@ -87,9 +88,14 @@ function NewStockContent() {
   }>({ current: 0, total: 0 });
   const [error, setError] = useState<string>("");
 
-  // Currency state
-  const [defaultCurrency, setDefaultCurrency] = useState<"THB" | "MMK">("THB");
-  const [currencySymbol, setCurrencySymbol] = useState<string>("฿");
+  // Prices are typed in the top-nav currency and stored in the default one
+  const {
+    entryCurrency,
+    entrySymbol,
+    defaultCurrency,
+    defaultSymbol,
+    rateMissing,
+  } = usePriceEntryCurrency();
 
   // Fetch shops from the API
   const fetchShops = async () => {
@@ -138,25 +144,6 @@ function NewStockContent() {
     };
   }, []);
 
-  // Load currency settings on component mount
-  useEffect(() => {
-    const fetchCurrencySettings = async () => {
-      try {
-        const settings = await SettingsService.getBusinessSettings();
-        if (settings) {
-          const currency = (settings.defaultCurrency as "THB" | "MMK") || "THB";
-          setDefaultCurrency(currency);
-          const currencyInfo = SettingsService.getCurrencyInfo(currency);
-          setCurrencySymbol(currencyInfo.symbol);
-        }
-      } catch (error) {
-        console.error("Error fetching currency settings:", error);
-      }
-    };
-
-    fetchCurrencySettings();
-  }, []);
-
   const addWholesaleTier = () => {
     const newTier: WholesaleTier = {
       id: Date.now().toString(),
@@ -191,6 +178,38 @@ function NewStockContent() {
       sizeQuantities: [],
     };
     setColorVariants([...colorVariants, newVariant]);
+  };
+
+  // Colorless stock is stored as a single variant with no colour, so the
+  // owner still gets one set of sizes and quantities to fill in.
+  const handleColorlessToggle = (checked: boolean) => {
+    if (!checked) {
+      setIsColorless(false);
+      return;
+    }
+
+    if (colorVariants.length > 1) {
+      const extra = colorVariants.length - 1;
+      if (
+        !confirm(
+          `Colorless stock has one set of sizes. The first variant's sizes will be kept and the other ${extra} ${extra === 1 ? "variant" : "variants"} removed. Continue?`,
+        )
+      ) {
+        return;
+      }
+      setColorVariants((variants) => variants.slice(0, 1));
+    } else if (colorVariants.length === 0) {
+      setColorVariants([
+        {
+          id: Date.now().toString(),
+          color: "",
+          colorCode: "#000000",
+          barcode: "",
+          sizeQuantities: [],
+        },
+      ]);
+    }
+    setIsColorless(true);
   };
 
   const handleMultipleImageUpload = () => {
@@ -383,6 +402,9 @@ function NewStockContent() {
   const handleImageUpload = async (id: string, imageUrl: string) => {
     // First update the image
     updateColorVariant(id, "image", imageUrl);
+
+    // Colorless stock has no colour to detect
+    if (isColorless) return;
 
     // Then extract colors from the image
     if (imageUrl) {
@@ -680,8 +702,13 @@ function NewStockContent() {
     setIsLoading(true);
 
     try {
-      // Ensure there's at least one variant to attach a barcode to (handles colorless items)
-      let variantsToUse = colorVariants;
+      // Colorless stock: a single variant with no colour, holding the sizes
+      let variantsToUse = isColorless
+        ? colorVariants
+            .slice(0, 1)
+            .map((variant) => ({ ...variant, color: "", colorCode: "#000000" }))
+        : colorVariants;
+      // Ensure there's at least one variant to attach a barcode to
       if (!variantsToUse || variantsToUse.length === 0) {
         variantsToUse = [
           {
@@ -881,28 +908,39 @@ function NewStockContent() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Unit Price ({currencySymbol})
+                          Unit Price ({entrySymbol})
                         </label>
-                        <input
-                          type="number"
-                          value={unitPrice}
-                          onChange={(e) => setUnitPrice(e.target.value)}
+                        <CurrencyPriceInput
+                          value={unitPrice === "" ? null : parseFloat(unitPrice)}
+                          onChange={(v) =>
+                            setUnitPrice(v === null ? "" : String(v))
+                          }
                           placeholder="Enter unit price"
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Original Price ({currencySymbol})
+                          Original Price ({entrySymbol})
                         </label>
-                        <input
-                          type="number"
-                          value={originalPrice}
-                          onChange={(e) => setOriginalPrice(e.target.value)}
+                        <CurrencyPriceInput
+                          value={
+                            originalPrice === "" ? null : parseFloat(originalPrice)
+                          }
+                          onChange={(v) =>
+                            setOriginalPrice(v === null ? "" : String(v))
+                          }
                           placeholder="Enter original price"
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                         />
                       </div>
+                      {(entryCurrency !== defaultCurrency || rateMissing) && (
+                        <p className="md:col-span-2 -mt-2 text-xs text-gray-500">
+                          {rateMissing
+                            ? `No exchange rate is set, so prices are entered in ${defaultSymbol} ${defaultCurrency}. Set a rate in Settings to enter them in the selected currency.`
+                            : `Prices are entered in ${entrySymbol} ${entryCurrency} and saved in ${defaultSymbol} ${defaultCurrency}, the business default currency.`}
+                        </p>
+                      )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Release Date
@@ -961,19 +999,6 @@ function NewStockContent() {
                           )}
                         </div>
                       </div>
-                    </div>
-                    <div className="mt-6">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isColorless}
-                          onChange={(e) => setIsColorless(e.target.checked)}
-                          className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-400"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">
-                          Is colorless stock?
-                        </span>
-                      </label>
                     </div>
                   </div>
                 </div>
@@ -1034,20 +1059,13 @@ function NewStockContent() {
                         </div>
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Price ({currencySymbol})
+                            Price ({entrySymbol})
                           </label>
-                          <input
+                          <CurrencyPriceInput
                             aria-label="Enter price"
-                            type="number"
-                            value={tier.price === 0 ? "" : tier.price}
-                            onChange={(e) =>
-                              updateWholesaleTier(
-                                tier.id,
-                                "price",
-                                e.target.value === ""
-                                  ? 0
-                                  : parseFloat(e.target.value),
-                              )
+                            value={tier.price === 0 ? null : tier.price}
+                            onChange={(v) =>
+                              updateWholesaleTier(tier.id, "price", v ?? 0)
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
                           />
@@ -1066,33 +1084,47 @@ function NewStockContent() {
               </div>
             </div>
 
-            {/* Color Variants Section */}
-            {!isColorless && (
+            {/* Color Variants Section (colorless stock: one set of sizes) */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
                 <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-rose-50">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-1.5 h-8 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full shrink-0"></div>
                       <div className="min-w-0">
                         <h2 className="text-lg font-semibold text-gray-900 truncate">
-                          Color Variants
+                          {isColorless ? "Sizes & Quantities" : "Color Variants"}
                         </h2>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {colorVariants.length} {colorVariants.length === 1 ? 'variant' : 'variants'}
+                          {isColorless
+                            ? "Colorless stock: no colour, one set of sizes"
+                            : `${colorVariants.length} ${colorVariants.length === 1 ? "variant" : "variants"}`}
                         </p>
                       </div>
                     </div>
-                    {colorVariants.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={addColorVariant}
-                        className="shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:from-rose-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span className="hidden sm:inline">Add Variant</span>
-                        <span className="sm:hidden">Add</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3 ml-auto">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-pink-300 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isColorless}
+                          onChange={(e) => handleColorlessToggle(e.target.checked)}
+                          className="rounded border-gray-300 text-pink-600 focus:ring-pink-400"
+                        />
+                        <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                          Colorless stock
+                        </span>
+                      </label>
+                      {!isColorless && colorVariants.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={addColorVariant}
+                          className="shrink-0 inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:from-rose-600 hover:to-pink-600 transition-all shadow-sm hover:shadow-md"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span className="hidden sm:inline">Add Variant</span>
+                          <span className="sm:hidden">Add</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="p-6 bg-gray-50/50">
@@ -1120,7 +1152,8 @@ function NewStockContent() {
                           key={variant.id}
                           className="bg-white rounded-xl border border-gray-200 hover:border-pink-300 hover:shadow-md transition-all overflow-hidden"
                         >
-                          {/* Header */}
+                          {/* Header (colorless stock has no colour to show) */}
+                          {!isColorless && (
                           <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
                               <div 
@@ -1146,6 +1179,7 @@ function NewStockContent() {
                               <X className="h-4 w-4 group-hover:scale-110 transition-transform" />
                             </button>
                           </div>
+                          )}
 
                           {/* Content */}
                           <div className="p-4 sm:p-5">
@@ -1171,9 +1205,13 @@ function NewStockContent() {
                               {/* Colour code (left) + available sizes (right),
                                   with stock quantities full width underneath */}
                               <div className="lg:col-span-9 min-w-0 space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  {/* Left column */}
-                                  <div className="min-w-0 space-y-4">
+                                <div
+                                  className={`grid grid-cols-1 gap-4 ${isColorless ? "" : "md:grid-cols-2"}`}
+                                >
+                                  {/* Left column (colour; not used for colorless stock) */}
+                                  <div
+                                    className={`min-w-0 space-y-4 ${isColorless ? "hidden" : ""}`}
+                                  >
                                 {/* Color Code */}
                                 <div>
                                   <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -1377,11 +1415,11 @@ function NewStockContent() {
                   )}
                 </div>
               </div>
-            )}
 
             {/* Action Buttons */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
+                {!isColorless && (
                 <Button
                   variant="outline"
                   onClick={handleMultipleImageUpload}
@@ -1402,6 +1440,7 @@ function NewStockContent() {
                     </>
                   )}
                 </Button>
+                )}
                 {!isColorless && (
                   <Button
                     variant="outline"

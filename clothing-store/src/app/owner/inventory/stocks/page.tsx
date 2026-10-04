@@ -31,8 +31,8 @@ import {
 import { StockItem, StockGroupDisplay } from "@/types/stock";
 import { Shop } from "@/types/shop";
 import { StockDisplayService } from "@/services/stockDisplayService";
-import { SettingsService } from "@/services/settingsService";
 import { CategoryService } from "@/services/categoryService";
+import { usePriceEntryCurrency } from "@/hooks/usePriceEntryCurrency";
 import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { authFetch } from "@/lib/authFetch";
@@ -87,8 +87,12 @@ function InventoryStocksContent() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Currency state
-  const [defaultCurrency, setDefaultCurrency] = useState<"THB" | "MMK">("THB");
+  // Prices are stored in the default currency and shown in the top-nav one
+  const {
+    entryCurrency: displayCurrency,
+    toEntry: toDisplayAmount,
+    formatPrice: formatDisplayPrice,
+  } = usePriceEntryCurrency();
 
   // Search and pagination state
   const [searchTerm, setSearchTerm] = useState("");
@@ -155,11 +159,10 @@ function InventoryStocksContent() {
         setIsLoading(true);
         setError(null);
 
-        // Fetch stocks, shops, and currency settings
-        const [stocksResponse, shopsResponse, settings] = await Promise.all([
+        // Fetch stocks and shops
+        const [stocksResponse, shopsResponse] = await Promise.all([
           authFetch("/api/stocks"),
           authFetch("/api/shops"),
-          SettingsService.getBusinessSettings(),
         ]);
 
         if (!stocksResponse.ok) {
@@ -195,14 +198,10 @@ function InventoryStocksContent() {
         });
         setShopLookup(lookup);
 
-        // Set currency from settings
-        const currency = (settings?.defaultCurrency as "THB" | "MMK") || "THB";
-        setDefaultCurrency(currency);
-
-        // Transform API data using the display service with currency
+        // Prices stay in the stored (default) currency; the table converts
+        // them to the top-nav currency when rendering.
         const transformedGroups = StockDisplayService.transformStocksForDisplay(
           stocksData.data,
-          currency,
         );
         setStockGroups(transformedGroups);
       } catch (err) {
@@ -241,10 +240,7 @@ function InventoryStocksContent() {
           setIsLoading(true);
           setError(null);
 
-          const [stocksResponse, settings] = await Promise.all([
-            authFetch("/api/stocks"),
-            SettingsService.getBusinessSettings(),
-          ]);
+          const stocksResponse = await authFetch("/api/stocks");
 
           if (!stocksResponse.ok) {
             throw new Error(tRef.current.failedToFetchStocks);
@@ -258,14 +254,9 @@ function InventoryStocksContent() {
             );
           }
 
-          // Set currency from settings
-          const currency = (settings?.defaultCurrency as "THB" | "MMK") || "THB";
-          setDefaultCurrency(currency);
-
-          // Transform API data using the display service with currency
+          // Prices are converted to the top-nav currency when rendering
           const transformedGroups = StockDisplayService.transformStocksForDisplay(
             stocksData.data,
-            currency,
           );
           setStockGroups(transformedGroups);
         } catch (err) {
@@ -317,8 +308,9 @@ function InventoryStocksContent() {
     // Price range filter
     let matchesPriceRange = true;
     if (priceRange.min !== "" || priceRange.max !== "") {
+      // The range is typed in the top-nav currency, so compare in it too
       const price = group.unitPrice
-        ? parseFloat(group.unitPrice.toString())
+        ? toDisplayAmount(parseFloat(group.unitPrice.toString()))
         : 0;
       const minPrice = priceRange.min !== "" ? parseFloat(priceRange.min) : 0;
       const maxPrice =
@@ -807,7 +799,7 @@ function InventoryStocksContent() {
                         {/* Price Range Filter */}
                         <div className="mb-1">
                           <label className="block text-xs font-semibold text-gray-700 mb-2.5">
-                            {t.priceRange} ({defaultCurrency})
+                            {t.priceRange} ({displayCurrency})
                           </label>
                           <div className="flex items-center rounded-lg border border-gray-200 bg-white overflow-hidden transition-all focus-within:ring-2 focus-within:ring-pink-400 focus-within:border-transparent">
                             <input
@@ -1113,16 +1105,14 @@ function InventoryStocksContent() {
                             {/* Unit Price Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
                               <div className="font-bold text-gray-900">
-                                {group.formattedPrice}
+                                {formatDisplayPrice(group.unitPrice)}
                               </div>
                             </td>
 
                             {/* Original Price Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
                               <div className="font-semibold text-gray-600">
-                                {defaultCurrency === "THB"
-                                  ? `฿${group.originalPrice.toLocaleString()}`
-                                  : `${group.originalPrice.toLocaleString()} Ks`}
+                                {formatDisplayPrice(group.originalPrice)}
                               </div>
                             </td>
 

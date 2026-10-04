@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { ChevronDown, ChevronUp, DollarSign, Package } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { WholesaleTier } from "@/types/stock";
-import { useCurrency } from "@/contexts/CurrencyContext";
+import { usePriceEntryCurrency } from "@/hooks/usePriceEntryCurrency";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface WholesalePricingTiersProps {
@@ -21,7 +21,9 @@ export function WholesalePricingTiers({
   defaultExpanded = false,
 }: WholesalePricingTiersProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  const { formatPrice } = useCurrency();
+  // Same conversion as the stock table (falls back to the default currency
+  // when no exchange rate is set, instead of mislabelling the amount)
+  const { formatPrice } = usePriceEntryCurrency();
   const { t } = useLanguage();
 
   const toggleExpanded = () => {
