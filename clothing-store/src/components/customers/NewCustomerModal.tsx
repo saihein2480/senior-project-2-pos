@@ -271,7 +271,7 @@ export default function NewCustomerModal({
                         value={formData.displayName}
                         onChange={handleChange}
                         required
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent text-gray-900 text-sm"
                         placeholder={t.enterCustomerName}
                       />
                     </div>
@@ -289,7 +289,7 @@ export default function NewCustomerModal({
                         value={formData.customerType}
                         onChange={handleChange}
                         required
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent appearance-none bg-white text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent appearance-none bg-white text-gray-900 text-sm"
                       >
                         <option value="">{t.selectType}</option>
                         <option value="retailer">{t.retailer}</option>
@@ -317,7 +317,7 @@ export default function NewCustomerModal({
                         value={formData.phone}
                         onChange={handleChange}
                         required
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent text-gray-900 text-sm"
                         placeholder={t.enterPrimaryPhoneNumber}
                       />
                     </div>
@@ -335,7 +335,7 @@ export default function NewCustomerModal({
                         name="secondaryPhone"
                         value={formData.secondaryPhone}
                         onChange={handleChange}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent text-gray-900 text-sm"
                         placeholder={t.enterSecondaryPhoneNumber}
                       />
                     </div>
@@ -355,7 +355,7 @@ export default function NewCustomerModal({
                       value={formData.address}
                       onChange={handleChange}
                       rows={2}
-                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent resize-none text-gray-900 text-sm"
+                      className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent resize-none text-gray-900 text-sm"
                       placeholder={t.enterFullAddress}
                     />
                   </div>
@@ -375,7 +375,7 @@ export default function NewCustomerModal({
                         name="township"
                         value={formData.township}
                         onChange={handleChange}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent text-gray-900 text-sm"
                         placeholder={t.enterTownship}
                       />
                     </div>
@@ -393,7 +393,7 @@ export default function NewCustomerModal({
                         name="city"
                         value={formData.city}
                         onChange={handleChange}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-gray-900 text-sm"
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent text-gray-900 text-sm"
                         placeholder={t.enterCity}
                       />
                     </div>

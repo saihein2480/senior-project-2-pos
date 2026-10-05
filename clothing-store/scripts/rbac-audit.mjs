@@ -271,6 +271,7 @@ const DOC_ROUTES = {
   "owner/shops/manage":                ["owner"],
   "owner/shops/reports":               ["owner"],
   "owner/staff":                       ["owner"],
+  "owner/activity":                    ["owner"],
   "owner/settings":                    ["owner", "manager", "staff"],
   "owner/notifications":               ["owner", "manager", "staff"],
   "owner/barcode/label-print":         ["owner", "manager"],

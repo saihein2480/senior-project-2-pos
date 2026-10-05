@@ -168,6 +168,7 @@ const PAGE_PROBES = [
   ["/owner/requests/refund-report",   "Online Report",              ["owner", "manager"]],
   ["/owner/requests/cancellations",   "Order Cancellation Requests",["owner", "manager"]],
   ["/owner/staff",                    "Staff Management",           ["owner"]],
+  ["/owner/activity",                 "Activity Log",               ["owner"]],
   ["/owner/expenses",                 "Expenses",                   ["owner", "manager"]],
 ];
 

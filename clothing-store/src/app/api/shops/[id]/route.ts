@@ -13,6 +13,7 @@ import {
   updateShop,
 } from '@/server/shopsAdmin';
 import { parseJson, validate } from '@/server/validation';
+import { auditCaller } from '@/server/auditLog';
 
 // Access:
 //   GET        - public (same reasoning as GET /api/shops).
@@ -173,6 +174,20 @@ export async function PUT(
     // Fetch updated shop
     const updatedShop = await getShopById(id);
 
+    await auditCaller(auth.caller, {
+      action: 'shop.update',
+      targetCollection: 'shops',
+      targetId: id,
+      details: {
+        name: updatedShop?.name ?? existingShop.name,
+        // A rename is worth seeing at a glance.
+        ...(updateData.name && updateData.name !== existingShop.name
+          ? { renamedFrom: existingShop.name }
+          : {}),
+        fields: Object.keys(updateData),
+      },
+    });
+
     const response: ShopResponse = {
       success: true,
       data: updatedShop!,
@@ -214,6 +229,13 @@ export async function DELETE(
     }
 
     await deleteShop(id);
+
+    await auditCaller(auth.caller, {
+      action: 'shop.delete',
+      targetCollection: 'shops',
+      targetId: id,
+      details: { name: existingShop.name },
+    });
 
     const response: ShopResponse = {
       success: true,

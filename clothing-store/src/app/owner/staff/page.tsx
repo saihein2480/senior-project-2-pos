@@ -258,7 +258,7 @@ function StaffContent() {
   const currentStaff = staff.slice(startIndex, endIndex);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -575,9 +575,9 @@ function StaffContent() {
                 </ul>
               </div>
 
-              <div className="bg-cyan-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">Manager</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
+                <h3 className="font-semibold text-rose-900 mb-2">Manager</h3>
+                <ul className="text-sm text-rose-800 space-y-1">
                   <li key="manager-1">
                     ✓ Access dashboard, sales, inventory, expenses & barcode
                   </li>

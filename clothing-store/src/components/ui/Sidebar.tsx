@@ -32,6 +32,10 @@ import {
   XCircle,
   DollarSign,
   Gift,
+  ShoppingBag,
+  History,
+  LogOut,
+  X,
 } from "lucide-react";
 import { MenuItem, NavigationProps } from "@/types/schemas";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -68,6 +72,49 @@ const iconMap = {
   XCircle,
   DollarSign,
   Gift,
+  ShoppingBag,
+  History,
+};
+
+/**
+ * Navigation groups, in display order.
+ *
+ * Kept as a separate lookup (top-level menu id -> group) instead of nesting
+ * the menu items, so the menu definition below - which the RBAC audit parses
+ * for ids and roles - stays flat and unchanged in shape. Anything not listed
+ * falls into "system".
+ */
+type NavSectionKey =
+  | "pos"
+  | "sales"
+  | "catalog"
+  | "marketing"
+  | "business"
+  | "system";
+
+const NAV_SECTION_ORDER: NavSectionKey[] = [
+  "pos",
+  "sales",
+  "catalog",
+  "marketing",
+  "business",
+  "system",
+];
+
+const NAV_SECTION_OF: Record<string, NavSectionKey> = {
+  home: "pos",
+  dashboard: "pos",
+  sales: "sales",
+  requests: "sales",
+  stocks: "catalog",
+  customers: "catalog",
+  "promotion-membership": "marketing",
+  expenses: "business",
+  "shops-branches": "business",
+  staff: "business",
+  activity: "business",
+  notifications: "system",
+  settings: "system",
 };
 
 interface SidebarProps extends NavigationProps {
@@ -309,7 +356,7 @@ export function Sidebar({
   }, []);
 
   // Get user role from auth context
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   
   // Menu visibility follows the effective role, so an owner previewing Staff
   // sees the Staff menu. Non-owners are pinned to their real role by the
@@ -326,9 +373,11 @@ export function Sidebar({
   // Create menu items with translations
   const menuItems: MenuItem[] = [
     {
+      // The walk-in selling screen. Same id/route as before ("home"), shown
+      // as the POS Terminal so cashiers can always find their way back.
       id: "home",
-      label: t.home,
-      icon: "Home",
+      label: t.posTerminal,
+      icon: "ShoppingBag",
       href: "/owner/home",
       roles: ["owner", "manager", "staff"], // All roles can access
     },
@@ -514,6 +563,13 @@ export function Sidebar({
       roles: ["owner"], // Only owner can manage staff
     },
     {
+      id: "activity",
+      label: t.activityLog,
+      icon: "History",
+      href: "/owner/activity",
+      roles: ["owner"], // Only owner sees what every account did
+    },
+    {
       id: "notifications",
       label: "Notifications",
       icon: "AlertCircle",
@@ -647,31 +703,71 @@ export function Sidebar({
     return checkChildren(item.children);
   };
 
+  /** Count shown on a menu entry, or 0 for none. */
+  const badgeCountFor = (id: string): number => {
+    switch (id) {
+      case "notifications":
+        return unreadNotificationsCount;
+      case "online-orders":
+        return unseenOrdersCount;
+      case "cancellation-requests":
+        return pendingCancellationCount;
+      case "refund-requests":
+        return pendingRefundCount;
+      // Unseen rather than total: opening this page acknowledges the
+      // notification, even though the payments stay pending.
+      case "pending-refunds":
+        return unseenRefundPaymentsCount;
+      default:
+        return 0;
+    }
+  };
+
+  const renderBadge = (count: number) =>
+    count > 0 ? (
+      <span className="ml-2 inline-flex h-5 min-w-[20px] flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white tabular">
+        {count > 99 ? "99+" : count}
+      </span>
+    ) : null;
+
   const renderMenuItem = (item: MenuItem, level: number = 0) => {
     const isExpanded = expandedItems.includes(item.id);
     const isActive = activeItem === item.id;
-    const hasChildren = item.children && item.children.length > 0;
+    const hasChildren = !!item.children && item.children.length > 0;
+    const isChild = level > 0;
 
     // Check if any descendant is active (for parent highlighting)
     const hasActiveChild = hasActiveDescendant(item);
 
-    const isActiveOrHasActiveChild = isActive || hasActiveChild;
+    // One selection style for every entry, POS Terminal included. Only the
+    // current page is tinted, so exactly one item ever reads as "selected".
+    let stateClasses: string;
+    let iconTone: string;
+    if (isActive) {
+      stateClasses = "bg-rose-50 text-rose-700 font-semibold";
+      iconTone = "text-rose-600";
+    } else if (hasActiveChild) {
+      stateClasses = "text-gray-900 font-semibold hover:bg-gray-50";
+      iconTone = "text-rose-500";
+    } else {
+      stateClasses = "text-gray-600 hover:bg-gray-50 hover:text-gray-900";
+      iconTone = "text-gray-400 group-hover:text-gray-600";
+    }
 
-    const itemClasses = `
-  group flex items-center w-full gap-2.5 text-sm font-medium rounded-lg transition-colors
-  px-3 py-2
-  ${
-    isActiveOrHasActiveChild
-      ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-sm hover:from-rose-600 hover:to-pink-600"
-      : "text-gray-600 hover:bg-pink-50 hover:text-gray-900"
-  }
-`;
+    const itemClasses = `group relative flex items-center w-full gap-3 rounded-xl text-sm font-medium transition-colors ${
+      isChild ? "px-3 py-2" : "px-3 py-2.5"
+    } ${stateClasses}`;
 
-    const iconClasses = `w-4 h-4 flex-shrink-0 ${
-      isActiveOrHasActiveChild
-        ? "text-white"
-        : "text-gray-400 group-hover:text-gray-600"
-    }`;
+    const iconClasses = `${isChild ? "w-4 h-4" : "w-[18px] h-[18px]"} flex-shrink-0 transition-colors ${iconTone}`;
+
+    // Slim brand bar marking the current page on top-level entries.
+    const activeBar =
+      isActive && !isChild ? (
+        <span
+          aria-hidden="true"
+          className="absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-brand"
+        />
+      ) : null;
 
     const handleMainClick = () => {
       if (item.href) {
@@ -682,100 +778,75 @@ export function Sidebar({
       }
     };
 
+    const chevron = isExpanded ? (
+      <ChevronDown className="w-4 h-4" aria-hidden="true" />
+    ) : (
+      <ChevronRight className="w-4 h-4" aria-hidden="true" />
+    );
+
     return (
       <div key={item.id}>
         {item.href ? (
           <div className="relative">
             <Link
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => {
                 onItemClick?.(item);
                 if (item.id === "online-orders") markAsSeen();
                 if (item.id === "pending-refunds") markRefundPaymentsSeen();
               }}
-              className={itemClasses}
+              className={`${itemClasses} ${hasChildren ? "pr-9" : ""}`}
             >
+              {activeBar}
               {renderIcon(item.icon, iconClasses)}
               <span className="flex-1 text-left flex items-center justify-between min-w-0">
                 <span className="truncate">{item.label}</span>
-                {item.id === "notifications" && unreadNotificationsCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
-                  </span>
-                )}
-                {item.id === "online-orders" && unseenOrdersCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {unseenOrdersCount > 99 ? "99+" : unseenOrdersCount}
-                  </span>
-                )}
-                {item.id === "cancellation-requests" && pendingCancellationCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {pendingCancellationCount > 99 ? "99+" : pendingCancellationCount}
-                  </span>
-                )}
-                {item.id === "refund-requests" && pendingRefundCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {pendingRefundCount > 99 ? "99+" : pendingRefundCount}
-                  </span>
-                )}
-                {/* Unseen rather than total: opening this page acknowledges the
-                    notification, even though the payments stay pending. */}
-                {item.id === "pending-refunds" && unseenRefundPaymentsCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                    {unseenRefundPaymentsCount > 99 ? "99+" : unseenRefundPaymentsCount}
-                  </span>
-                )}
+                {renderBadge(badgeCountFor(item.id))}
               </span>
             </Link>
             {hasChildren && (
               <button
+                type="button"
+                aria-label={isExpanded ? "Collapse" : "Expand"}
+                aria-expanded={isExpanded}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   toggleExpanded(item.id);
                 }}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors ${
-                  isActiveOrHasActiveChild
-                    ? "hover:bg-white/20"
-                    : "hover:bg-gray-200"
-                }`}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
               >
-                {isExpanded ? (
-                  <ChevronDown className="w-3 h-3" />
-                ) : (
-                  <ChevronRight className="w-3 h-3" />
-                )}
+                {chevron}
               </button>
             )}
           </div>
         ) : (
-          <button onClick={handleMainClick} className={itemClasses}>
+          <button
+            type="button"
+            onClick={handleMainClick}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+            className={itemClasses}
+          >
+            {activeBar}
             {renderIcon(item.icon, iconClasses)}
             <span className="flex-1 text-left flex items-center justify-between min-w-0">
               <span className="truncate">{item.label}</span>
               {/* Online-order and refund activity belongs to Online Sales.
                   It used to render against item.id "sales" (Walk-in Sales),
                   which has nothing to do with online orders. */}
-              {item.id === "requests" && onlineSalesBadgeTotal > 0 && !isExpanded && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2">
-                  {onlineSalesBadgeTotal > 99 ? "99+" : onlineSalesBadgeTotal}
-                </span>
-              )}
+              {item.id === "requests" &&
+                !isExpanded &&
+                renderBadge(onlineSalesBadgeTotal)}
             </span>
             {hasChildren && (
-              <div className="ml-1 flex-shrink-0">
-                {isExpanded ? (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5" />
-                )}
-              </div>
+              <span className="flex-shrink-0 text-gray-400">{chevron}</span>
             )}
           </button>
         )}
 
         {hasChildren && isExpanded && (
-          <div className="mt-0.5 mb-1 ml-5 pl-2.5 border-l border-gray-200 space-y-0.5">
+          <div className="mt-1 mb-1.5 ml-[21px] pl-3 border-l border-gray-100 space-y-0.5">
             {item.children?.map((child) => renderMenuItem(child, level + 1))}
           </div>
         )}
@@ -788,53 +859,141 @@ export function Sidebar({
     return null;
   }
 
+  const isMobileInstance = typeof isMobileOpen !== "undefined";
+
+  // Group the (already role-filtered) top-level entries into sections and
+  // drop any section the current role has nothing in.
+  const sectionLabels: Record<NavSectionKey, string> = {
+    pos: t.navPointOfSale,
+    sales: t.sales,
+    catalog: t.navCatalog,
+    marketing: t.navMarketing,
+    business: t.navBusiness,
+    system: t.navSystem,
+  };
+  const navSections = NAV_SECTION_ORDER.map((key) => ({
+    key,
+    label: sectionLabels[key],
+    items: filteredMenuItems.filter(
+      (item) => (NAV_SECTION_OF[item.id] ?? "system") === key,
+    ),
+  })).filter((section) => section.items.length > 0);
+
+  // Signed-in person (their real role, not the previewed one).
+  // Display only; menu visibility above is what follows the role.
+  const roleLabels: Record<string, string> = {
+    owner: t.owner,
+    manager: t.manager,
+    staff: t.staff_role,
+  };
+  const roleLabel = roleLabels[user?.role ?? "staff"] ?? t.staff;
+  const displayName =
+    user?.displayName || user?.email?.split("@")[0] || roleLabel;
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "U";
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
+
   const container = (
     <div
-      className={`w-60 bg-white border-r border-gray-200 h-screen sticky top-0 transition-all duration-300 ${className} flex flex-col`}
+      className={`w-64 bg-white border-r border-gray-200/80 h-screen sticky top-0 transition-all duration-300 ${className} flex flex-col`}
     >
-      {/* Shop Header */}
-      <div className="px-4 py-4 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          {businessLogo && !logoError ? (
-            <img
-              src={businessLogo}
-              alt="Business Logo"
-              className="w-9 h-9 object-contain rounded-lg flex-shrink-0"
-              onError={() => setLogoError(true)}
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Store className="w-5 h-5 text-white" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-sm font-bold text-gray-900 truncate">
-              {isLoading ? "Loading..." : businessName || "Business Name"}
-            </h1>
-            <p className="text-[11px] text-gray-500">Owner Dashboard</p>
+      {/* Shop Header - same height as the top bar so the two line up */}
+      <div className="h-16 px-4 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+        {businessLogo && !logoError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={businessLogo}
+            alt="Business Logo"
+            className="w-10 h-10 object-contain rounded-xl flex-shrink-0 border border-gray-100 bg-white"
+            onError={() => setLogoError(true)}
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center flex-shrink-0 shadow-brand">
+            <Store className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-gray-900 truncate leading-tight">
+            {isLoading ? "Loading..." : businessName || "Business Name"}
+          </p>
+          <p className="text-[11px] font-medium text-rose-500 leading-tight mt-0.5">
+            ClothingStore POS
+          </p>
         </div>
+        {isMobileInstance && (
+          <button
+            type="button"
+            onClick={() => onCloseMobile?.()}
+            aria-label="Close menu"
+            className="p-2 -mr-1 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Scrollable Navigation Area */}
-      <div
-        className="flex-1 overflow-y-auto py-3"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        <style jsx>{`
-          div::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
-        <nav className="px-2 space-y-0.5">
-          {filteredMenuItems.map((item) => renderMenuItem(item))}
+      <div className="flex-1 overflow-y-auto scrollbar-none px-3 py-3">
+        <nav aria-label="Main" className="space-y-4">
+          {navSections.map((section) => (
+            <div key={section.key}>
+              {/* The POS group needs no heading: it is always first. */}
+              {section.key !== "pos" && (
+                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  {section.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {section.items.map((item) => renderMenuItem(item))}
+              </div>
+            </div>
+          ))}
         </nav>
+      </div>
+
+      {/* Signed-in user */}
+      <div className="border-t border-gray-100 p-3 flex-shrink-0">
+        <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+          <div
+            className="h-9 w-9 rounded-full bg-brand text-white flex items-center justify-center text-xs font-bold flex-shrink-0"
+            aria-hidden="true"
+          >
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-gray-900 truncate">
+              {displayName}
+            </p>
+            <p className="text-[11px] text-gray-500 truncate">{roleLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            title={t.logout}
+            aria-label={t.logout}
+            className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-white transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
 
   // If this is a mobile instance, render as overlay with backdrop
-  if (typeof isMobileOpen !== "undefined") {
+  if (isMobileInstance) {
     return (
       <AnimatePresence>
         {isMobileOpen && (
@@ -843,8 +1002,8 @@ export function Sidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm"
+              transition={{ duration: 0.25 }}
+              className="fixed inset-0 z-40 bg-gray-900/40 backdrop-blur-sm"
               onClick={() => onCloseMobile?.()}
               aria-hidden="true"
             />
@@ -852,8 +1011,8 @@ export function Sidebar({
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="fixed inset-y-0 left-0 z-50 w-60 drop-shadow-2xl"
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="fixed inset-y-0 left-0 z-50 w-64 shadow-2xl"
             >
               {container}
             </motion.div>
@@ -865,4 +1024,3 @@ export function Sidebar({
 
   return container;
 }
-

@@ -97,7 +97,7 @@ export function NetMarginChart({ data }: NetMarginChartProps) {
                   <p className="text-red-600">
                     {t.expenses}: {formatPrice(row.expense)}
                   </p>
-                  <p className="text-blue-700">
+                  <p className="text-rose-600">
                     {t.totalNetSales}: {formatPrice(row.netSales)}
                   </p>
                   <p
@@ -132,7 +132,7 @@ export function NetMarginChart({ data }: NetMarginChartProps) {
           <Line
             type="monotone"
             dataKey="netSales"
-            stroke="#3b82f6"
+            stroke="#f43f5e"
             strokeWidth={2}
             dot={false}
             name={t.totalNetSales}
@@ -140,7 +140,7 @@ export function NetMarginChart({ data }: NetMarginChartProps) {
           <Line
             type="monotone"
             dataKey="net"
-            stroke="#1d4ed8"
+            stroke="#be123c"
             strokeWidth={2}
             strokeDasharray="4 4"
             dot={false}

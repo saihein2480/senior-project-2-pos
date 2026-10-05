@@ -9,6 +9,7 @@ import { SettingsService, ReceiptPaperSize } from "@/services/settingsService";
 import { db } from "@/lib/firebase";
 import { deliveryFeeOf } from "@/lib/deliveryFee";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { PaymentMethodLabel } from "@/components/ui/PaymentMethodLabel";
 import {
   MoreVertical,
   Eye,
@@ -306,9 +307,9 @@ function getOrderSummary(row: OnlineOrder) {
 function getPaymentMethodLabel(row: OnlineOrder): string {
   const method = (row.paymentMethod || "").toLowerCase();
   
-  if (method === "cod") return "💵 COD";
-  if (method === "cash") return "💵 Cash";
-  if (method === "scan" || method === "wallet") return "📱 QR Scan";
+  if (method === "cod") return "COD";
+  if (method === "cash") return "Cash";
+  if (method === "scan" || method === "wallet") return "QR Scan";
   if (method) {
     return method.charAt(0).toUpperCase() + method.slice(1);
   }
@@ -584,9 +585,12 @@ function OrderDetailsModal({
               Payment Information
             </div>
             <div className="grid grid-cols-1 gap-1 text-sm">
-              <div className="text-gray-700">
-                <span className="font-medium text-gray-900">Method: </span>
-                {getPaymentMethodLabel(row)}
+              <div className="flex items-center gap-1 text-gray-700">
+                <span className="font-medium text-gray-900">Method:</span>
+                <PaymentMethodLabel
+                  method={row.paymentMethod}
+                  label={getPaymentMethodLabel(row)}
+                />
               </div>
               <div className="text-gray-700">
                 <span className="font-medium text-gray-900">Status: </span>
@@ -755,7 +759,9 @@ function OrderTableRow({
           <span className="text-gray-400">-</span>
         )}
       </td>
-      <td className="px-4 py-4 text-gray-700">{paymentMethodLabel}</td>
+      <td className="px-4 py-4 text-gray-700">
+        <PaymentMethodLabel method={row.paymentMethod} label={paymentMethodLabel} />
+      </td>
       <td className="px-4 py-4 text-gray-700">{paymentStatusLabel}</td>
       <td className="px-4 py-4 text-gray-700">{orderStatusLabel}</td>
       <td className="px-4 py-4 text-gray-600">
@@ -1901,7 +1907,7 @@ function OnlineOrdersContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="online-orders"
@@ -1930,7 +1936,7 @@ function OnlineOrdersContent() {
 
               {/* Connection state. Without this a dropped listener looks
                   identical to "no new orders". */}
-              {realtimeState === "live" && (
+              {/* {realtimeState === "live" && (
                 <span
                   className="inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
                   title={
@@ -1945,16 +1951,16 @@ function OnlineOrdersContent() {
                   </span>
                   Live
                 </span>
-              )}
+              )} */}
 
-              {realtimeState === "connecting" && (
+              {/* {realtimeState === "connecting" && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
                   <span className="h-2 w-2 rounded-full bg-gray-400" />
                   Connecting...
                 </span>
-              )}
+              )} */}
 
-              {realtimeState === "offline" && (
+              {/* {realtimeState === "offline" && (
                 <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
                   Not live
@@ -1966,7 +1972,7 @@ function OnlineOrdersContent() {
                     Reconnect
                   </button>
                 </span>
-              )}
+              )} */}
             </div>
 
             <p className="text-sm text-gray-600 mt-1">
@@ -2077,8 +2083,8 @@ function OnlineOrdersContent() {
                     className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Methods</option>
-                    <option value="cod">💵 Cash on Delivery</option>
-                    <option value="scan">📱 QR Scan</option>
+                    <option value="cod">Cash on Delivery</option>
+                    <option value="scan">QR Scan</option>
                   </select>
                 </div>
 

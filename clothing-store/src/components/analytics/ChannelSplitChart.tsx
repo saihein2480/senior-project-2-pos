@@ -48,7 +48,7 @@ export function ChannelSplitChart({ data }: ChannelSplitChartProps) {
       description={t.salesChannelSplitHint}
       badge={
         combined > 0 ? (
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-cyan-50 text-cyan-700">
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-rose-50 text-rose-700">
             {t.onlineShare}: {onlineShare.toFixed(1)}%
           </span>
         ) : undefined
@@ -62,8 +62,8 @@ export function ChannelSplitChart({ data }: ChannelSplitChartProps) {
         <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 8 }}>
           <defs>
             <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#0891b2" stopOpacity={0.8} />
-              <stop offset="95%" stopColor="#0891b2" stopOpacity={0.1} />
+              <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.1} />
             </linearGradient>
             <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
@@ -78,7 +78,7 @@ export function ChannelSplitChart({ data }: ChannelSplitChartProps) {
             orientation="right"
             domain={[0, 100]}
             tick={{ fontSize: 12 }}
-            stroke="#f59e0b"
+            stroke="#9ca3af"
             tickFormatter={(value: number) => `${value}%`}
           />
           <Tooltip
@@ -101,7 +101,7 @@ export function ChannelSplitChart({ data }: ChannelSplitChartProps) {
             type="monotone"
             dataKey="pos"
             stackId="channel"
-            stroke="#0891b2"
+            stroke="#f43f5e"
             fillOpacity={1}
             fill="url(#colorPos)"
             name={t.inStoreSales}
@@ -120,7 +120,7 @@ export function ChannelSplitChart({ data }: ChannelSplitChartProps) {
             yAxisId="right"
             type="monotone"
             dataKey="onlineShare"
-            stroke="#f59e0b"
+            stroke="#9ca3af"
             strokeWidth={2}
             strokeDasharray="4 4"
             dot={false}

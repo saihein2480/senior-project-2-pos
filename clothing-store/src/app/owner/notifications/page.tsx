@@ -151,7 +151,7 @@ function NotificationsContent() {
   const getNotificationIcon = (type: Notification["type"]) => {
     switch (type) {
       case "online_order":
-        return <ShoppingCart className="w-5 h-5 text-blue-600" />;
+        return <ShoppingCart className="w-5 h-5 text-rose-600" />;
       case "cancellation_request":
         return <XCircle className="w-5 h-5 text-orange-600" />;
       case "refund_request":
@@ -170,7 +170,7 @@ function NotificationsContent() {
   const getNotificationBgColor = (type: Notification["type"]) => {
     switch (type) {
       case "online_order":
-        return "bg-blue-50 border-blue-200";
+        return "bg-rose-50 border-rose-200";
       case "cancellation_request":
         return "bg-orange-50 border-orange-200";
       case "refund_request":
@@ -193,7 +193,7 @@ function NotificationsContent() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-canvas flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -266,7 +266,7 @@ function NotificationsContent() {
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors text-sm font-medium"
                     >
                       <Check className="w-4 h-4" />
                       {t.markAllAsRead}
@@ -350,7 +350,7 @@ function NotificationsContent() {
                             {!notification.read && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                 title={t.markAsRead}
                               >
                                 <Check className="w-4 h-4" />

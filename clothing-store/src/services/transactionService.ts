@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { authFetch } from "@/lib/authFetch";
+import { logActivity } from "@/lib/activityClient";
 import { SelectedCustomer, CartItem } from "@/types/cart";
 import type { ColorVariant } from "@/types/stock";
 import {
@@ -533,6 +534,12 @@ class TransactionService {
         // Don't fail the sale if coupon bookkeeping fails.
         console.error("Error redeeming coupon:", couponError);
       }
+    }
+
+    // Activity log entry for the sale. The server checks the sale is this
+    // account's and writes it once; never awaited, never fails the sale.
+    if (saleDocId) {
+      void logActivity({ action: "sale.complete", transactionDocId: saleDocId });
     }
 
     // Loyalty points are awarded by the server (idempotent route), and only

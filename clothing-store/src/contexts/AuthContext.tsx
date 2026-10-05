@@ -11,6 +11,7 @@ import {
   RegisterCredentials,
 } from "@/types/auth";
 import { authService } from "@/services/authService";
+import { logActivity } from "@/lib/activityClient";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -167,6 +168,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       setError(null);
+      // Reported while still signed in (the server needs the ID token), and
+      // capped at 2s so a slow network never holds up signing out.
+      if (user && user.role !== "customer") {
+        await logActivity({ action: "auth.signOut" }, 2000);
+      }
       await authService.logout();
       setUser(null);
     } catch (err) {

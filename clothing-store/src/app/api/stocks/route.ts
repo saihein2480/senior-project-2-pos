@@ -15,6 +15,7 @@ import {
   stockRequestSchema,
 } from "@/server/stocksAdmin";
 import { parseJson, parseQuery } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 
 // Access:
 //   GET  - every POS role (the product grid and cart read stock for sales).
@@ -100,6 +101,17 @@ export async function POST(request: NextRequest) {
     }
 
     const createdStock = await createStock(stockData, auth.caller.uid);
+
+    await auditCaller(auth.caller, {
+      action: "stock.create",
+      targetCollection: "stocks",
+      targetId: createdStock.id,
+      details: {
+        name: body.groupName,
+        unitPrice: body.unitPrice,
+        variants: (body.colorVariants || []).length,
+      },
+    });
 
     const response: StockResponse = {
       success: true,

@@ -16,6 +16,11 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured, googleProvider } from "@/lib/firebase";
+import { logActivity } from "@/lib/activityClient";
+
+/** POS accounts appear in the Activity log; storefront customers do not. */
+const isPosRole = (role: UserRole) =>
+  role === "owner" || role === "manager" || role === "staff";
 import {
   User,
   UserRole,
@@ -51,6 +56,13 @@ class AuthService {
         throw new Error(
           `Access denied. This account is not registered as a ${role}.`,
         );
+      }
+
+      // Only here, after the role check: the staff screen tries "manager"
+      // first, and that attempt signs a staff account straight back out.
+      // Not awaited, so the Activity log never slows down a login.
+      if (isPosRole(userData.role)) {
+        void logActivity({ action: "auth.signIn" });
       }
 
       return userData;

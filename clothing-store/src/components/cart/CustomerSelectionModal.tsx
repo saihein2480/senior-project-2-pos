@@ -38,7 +38,7 @@ function getCustomerTypeLabel(
   if (isOnlineCustomer(customer)) {
     return {
       label: t.onlineCustomer,
-      className: "bg-cyan-100 text-cyan-800 border-cyan-200",
+      className: "bg-rose-100 text-rose-800 border-rose-200",
     };
   }
 
@@ -197,9 +197,9 @@ export function CustomerSelectionModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[100000]">
-      <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border-2 border-pink-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-gray-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 rounded-t-2xl">
+        <div className="flex items-center justify-between p-6 bg-brand rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <Users className="h-6 w-6 text-white" />
             <h2 className="text-xl font-bold text-white">{t.selectCustomer}</h2>
@@ -214,7 +214,7 @@ export function CustomerSelectionModal({
         </div>
 
         {/* Search + filters */}
-        <div className="p-6 border-b border-pink-200 space-y-3 bg-white/50">
+        <div className="p-6 border-b border-gray-200 space-y-3 bg-white/50">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-rose-400" />
             <input
@@ -222,7 +222,7 @@ export function CustomerSelectionModal({
               placeholder={t.searchCustomersPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border-2 border-pink-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-500 text-gray-900 bg-white placeholder-gray-400"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-500 text-gray-900 bg-white placeholder-gray-400"
             />
           </div>
 
@@ -239,7 +239,7 @@ export function CustomerSelectionModal({
                 onChange={(e) =>
                   setSourceFilter(e.target.value as SourceFilter)
                 }
-                className="px-3 py-1.5 border-2 border-pink-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
               >
                 <option value="all">{t.allSources}</option>
                 <option value="online">{t.online}</option>
@@ -252,7 +252,7 @@ export function CustomerSelectionModal({
                 title={t.filterByCustomerType}
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-                className="px-3 py-1.5 border-2 border-pink-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
               >
                 <option value="all">{t.allTypes}</option>
                 <option value="online">{t.onlineCustomer}</option>
@@ -269,7 +269,7 @@ export function CustomerSelectionModal({
                 type="checkbox"
                 checked={membersOnly}
                 onChange={(e) => setMembersOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-pink-300 text-rose-600 focus:ring-rose-500"
+                className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
               />
               {t.membersOnly}
             </label>
@@ -305,8 +305,8 @@ export function CustomerSelectionModal({
             onClick={handleSelectUnknown}
             className={`flex items-center p-4 mb-2 rounded-xl border-2 cursor-pointer transition-all shadow-sm ${
               !selectedCustomer
-                ? "border-rose-500 bg-gradient-to-r from-rose-50 to-pink-100 shadow-md"
-                : "border-pink-200 hover:border-pink-300 hover:bg-pink-50"
+                ? "border-rose-500 bg-rose-50/60 shadow-md"
+                : "border-gray-200 hover:border-rose-200 hover:bg-rose-50"
             }`}
           >
             <div className="flex-shrink-0 h-12 w-12">
@@ -324,7 +324,7 @@ export function CustomerSelectionModal({
             </div>
             {!selectedCustomer && (
               <div className="flex-shrink-0">
-                <div className="h-5 w-5 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 shadow-sm"></div>
+                <div className="h-5 w-5 rounded-full bg-brand shadow-sm"></div>
               </div>
             )}
           </div>
@@ -332,7 +332,7 @@ export function CustomerSelectionModal({
           {/* Loading State */}
           {isLoading && (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-[3px] border-rose-100 border-t-rose-500"></div>
             </div>
           )}
 
@@ -365,19 +365,19 @@ export function CustomerSelectionModal({
                     onClick={() => handleSelectCustomer(customer)}
                     className={`flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all shadow-sm ${
                       selectedCustomer?.uid === customer.uid
-                        ? "border-rose-500 bg-gradient-to-r from-rose-50 to-pink-100 shadow-md"
-                        : "border-pink-200 hover:border-pink-300 hover:bg-pink-50"
+                        ? "border-rose-500 bg-rose-50/60 shadow-md"
+                        : "border-gray-200 hover:border-rose-200 hover:bg-rose-50"
                     }`}
                   >
                     <div className="flex-shrink-0 h-12 w-12">
                       {customer.customerImage ? (
                         <img
-                          className="h-12 w-12 rounded-full object-cover border-2 border-pink-300 shadow-sm"
+                          className="h-12 w-12 rounded-full object-cover border border-gray-200 shadow-sm"
                           src={customer.customerImage}
                           alt={customer.displayName || customer.email}
                         />
                       ) : (
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-pink-200 to-rose-200 flex items-center justify-center shadow-sm">
+                        <div className="h-12 w-12 rounded-full bg-rose-100 flex items-center justify-center shadow-sm">
                           <User className="h-6 w-6 text-rose-600" />
                         </div>
                       )}
@@ -407,7 +407,7 @@ export function CustomerSelectionModal({
                         })()}
 
                         {customer.isMember && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 border-purple-300 shadow-sm">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-purple-50 text-purple-700 border-purple-300 shadow-sm">
                             <Gift className="h-3 w-3" />
                             {t.member}
                           </span>
@@ -417,7 +417,7 @@ export function CustomerSelectionModal({
                           const usable = countUsableCoupons(customer);
                           if (usable === 0) return null;
                           return (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-green-300 shadow-sm">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border bg-emerald-50 text-green-700 border-green-300 shadow-sm">
                               {usable} {t.coupons}
                             </span>
                           );
@@ -426,7 +426,7 @@ export function CustomerSelectionModal({
                     </div>
                     {selectedCustomer?.uid === customer.uid && (
                       <div className="flex-shrink-0">
-                        <div className="h-5 w-5 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 shadow-sm"></div>
+                        <div className="h-5 w-5 rounded-full bg-brand shadow-sm"></div>
                       </div>
                     )}
                   </div>
@@ -437,10 +437,10 @@ export function CustomerSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end space-x-3 p-6 border-t-2 border-pink-200 bg-white/50 rounded-b-2xl">
+        <div className="flex justify-end space-x-3 p-6 border-t-2 border-gray-200 bg-white/50 rounded-b-2xl">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
+            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
           >
             {t.cancel}
           </button>

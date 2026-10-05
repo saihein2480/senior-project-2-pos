@@ -434,7 +434,7 @@ function PendingRefundsContent() {
     type === "cancellation" ? "Cancellation refund" : "Return refund";
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -467,7 +467,6 @@ function PendingRefundsContent() {
         <main className="flex-1 overflow-y-auto px-3 py-5 sm:px-4 lg:px-6">
           <div className="mx-auto max-w-7xl">
             <RequestPageHeader
-              icon={Wallet}
               title="Pending Refund Payments"
               description="Refunds owed to customers for cancelled and returned orders. Confirm each one after the money has been returned."
               actions={<LiveIndicator />}

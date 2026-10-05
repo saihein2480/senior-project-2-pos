@@ -17,7 +17,8 @@ const inter = Inter({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#3b82f6",
+  // Brand rose (rose-500), matching the rose -> pink theme.
+  themeColor: "#f43f5e",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -57,7 +58,22 @@ export default function RootLayout({
           </AuthProvider>
         </LanguageProvider>
         <NumberInputGuard />
-        <Toaster position="top-center" containerStyle={{ zIndex: 100000 }} />
+        <Toaster
+          position="top-center"
+          containerStyle={{ zIndex: 100000 }}
+          toastOptions={{
+            style: {
+              borderRadius: "12px",
+              border: "1px solid #ececf0",
+              boxShadow: "0 10px 30px -10px rgb(16 24 40 / 0.25)",
+              color: "#111827",
+              fontSize: "14px",
+              padding: "10px 14px",
+            },
+            success: { iconTheme: { primary: "#16a34a", secondary: "#fff" } },
+            error: { iconTheme: { primary: "#e11d48", secondary: "#fff" } },
+          }}
+        />
         <SpeedInsights />
       </body>
     </html>

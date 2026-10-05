@@ -9,6 +9,7 @@ import {
   getCustomersWithFilters,
 } from '@/server/customersAdmin';
 import { parseJson } from '@/server/validation';
+import { auditCaller } from '@/server/auditLog';
 
 // Access: every POS role (Doc: "View Customer List" / "Add New Customers").
 
@@ -64,6 +65,13 @@ export async function POST(request: NextRequest) {
     const body = await parseJson(request, createCustomerSchema);
 
     const customer = await createCustomer(body);
+
+    await auditCaller(auth.caller, {
+      action: 'customer.create',
+      targetCollection: 'customers',
+      targetId: customer.uid,
+      details: { name: customer.displayName || customer.email || null },
+    });
     
     return NextResponse.json({
       success: true,

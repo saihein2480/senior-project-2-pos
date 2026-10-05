@@ -89,6 +89,7 @@ export const routePermissions: RoutePermission[] = [
 
   // ---- Staff Management ----------------------------------------------
   { path: "/owner/staff", allowedRoles: OWNER_ONLY, description: "Manage staff accounts" },
+  { path: "/owner/activity", allowedRoles: OWNER_ONLY, description: "Activity log of every POS account" },
 
   // ---- Shared --------------------------------------------------------
   { path: "/owner/notifications", allowedRoles: ALL_STAFF, description: "Notifications" },

@@ -82,9 +82,9 @@ export function RewardRedemptionModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[100001] p-4">
-      <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col border-2 border-pink-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 rounded-t-2xl">
+        <div className="flex items-start justify-between p-5 bg-brand rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-white flex items-center justify-center shadow-sm">
               <Gift className="h-5 w-5 text-rose-600" />
@@ -106,7 +106,7 @@ export function RewardRedemptionModal({
         </div>
 
         {/* Points summary */}
-        <div className="grid grid-cols-2 divide-x divide-pink-200 border-b-2 border-pink-200 bg-white/50">
+        <div className="grid grid-cols-2 divide-x divide-pink-200 border-b-2 border-gray-200 bg-white/50">
           <div className="p-4">
             <p className="text-xs font-semibold text-gray-600">
               {t.totalPoints}
@@ -117,7 +117,7 @@ export function RewardRedemptionModal({
             <p className="text-xs font-semibold text-gray-600">
               {t.pointsForRedeem}
             </p>
-            <p className="text-2xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent">
+            <p className="text-2xl font-bold bg-brand-strong bg-clip-text text-transparent">
               {availablePoints}
             </p>
             {reservedPoints > 0 && (
@@ -130,14 +130,14 @@ export function RewardRedemptionModal({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {error && (
-            <div className="rounded-xl border-2 border-rose-300 bg-gradient-to-r from-rose-50 to-pink-50 px-3 py-2 shadow-sm">
+            <div className="rounded-xl border-2 border-rose-300 bg-rose-50/60 px-3 py-2 shadow-sm">
               <p className="text-sm text-rose-700 font-medium">{error}</p>
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-rose-500"></div>
+              <div className="animate-spin rounded-full h-7 w-7 border-[3px] border-rose-100 border-t-rose-500"></div>
             </div>
           ) : (
             <>
@@ -148,14 +148,14 @@ export function RewardRedemptionModal({
                     <Tag className="h-4 w-4 text-white" />
                   </div>
                   <span>{t.readyToUse}</span>
-                  <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-green-100 to-emerald-100 text-xs font-bold text-green-700 border border-green-300">
+                  <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-50 text-xs font-bold text-green-700 border border-green-300">
                     {coupons.length} {t.coupons}
                   </span>
                 </h3>
 
                 {coupons.length === 0 ? (
                   <div className="text-center py-6 bg-white rounded-xl border-2 border-dashed border-gray-300">
-                    <div className="inline-block p-3 bg-gradient-to-br from-gray-100 to-pink-100 rounded-full mb-2">
+                    <div className="inline-block p-3 bg-gray-100 rounded-full mb-2">
                       <Tag className="h-6 w-6 text-gray-500" />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
@@ -184,14 +184,14 @@ export function RewardRedemptionModal({
 
                           <div className="flex items-center gap-3 p-4">
                             <div className="flex-shrink-0">
-                              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center border-2 border-green-300 shadow-sm">
+                              <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center border-2 border-green-300 shadow-sm">
                                 <Ticket className="h-7 w-7 text-green-600" />
                               </div>
                             </div>
 
                             <div className="flex-1 min-w-0">
                               {coupon.packageName && (
-                                <div className="inline-block px-2 py-0.5 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full mb-1">
+                                <div className="inline-block px-2 py-0.5 bg-emerald-50 rounded-full mb-1">
                                   <p className="text-[10px] font-bold uppercase tracking-wide text-green-700">
                                     {coupon.packageName}
                                   </p>
@@ -219,7 +219,7 @@ export function RewardRedemptionModal({
                             <button
                               onClick={() => onApplyCoupon(coupon)}
                               disabled={isApplied}
-                              className="flex-shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-black hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all transform hover:scale-105"
+                              className="flex-shrink-0 px-4 py-2 rounded-xl bg-brand text-white text-xs font-black hover:bg-brand-strong disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all transform hover:scale-105"
                             >
                               {isApplied ? `${t.applied} ✓` : t.applyNow}
                             </button>
@@ -238,14 +238,14 @@ export function RewardRedemptionModal({
                     <Gift className="h-4 w-4 text-white" />
                   </div>
                   <span>{t.availableRewards}</span>
-                  <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 text-xs font-bold text-purple-700 border border-purple-300">
+                  <span className="ml-auto px-2 py-0.5 rounded-full bg-purple-50 text-xs font-bold text-purple-700 border border-purple-300">
                     {packages.filter((pkg) => pkg.affordable).length}/{packages.length} {t.readySuffix}
                   </span>
                 </h3>
 
                 {packages.length === 0 ? (
                   <div className="text-center py-6 bg-white rounded-xl border-2 border-dashed border-gray-300">
-                    <div className="inline-block p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full mb-2">
+                    <div className="inline-block p-3 bg-purple-50 rounded-full mb-2">
                       <Gift className="h-6 w-6 text-purple-500" />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
@@ -274,7 +274,7 @@ export function RewardRedemptionModal({
                           <div className="flex-shrink-0">
                             <div className={`h-14 w-14 rounded-2xl flex items-center justify-center border-2 shadow-sm ${
                               pkg.affordable
-                                ? "bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300"
+                                ? "bg-purple-50 border-purple-300"
                                 : "bg-gray-200 border-gray-300"
                             }`}>
                               {pkg.affordable ? (
@@ -311,7 +311,7 @@ export function RewardRedemptionModal({
                             <button
                               onClick={() => onRedeemPackage(pkg.id)}
                               disabled={redeemingPackageId === pkg.id}
-                              className="flex-shrink-0 px-4 py-2 rounded-xl border-2 border-purple-500 bg-white text-purple-700 text-xs font-black hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 disabled:opacity-50 shadow-sm hover:shadow-md transition-all transform hover:scale-105"
+                              className="flex-shrink-0 px-4 py-2 rounded-xl border-2 border-purple-500 bg-white text-purple-700 text-xs font-black hover:bg-purple-50 disabled:opacity-50 shadow-sm hover:shadow-md transition-all transform hover:scale-105"
                             >
                               {redeemingPackageId === pkg.id
                                 ? t.redeemingLabel
@@ -335,10 +335,10 @@ export function RewardRedemptionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-4 border-t-2 border-pink-200 bg-white/50 rounded-b-2xl">
+        <div className="flex justify-end p-4 border-t-2 border-gray-200 bg-white/50 rounded-b-2xl">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
+            className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 shadow-sm transition-all"
           >
             {t.done}
           </button>

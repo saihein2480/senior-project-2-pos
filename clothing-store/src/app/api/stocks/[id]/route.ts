@@ -24,6 +24,7 @@ import {
   updateStockWithMerge,
 } from "@/server/stocksAdmin";
 import { parseJson } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 
 // Access:
 //   GET    - every POS role.
@@ -140,6 +141,13 @@ export async function PUT(
         throw error;
       }
 
+      await auditCaller(auth.caller, {
+        action: "stock.update",
+        targetCollection: "stocks",
+        targetId: id,
+        details: { name: body.groupName, unitPrice: body.unitPrice },
+      });
+
       const response: StockResponse = {
         success: true,
         message: "Stock item updated successfully",
@@ -152,6 +160,13 @@ export async function PUT(
       `PUT /api/stocks/${id} without baseColorVariants: quantities overwritten as sent`,
     );
     await updateStock(id, updateData);
+
+    await auditCaller(auth.caller, {
+      action: "stock.update",
+      targetCollection: "stocks",
+      targetId: id,
+      details: { name: body.groupName, unitPrice: body.unitPrice },
+    });
 
     const response: StockResponse = {
       success: true,
@@ -179,7 +194,17 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    // Read the name first: after the delete there is nothing left to show.
+    const existing = await getStockById(id).catch(() => null);
+
     await deleteStock(id);
+
+    await auditCaller(auth.caller, {
+      action: "stock.delete",
+      targetCollection: "stocks",
+      targetId: id,
+      details: { name: existing?.groupName ?? null },
+    });
 
     const response: StockResponse = {
       success: true,

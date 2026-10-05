@@ -714,7 +714,7 @@ function LabelPrintContent() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-canvas">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -726,7 +726,7 @@ function LabelPrintContent() {
           <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading inventory...</p>
             </div>
           </div>
@@ -736,7 +736,7 @@ function LabelPrintContent() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <Sidebar
         activeItem={activeMenuItem}
         onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -773,7 +773,7 @@ function LabelPrintContent() {
               <Button
                 onClick={handlePrintLabels}
                 disabled={selectedVariants.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300"
+                className="bg-brand hover:bg-brand-strong text-white disabled:bg-gray-300"
               >
                 <Printer className="h-4 w-4 mr-2" />
                 Print Selected ({selectedVariants.length})
@@ -880,7 +880,7 @@ function LabelPrintContent() {
                         key={variant.id}
                         className={`group relative bg-white border cursor-pointer transition-all duration-200 ${
                           selectedVariants.includes(variant.id)
-                            ? "border-blue-400 bg-cyan-50/50 shadow-lg shadow-blue-100/50"
+                            ? "border-rose-400 bg-rose-50/50 shadow-lg shadow-rose-100/50"
                             : "border-gray-200 hover:border-gray-300 hover:shadow-md"
                         }`}
                         onClick={() => handleSelectVariant(variant.id)}
@@ -910,8 +910,8 @@ function LabelPrintContent() {
                           <div
                             className={`absolute top-3 right-3 w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
                               selectedVariants.includes(variant.id)
-                                ? "bg-cyan-500 border-blue-500"
-                                : "bg-white/80 border-gray-300 group-hover:border-blue-400"
+                                ? "bg-rose-500 border-rose-500"
+                                : "bg-white/80 border-gray-300 group-hover:border-rose-400"
                             }`}
                           >
                             {selectedVariants.includes(variant.id) && (
@@ -993,7 +993,7 @@ function LabelPrintContent() {
                             <div
                               className={`text-xs px-3 py-1 rounded-full font-medium ${
                                 selectedVariants.includes(variant.id)
-                                  ? "bg-cyan-100 text-cyan-600"
+                                  ? "bg-rose-100 text-rose-600"
                                   : "bg-gray-100 text-gray-500"
                               }`}
                             >

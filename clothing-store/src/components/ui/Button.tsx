@@ -1,7 +1,14 @@
 import React from "react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline";
+  /**
+   * primary   - brand gradient, the one main action on a screen
+   * secondary - soft rose, a supporting action
+   * outline   - neutral bordered button
+   * ghost     - text-only, for toolbars and low-emphasis actions
+   * danger    - destructive actions
+   */
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   children: React.ReactNode;
@@ -17,12 +24,17 @@ export function Button({
   ...props
 }: ButtonProps) {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed rounded-xl";
+    "inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
 
   const variantClasses = {
-    primary: "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-md border-0",
-    secondary: "bg-gray-500 text-white hover:bg-gray-600 shadow-sm",
-    outline: "border border-gray-300 text-gray-900 hover:bg-gray-50",
+    primary:
+      "bg-brand hover:bg-brand-strong text-white shadow-brand border-0",
+    secondary:
+      "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-100",
+    outline:
+      "bg-white border border-gray-200 text-gray-800 hover:bg-gray-50 hover:border-gray-300 shadow-sm",
+    ghost: "bg-transparent text-gray-700 hover:bg-gray-100",
+    danger: "bg-red-600 text-white hover:bg-red-700 shadow-sm",
   };
 
   const sizeClasses = {
@@ -34,13 +46,19 @@ export function Button({
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
 
   return (
-    <button className={classes} disabled={disabled || loading} {...props}>
+    <button
+      className={classes}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
       {loading && (
         <svg
-          className="animate-spin -ml-1 mr-3 h-5 w-5 text-current"
+          className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <circle
             className="opacity-25"

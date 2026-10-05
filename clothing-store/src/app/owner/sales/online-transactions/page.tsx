@@ -8,6 +8,8 @@ import {
   onlineOrderService,
   OnlineTransaction,
 } from "@/services/onlineOrderService";
+import { PaymentMethodLabel } from "@/components/ui/PaymentMethodLabel";
+import { deliveryFeeOf } from "@/lib/deliveryFee";
 import {
   Search,
   Filter,
@@ -61,9 +63,9 @@ function getNormalizedOrderStatus(
 /** Human label for a payment method code. */
 function getPaymentMethodLabel(method?: string) {
   const value = (method || "").toLowerCase();
-  if (value === "cod") return "💵 COD";
-  if (value === "cash") return "💵 Cash";
-  if (value === "scan" || value === "wallet") return "📱 QR Scan";
+  if (value === "cod") return "COD";
+  if (value === "cash") return "Cash";
+  if (value === "scan" || value === "wallet") return "QR Scan";
   if (!value) return "-";
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -107,7 +109,10 @@ function getPaymentBreakdown(row: OnlineTransaction) {
         ? (tax / taxableBase) * 100
         : 0;
 
-  const total = Number(row.total || 0) || taxableBase + tax;
+  // Flat fee on top of tax (never taxed); older orders recorded none.
+  const deliveryFee = deliveryFeeOf(row);
+
+  const total = Number(row.total || 0) || taxableBase + tax + deliveryFee;
 
   return {
     subtotal,
@@ -115,6 +120,7 @@ function getPaymentBreakdown(row: OnlineTransaction) {
     couponDiscount,
     tax,
     taxPercent,
+    deliveryFee,
     total,
   };
 }
@@ -259,7 +265,7 @@ function TransactionDetailsModal({
                     <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                       <th className="pb-2 pr-3">Product</th>
                       <th className="pb-2 pr-3">Variant</th>
-                      <th className="pb-2 pr-3 text-right">Unit Price</th>
+                      <th className="pb-2 pr-3 text-right">Selling Price</th>
                       <th className="pb-2 pr-3 text-right">Qty</th>
                       <th className="pb-2 text-right">Line Total</th>
                     </tr>
@@ -306,7 +312,12 @@ function TransactionDetailsModal({
             <div className="divide-y divide-gray-100">
               <DetailRow
                 label="Payment Method"
-                value={getPaymentMethodLabel(row.paymentMethod)}
+                value={
+                  <PaymentMethodLabel
+                    method={row.paymentMethod}
+                    label={getPaymentMethodLabel(row.paymentMethod)}
+                  />
+                }
               />
               <DetailRow
                 label="Provider"
@@ -373,6 +384,15 @@ function TransactionDetailsModal({
                   ฿ {money.tax.toFixed(2)}
                 </span>
               </div>
+
+              {money.deliveryFee > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Delivery Fee</span>
+                  <span className="font-medium text-gray-900">
+                    ฿ {money.deliveryFee.toFixed(2)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between border-t border-dashed border-gray-300 pt-2">
                 <span className="font-bold text-gray-900">Total (THB)</span>
@@ -611,7 +631,7 @@ function OnlineTransactionsContent() {
   const totalCustomers = uniqueCustomerKeys.size;
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="online-transactions"
@@ -764,8 +784,8 @@ function OnlineTransactionsContent() {
                     className="w-full rounded-lg border border-gray-300 bg-white text-gray-900 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 appearance-none"
                   >
                     <option value="all">All Payment Methods</option>
-                    <option value="cod">💵 Cash on Delivery</option>
-                    <option value="scan">📱 QR Scan</option>
+                    <option value="cod">Cash on Delivery</option>
+                    <option value="scan">QR Scan</option>
                   </select>
                 </div>
 
@@ -817,7 +837,7 @@ function OnlineTransactionsContent() {
               )}
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full text-sm">
                 <thead className="bg-gradient-to-r from-pink-50 to-pink-100 border-b border-gray-100 text-left text-gray-700">
                   <tr>
@@ -825,6 +845,8 @@ function OnlineTransactionsContent() {
                     <th className="px-4 py-3">Order Ref</th>
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Payment Method</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Tax (THB)</th>
+                    <th className="px-4 py-3 whitespace-nowrap">Delivery Fee (THB)</th>
                     <th className="px-4 py-3">Total (THB)</th>
                     <th className="px-4 py-3">Total (MMK)</th>
                     <th className="px-4 py-3">Payment Status</th>
@@ -836,7 +858,7 @@ function OnlineTransactionsContent() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={11}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         Loading online transactions...
@@ -845,7 +867,7 @@ function OnlineTransactionsContent() {
                   ) : currentRows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={11}
                         className="px-4 py-8 text-center text-gray-500"
                       >
                         No matching online transactions found.
@@ -856,6 +878,7 @@ function OnlineTransactionsContent() {
                       const paymentMethodLabel = getPaymentMethodLabel(
                         row.paymentMethod,
                       );
+                      const money = getPaymentBreakdown(row);
 
                       return (
                         <tr key={row.id} className="border-t border-gray-100">
@@ -871,7 +894,31 @@ function OnlineTransactionsContent() {
                               "-"}
                           </td>
                           <td className="px-4 py-3 text-gray-700">
-                            {paymentMethodLabel}
+                            <PaymentMethodLabel
+                              method={row.paymentMethod}
+                              label={paymentMethodLabel}
+                            />
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                            {money.tax > 0 ? (
+                              <>
+                                {money.tax.toFixed(2)}
+                                {money.taxPercent > 0 && (
+                                  <span className="ml-1 text-xs text-gray-400">
+                                    ({formatRatePercent(money.taxPercent)}%)
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {money.deliveryFee > 0 ? (
+                              money.deliveryFee.toFixed(2)
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-gray-700">
                             {Number(row.total || 0).toFixed(2)}

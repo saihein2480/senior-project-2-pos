@@ -1,26 +1,138 @@
 @import "tailwindcss";
 
+/*
+ * POS design foundation.
+ *
+ * Brand: rose -> pink. Primary actions and active states use the `bg-brand`
+ * gradient; everything else stays neutral (white surfaces on a soft canvas)
+ * so the brand colour always means "this is the thing to press".
+ * Semantic colours keep their meaning: green = success/paid, amber = warning,
+ * red = danger/out of stock.
+ *
+ * The POS is a light-only UI: every screen sets explicit light surfaces, so
+ * the old prefers-color-scheme override only produced a dark page behind
+ * light cards.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf7f8;
+  --foreground: #111827;
+  --pos-canvas: #faf7f8;
+  --pos-border: #ececf0;
+  color-scheme: light;
+  /* Native checkboxes, radios and range inputs follow the brand. */
+  accent-color: var(--color-rose-500);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-canvas: var(--pos-canvas);
+  /* Inter for Latin; Myanmar fallbacks so Burmese labels render cleanly. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", "Noto Sans Myanmar", "Myanmar Text", "Padauk", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--color-rose-200);
+  color: var(--color-rose-900);
+}
+
+/* Keyboard focus is always visible; elements that opt out with
+   `focus:outline-none` keep their own ring (higher specificity). */
+:where(a, button, [role="button"], [role="menuitem"], [role="tab"], summary):focus-visible {
+  outline: 2px solid var(--color-rose-400);
+  outline-offset: 2px;
+}
+
+/* Thin, quiet scrollbars for long lists and panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-gray-300);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-gray-400);
+}
+
+/* ---------- Brand utilities (usable with variants, e.g. hover:bg-brand-strong) ---------- */
+
+@utility bg-brand {
+  background-image: linear-gradient(
+    to right,
+    var(--color-rose-500),
+    var(--color-pink-500)
+  );
+}
+
+@utility bg-brand-strong {
+  background-image: linear-gradient(
+    to right,
+    var(--color-rose-600),
+    var(--color-pink-600)
+  );
+}
+
+@utility bg-brand-soft {
+  background-image: linear-gradient(
+    135deg,
+    var(--color-rose-50),
+    var(--color-pink-50)
+  );
+}
+
+@utility text-brand-gradient {
+  background-image: linear-gradient(
+    to right,
+    var(--color-rose-600),
+    var(--color-pink-500)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility shadow-brand {
+  box-shadow:
+    0 1px 2px 0 rgb(225 29 72 / 0.12),
+    0 6px 16px -4px rgb(236 72 153 / 0.35);
+}
+
+@utility pos-surface {
+  background-color: #fff;
+  border: 1px solid var(--pos-border);
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(16 24 40 / 0.04);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Tabular figures keep prices and quantities aligned in lists and totals. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
 }

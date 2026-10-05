@@ -167,6 +167,7 @@ This document outlines the role-based access control system implemented in the P
 | Assign Roles | ✅ Yes | ❌ No | ❌ No |
 | Activate/Deactivate Staff | ✅ Yes | ❌ No | ❌ No |
 | View Staff Performance | ✅ Yes | ❌ No | ❌ No |
+| View Activity Log (`/owner/activity`, every account's actions) | ✅ Yes | ❌ No | ❌ No |
 
 ---
 

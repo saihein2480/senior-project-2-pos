@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "react-hot-toast";
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -34,6 +34,7 @@ import { StockDisplayService } from "@/services/stockDisplayService";
 import { CategoryService } from "@/services/categoryService";
 import { usePriceEntryCurrency } from "@/hooks/usePriceEntryCurrency";
 import { WholesalePricingTiers } from "@/components/ui/WholesalePricingTiers";
+import { StockDetailsDrawer } from "@/components/inventory/StockDetailsDrawer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { authFetch } from "@/lib/authFetch";
 import {
@@ -71,6 +72,9 @@ function InventoryStocksContent() {
 
   // UI state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  /** Product shown in the details panel (opened from its image or name). */
+  const [detailsGroup, setDetailsGroup] = useState<StockGroupDisplay | null>(null);
+  const closeDetails = useCallback(() => setDetailsGroup(null), []);
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -383,7 +387,7 @@ function InventoryStocksContent() {
       "Size",
       "Quantity",
       "Original Price",
-      "Price",
+      "Selling Price",
       "Barcode",
       "Date Added",
     ];
@@ -593,7 +597,7 @@ function InventoryStocksContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem={activeItem}
@@ -700,7 +704,7 @@ function InventoryStocksContent() {
                       <Filter className="h-4 w-4" />
                       {t.filter}
                       {hasActiveFilters && (
-                        <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded-full">
+                        <span className="ml-1 px-2 py-0.5 bg-rose-600 text-white text-xs font-semibold rounded-full">
                           {
                             [
                               selectedShop !== "all",
@@ -722,7 +726,7 @@ function InventoryStocksContent() {
                           {hasActiveFilters && (
                             <button
                               onClick={clearFilters}
-                              className="text-xs text-cyan-600 hover:text-blue-800 font-semibold hover:bg-cyan-50 px-2 py-1 rounded-lg transition-colors"
+                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors"
                             >
                               {t.clearAll}
                             </button>
@@ -911,7 +915,7 @@ function InventoryStocksContent() {
               {isLoading ? (
                 <div className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"></div>
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-rose-200 border-t-rose-500"></div>
                     <span className="text-gray-600 font-medium">
                       {t.loadingStocks}
                     </span>
@@ -965,7 +969,7 @@ function InventoryStocksContent() {
                                 selectedStocks.length === currentGroups.length
                               }
                               onChange={toggleSelectAll}
-                              className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
+                              className="h-4 w-4 text-rose-600 focus:ring-rose-400 border-gray-300 rounded cursor-pointer"
                               aria-label={t.selectAllStocks}
                             />
                           </th>
@@ -1033,32 +1037,37 @@ function InventoryStocksContent() {
                                   onChange={() =>
                                     toggleSelectStock(group.groupId)
                                   }
-                                  className="h-4 w-4 text-cyan-600 focus:ring-cyan-400 border-gray-300 rounded cursor-pointer"
+                                  className="h-4 w-4 text-rose-600 focus:ring-rose-400 border-gray-300 rounded cursor-pointer"
                                   aria-label={`${group.groupName} ${t.selectSuffix}`}
                                 />
                               </td>
                             )}
-                            {/* Product Column */}
+                            {/* Product Column - image and name open the details panel */}
                             <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
-                              <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 flex-shrink-0 relative rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => setDetailsGroup(group)}
+                                aria-label={`${t.viewDetails}: ${group.groupName}`}
+                                className="group/product flex w-full items-center gap-3 rounded-xl text-left -m-1 p-1 transition-colors hover:bg-rose-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                              >
+                                <div className="h-12 w-12 flex-shrink-0 relative rounded-lg overflow-hidden bg-gray-100 border border-gray-200 shadow-sm transition-shadow group-hover/product:ring-2 group-hover/product:ring-rose-200">
                                   <Image
                                     src={group.groupImage}
                                     alt={group.groupName}
                                     fill
-                                    className="object-cover"
+                                    className="object-cover transition-transform duration-200 group-hover/product:scale-105"
                                     sizes="48px"
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-semibold text-gray-900 truncate text-sm">
+                                  <div className="font-semibold text-gray-900 truncate text-sm group-hover/product:text-rose-600 group-hover/product:underline underline-offset-2">
                                     {group.groupName}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-0.5">
                                     ID: {group.groupId}
                                   </div>
                                 </div>
-                              </div>
+                              </button>
                             </td>
 
                             {/* Shop Column */}
@@ -1102,7 +1111,7 @@ function InventoryStocksContent() {
                               </div>
                             </td>
 
-                            {/* Unit Price Column */}
+                            {/* Selling Price Column */}
                             <td className="whitespace-nowrap px-3 py-4 text-sm">
                               <div className="font-bold text-gray-900">
                                 {formatDisplayPrice(group.unitPrice)}
@@ -1128,7 +1137,7 @@ function InventoryStocksContent() {
                                 {permissions.canEditProducts && (
                                   <button
                                     onClick={() => handleEditGroup(group)}
-                                    className="p-2 text-cyan-600 hover:text-blue-900 hover:bg-cyan-50 rounded-lg transition-colors"
+                                    className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
                                     title={t.edit}
                                   >
                                     <Edit className="h-4 w-4" />
@@ -1223,7 +1232,7 @@ function InventoryStocksContent() {
                                                 (sizeInfo, sizeIndex) => (
                                                   <div
                                                     key={sizeIndex}
-                                                    className="flex flex-col items-center justify-center px-2 py-2 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-cyan-50 transition-all"
+                                                    className="flex flex-col items-center justify-center px-2 py-2 bg-gray-50 rounded-lg border border-gray-200 hover:border-rose-300 hover:bg-rose-50 transition-all"
                                                   >
                                                     <span className="text-xs font-semibold text-gray-700 mb-1">
                                                       {sizeInfo.size}
@@ -1299,7 +1308,7 @@ function InventoryStocksContent() {
                         setRowsPerPage(Number(e.target.value));
                         setCurrentPage(1);
                       }}
-                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 hover:border-gray-400 focus:ring-2 focus:ring-cyan-400 transition-all"
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-900 hover:border-gray-400 focus:ring-2 focus:ring-rose-400 transition-all"
                     >
                       <option value={10}>10</option>
                       <option value={25}>25</option>
@@ -1346,6 +1355,23 @@ function InventoryStocksContent() {
           </div>
         </main>
       </div>
+
+      {/* Product details (variants, stock per size, wholesale tiers) */}
+      <StockDetailsDrawer
+        group={detailsGroup}
+        shopName={
+          detailsGroup
+            ? shopLookup.get(detailsGroup.shop) || detailsGroup.shop
+            : ""
+        }
+        onClose={closeDetails}
+        onEdit={
+          permissions.canEditProducts && detailsGroup
+            ? () => handleEditGroup(detailsGroup)
+            : undefined
+        }
+        showCostFigures={permissions.canViewStockValue}
+      />
 
       {/* Success Message */}
       {successMessage && (
@@ -1435,7 +1461,7 @@ function InventoryStocksContent() {
                   type="button"
                   onClick={cancelDelete}
                   disabled={isDeleting}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   {t.cancel}
                 </button>

@@ -7,40 +7,52 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { detectColorName } from "@/lib/colorUtils";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopNavBar } from "@/components/ui/TopNavBar";
+import Link from "next/link";
 import {
-  Store,
   Package,
   BarChart3,
   ShoppingCart,
   User,
-  TrendingUp,
-  TrendingDown,
-  Users,
   RefreshCw,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   CheckCircle,
   XCircle,
   Clock,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Wallet,
+  Receipt,
+  TrendingUp,
+  Coins,
+  Banknote,
+  QrCode,
+  Truck,
+  ChevronDown,
+  ChevronRight,
+  type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  Cell,
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 import { transactionService, Transaction } from "@/services/transactionService";
+import { ChartCard } from "@/components/analytics/ChartCard";
 import {
+  getNetProfit,
+  getNetRevenue,
+  getSellingPrice,
+  isRevenueTransaction,
   calculateChannelSplit,
   calculateDailyNetMargin,
   calculatePromotedProducts,
@@ -110,10 +122,13 @@ interface DashboardStats {
   remainingStockValueOriginalPriceMMK: number;
 }
 
+/** Sales by how the customer paid. */
 interface RevenueByMethod {
+  /** Walk-in cash at the till. */
   cash: number;
-  scan: number;
-  wallet: number;
+  /** Storefront QR payment ("scan", or "wallet" on older records). */
+  onlineQr: number;
+  /** Cash on delivery. */
   cod: number;
 }
 
@@ -179,6 +194,107 @@ interface Expense {
   amount?: number;
 }
 
+/** Totals for the period before the selected one, for the growth chips. */
+interface PeriodTotals {
+  revenue: number;
+  profit: number;
+  orders: number;
+}
+
+/** 12_300 -> "12.3K", for chart axes where full prices would crowd. */
+const compactNumber = (value: number) =>
+  new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+
+/**
+ * Percentage change, or null when there is no earlier figure to compare with
+ * (a jump from zero has no meaningful percentage).
+ */
+const percentChange = (current: number, previous: number): number | null =>
+  previous > 0 ? ((current - previous) / previous) * 100 : null;
+
+/** Up/down chip for a KPI; hidden when there is nothing to compare with. */
+function GrowthChip({ value }: { value: number | null }) {
+  if (value === null) return null;
+  const rounded = Math.abs(value) < 0.05 ? 0 : value;
+  const tone =
+    rounded > 0
+      ? "bg-emerald-50 text-emerald-700"
+      : rounded < 0
+        ? "bg-red-50 text-red-700"
+        : "bg-gray-100 text-gray-600";
+  const Icon = rounded > 0 ? ArrowUpRight : rounded < 0 ? ArrowDownRight : Minus;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold tabular ${tone}`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {Math.abs(rounded).toFixed(1)}%
+    </span>
+  );
+}
+
+/** One headline number: label, value, and a short line of context. */
+function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  valueClassName = "text-gray-900",
+  children,
+}: {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  valueClassName?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+          <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+        </span>
+      </div>
+      <p className={`mt-3 text-2xl font-bold tracking-tight tabular ${valueClassName}`}>
+        {value}
+      </p>
+      {children && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Plain white card with a title row, used by the overview panels. */
+function Panel({
+  title,
+  aside,
+  className = "",
+  children,
+}: {
+  title: string;
+  aside?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-gray-200/80 bg-white p-5 shadow-sm ${className}`}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function OwnerDashboardContent() {
   const { formatPrice } = useCurrency();
   const { businessSettings, branch: currentBranch } = useSettings();
@@ -224,8 +340,7 @@ function OwnerDashboardContent() {
   });
   const [revenueByMethod, setRevenueByMethod] = useState<RevenueByMethod>({
     cash: 0,
-    scan: 0,
-    wallet: 0,
+    onlineQr: 0,
     cod: 0,
   });
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
@@ -270,6 +385,14 @@ function OwnerDashboardContent() {
     [],
   );
   const [channelSplit, setChannelSplit] = useState<ChannelSplitPoint[]>([]);
+  const [previousPeriod, setPreviousPeriod] = useState<PeriodTotals>({
+    revenue: 0,
+    profit: 0,
+    orders: 0,
+  });
+  /** First load shows a skeleton; later refreshes keep the numbers on screen. */
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
 
   // Load shops and set initial branch filter
   useEffect(() => {
@@ -446,9 +569,24 @@ function OwnerDashboardContent() {
         rangeStartDate.getTime() - periodDays * 24 * 60 * 60 * 1000,
       );
 
+      // Same branch as the current period, otherwise a single branch would be
+      // compared against the whole business and growth would read as a drop.
       const previousTransactions = transactions.filter((t) => {
         const date = new Date(t.timestamp);
-        return date >= previousStartDate && date < rangeStartDate;
+        return (
+          date >= previousStartDate &&
+          date < rangeStartDate &&
+          (!branchFilter || matchesBranch(t, branchFilter))
+        );
+      });
+
+      // Same definitions as the revenue series, so the chips compare like
+      // with like.
+      const previousPaid = previousTransactions.filter(isRevenueTransaction);
+      setPreviousPeriod({
+        revenue: previousPaid.reduce((sum, tx) => sum + getNetRevenue(tx), 0),
+        profit: previousPaid.reduce((sum, tx) => sum + getNetProfit(tx), 0),
+        orders: previousPaid.length,
       });
 
       // Filter expenses by date range
@@ -543,6 +681,7 @@ function OwnerDashboardContent() {
       console.error("Error loading dashboard data:", error);
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
     // `businessSettings` is a real dependency: it supplies the currency rate for
     // net margin and the reward tiers for the points-liability estimate. It
@@ -827,7 +966,7 @@ function OwnerDashboardContent() {
   const calculateRevenueByMethod = (
     transactions: Transaction[],
   ): RevenueByMethod => {
-    const methods: RevenueByMethod = { cash: 0, scan: 0, wallet: 0, cod: 0 };
+    const methods: RevenueByMethod = { cash: 0, onlineQr: 0, cod: 0 };
 
     transactions.forEach((transaction) => {
       if (
@@ -846,11 +985,11 @@ function OwnerDashboardContent() {
           case "cash":
             methods.cash += netAmount;
             break;
+          // The storefront's QR payment (MyanMyanPay) is stored as "scan";
+          // "wallet" only appears on older records of the same thing.
           case "scan":
-            methods.scan += netAmount;
-            break;
           case "wallet":
-            methods.wallet += netAmount;
+            methods.onlineQr += netAmount;
             break;
           case "cod":
             methods.cod += netAmount;
@@ -902,9 +1041,11 @@ function OwnerDashboardContent() {
         transaction.items.forEach((item) => {
           const key = `${item.groupName}-${item.selectedColor || "default"}`;
           const existing = productMap.get(key);
-          const itemRevenue = item.unitPrice * item.quantity;
+          // The price actually charged (after promotions), matching the KPIs.
+          const sellingPrice = getSellingPrice(item);
+          const itemRevenue = sellingPrice * item.quantity;
           const itemProfit =
-            (item.unitPrice - item.originalPrice) * item.quantity;
+            (sellingPrice - item.originalPrice) * item.quantity;
 
           let displayColorName = item.selectedColor;
           if (item.selectedColor) {
@@ -1027,23 +1168,110 @@ function OwnerDashboardContent() {
         return status === "completed" ? (
           <CheckCircle className="h-4 w-4 text-green-600" />
         ) : status === "pending" ? (
-          <Clock className="h-4 w-4 text-yellow-600" />
+          <Clock className="h-4 w-4 text-gray-500" />
         ) : (
-          <ShoppingCart className="h-4 w-4 text-cyan-600" />
+          <ShoppingCart className="h-4 w-4 text-rose-600" />
         );
       case "refund":
         return <XCircle className="h-4 w-4 text-red-600" />;
       case "customer":
-        return <User className="h-4 w-4 text-purple-600" />;
+        return <User className="h-4 w-4 text-rose-500" />;
       case "stock":
-        return <Package className="h-4 w-4 text-orange-600" />;
+        return <Package className="h-4 w-4 text-gray-500" />;
       default:
         return <AlertCircle className="h-4 w-4 text-gray-600" />;
     }
   };
 
+
+  // ---------------------------------------------------------------------
+  // Figures for the overview. Everything comes from the same per-transaction
+  // helpers as the revenue series, so cards, chart and growth agree.
+  // ---------------------------------------------------------------------
+  const periodTotals = dailyRevenueData.reduce(
+    (acc, row) => ({
+      revenue: acc.revenue + row.revenue,
+      profit: acc.profit + row.profit,
+      orders: acc.orders + row.orders,
+    }),
+    { revenue: 0, profit: 0, orders: 0 },
+  );
+  const periodExpenses = netMarginData.reduce(
+    (sum, row) => sum + row.expense,
+    0,
+  );
+  const netProfit = periodTotals.profit - periodExpenses;
+  const profitMargin =
+    periodTotals.revenue > 0
+      ? (periodTotals.profit / periodTotals.revenue) * 100
+      : 0;
+  const averageOrder =
+    periodTotals.orders > 0 ? periodTotals.revenue / periodTotals.orders : 0;
+
+  const revenueGrowth = percentChange(
+    periodTotals.revenue,
+    previousPeriod.revenue,
+  );
+  const profitGrowth = percentChange(
+    periodTotals.profit,
+    previousPeriod.profit,
+  );
+  const ordersGrowth = percentChange(
+    periodTotals.orders,
+    previousPeriod.orders,
+  );
+
+  const paymentRows: {
+    key: string;
+    label: string;
+    value: number;
+    icon: LucideIcon;
+  }[] = [
+    { key: "cash", label: t.cash, value: revenueByMethod.cash, icon: Banknote },
+    { key: "onlineQr", label: t.onlineQrPayment, value: revenueByMethod.onlineQr, icon: QrCode },
+    { key: "cod", label: t.cod, value: revenueByMethod.cod, icon: Truck },
+  ];
+  const paymentTotal = paymentRows.reduce((sum, row) => sum + row.value, 0);
+
+  const rangePresets: { value: typeof dateRange; label: string }[] = [
+    { value: "today", label: t.today },
+    { value: "7d", label: t.last7Days },
+    { value: "30d", label: t.last30Days },
+    { value: "90d", label: t.last90Days },
+    { value: "custom", label: t.customRange },
+  ];
+
+  const applyRange = (range: typeof dateRange) => {
+    setDateRange(range);
+    if (range === "custom") return;
+
+    const end = new Date();
+    const start = new Date();
+    if (range === "7d") start.setDate(start.getDate() - 7);
+    if (range === "30d") start.setDate(start.getDate() - 30);
+    if (range === "90d") start.setDate(start.getDate() - 90);
+
+    setStartDate(start.toISOString().split("T")[0]);
+    setEndDate(end.toISOString().split("T")[0]);
+  };
+
+  const formatDay = (value: string) =>
+    value
+      ? new Date(value).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "";
+  const periodLabel =
+    startDate === endDate
+      ? formatDay(startDate)
+      : `${formatDay(startDate)} – ${formatDay(endDate)}`;
+
+  const hasSales = periodTotals.orders > 0;
+
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1073,960 +1301,561 @@ function OwnerDashboardContent() {
           onMenuToggle={() => setIsMobileSidebarOpen((s) => !s)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="max-w-screen-2xl mx-auto">
-            {/* Header */}
-            <div className="mb-8 flex flex-col gap-4">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-screen-2xl mx-auto space-y-6">
+            {/* ================= Header & filters ================= */}
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900">
                   {t.dashboard}
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  Overview of performance, sales, and inventory.
+                <p className="mt-1 text-sm text-gray-500">
+                  {t.dashboardSubtitle}{" "}
+                  <span className="font-medium text-gray-700">{periodLabel}</span>
                 </p>
               </div>
 
-              <div className="bg-white/80 backdrop-blur border border-gray-200 rounded-2xl shadow-sm p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
-                    <select
-                      title="Filter by Branch"
-                      value={filterBranch}
-                      onChange={(e) => setFilterBranch(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
-                    >
-                      <option value="all">{t.allBranches}</option>
-                      {shops.map((shop) => (
-                        <option key={shop.id} value={shop.id}>
-                          {shop.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <select
-                      title="Date Range"
-                      value={dateRange}
-                      onChange={(e) => {
-                        const range = e.target.value as
-                          | "today"
-                          | "7d"
-                          | "30d"
-                          | "90d"
-                          | "custom";
-                        setDateRange(range);
-
-                        if (range !== "custom") {
-                          const end = new Date();
-                          const start = new Date();
-
-                          switch (range) {
-                            case "today":
-                              break;
-                            case "7d":
-                              start.setDate(start.getDate() - 7);
-                              break;
-                            case "30d":
-                              start.setDate(start.getDate() - 30);
-                              break;
-                            case "90d":
-                              start.setDate(start.getDate() - 90);
-                              break;
-                          }
-
-                          setStartDate(start.toISOString().split("T")[0]);
-                          setEndDate(end.toISOString().split("T")[0]);
-                        }
-                      }}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
-                    >
-                      <option value="today">{t.today}</option>
-                      <option value="7d">{t.last7Days}</option>
-                      <option value="30d">{t.last30Days}</option>
-                      <option value="90d">{t.last90Days}</option>
-                      <option value="custom">{t.customRange}</option>
-                    </select>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => {
-                          setStartDate(e.target.value);
-                          setDateRange("custom");
-                        }}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
-                        max={endDate}
-                        aria-label="Start Date"
-                        placeholder="Start Date"
-                      />
-                      <span className="text-gray-400">—</span>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => {
-                          setEndDate(e.target.value);
-                          setDateRange("custom");
-                        }}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-900 shadow-sm focus:ring-2 focus:ring-gray-300 focus:border-transparent"
-                        min={startDate}
-                        max={new Date().toISOString().split("T")[0]}
-                        aria-label="End Date"
-                      />
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                {/* Period */}
+                <div
+                  role="radiogroup"
+                  aria-label={t.customRange}
+                  className="flex items-center gap-1 overflow-x-auto scrollbar-none rounded-xl border border-gray-200 bg-white p-1 shadow-sm"
+                >
+                  {rangePresets.map((preset) => {
+                    const isActive = dateRange === preset.value;
+                    return (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        onClick={() => applyRange(preset.value)}
+                        className={`h-8 flex-shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition-colors ${
+                          isActive
+                            ? "bg-brand text-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {/* Branch */}
+                <select
+                  aria-label={t.branch}
+                  value={filterBranch}
+                  onChange={(e) => setFilterBranch(e.target.value)}
+                  className="h-10 rounded-xl border border-gray-200 bg-white px-3 pr-8 text-sm font-medium text-gray-800 shadow-sm focus:border-rose-400 focus:outline-none focus:ring-4 focus:ring-rose-100"
+                >
+                  <option value="all">{t.allBranches}</option>
+                  {shops.map((shop) => (
+                    <option key={shop.id} value={shop.id}>
+                      {shop.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
+                  aria-label={t.refresh}
+                  title={t.refresh}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 disabled:opacity-60"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${refreshing || loading ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
+                </button>
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            {/* Custom dates only when asked for */}
+            {dateRange === "custom" && (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200/80 bg-white p-3 shadow-sm">
+                <Calendar className="ml-1 h-4 w-4 text-rose-500" aria-hidden="true" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  max={endDate}
+                  aria-label="Start date"
+                  className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-900 focus:border-rose-400 focus:outline-none focus:ring-4 focus:ring-rose-100"
+                />
+                <span className="text-gray-400">–</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate}
+                  max={new Date().toISOString().split("T")[0]}
+                  aria-label="End date"
+                  className="h-9 rounded-lg border border-gray-200 px-3 text-sm text-gray-900 focus:border-rose-400 focus:outline-none focus:ring-4 focus:ring-rose-100"
+                />
+              </div>
+            )}
+
+            {!hasLoaded ? (
+              /* First load */
+              <div className="space-y-6" aria-busy="true">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-[132px] animate-pulse rounded-2xl border border-gray-200/80 bg-white" />
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <div className="h-80 animate-pulse rounded-2xl border border-gray-200/80 bg-white lg:col-span-2" />
+                  <div className="h-80 animate-pulse rounded-2xl border border-gray-200/80 bg-white" />
+                </div>
               </div>
             ) : (
-              <>
-                {/* Key Performance Indicators */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {/* Total Revenue */}
-                  {/* <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalSales} (฿ / Ks)
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {formatPrice(stats.totalRevenue)}
-                        </p>
-                      </div>
-                    </div>
-                  </div> */}
+              <div className={`space-y-6 transition-opacity ${loading ? "opacity-60" : ""}`}>
+                {/* ================= Alert ================= */}
+                {stats.lowStockProducts > 0 && (
+                  <Link
+                    href="/owner/inventory/stocks"
+                    className="group flex items-center gap-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 transition-colors hover:bg-rose-50"
+                  >
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-rose-500 shadow-sm">
+                      <AlertTriangle className="h-[18px] w-[18px]" aria-hidden="true" />
+                    </span>
+                    <p className="flex-1 text-sm text-gray-700">
+                      <span className="font-bold text-gray-900 tabular">
+                        {stats.lowStockProducts}
+                      </span>{" "}
+                      {t.lowStockAlertSuffix}
+                    </p>
+                    <span className="hidden items-center gap-1 text-sm font-semibold text-rose-600 sm:inline-flex">
+                      {t.viewStock}
+                      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    </span>
+                  </Link>
+                )}
 
-                  {/* Total Profit */}
-                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalProfit}
-                        </p>
-                        <p className="text-2xl font-bold text-green-600">
-                          {formatPrice(stats.totalProfit)}
-                        </p>
-                      </div>
-                    </div>
-                  </div> */}
+                {/* ================= KPIs ================= */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <KpiCard
+                    label={t.totalSales}
+                    value={formatPrice(periodTotals.revenue)}
+                    icon={TrendingUp}
+                  >
+                    <GrowthChip value={revenueGrowth} />
+                    {revenueGrowth !== null && <span>{t.vsPreviousPeriod}</span>}
+                  </KpiCard>
 
-                  {/* Total Orders */}
-                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalOrders}
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {stats.totalOrders}
-                        </p>
-                      </div>
-                    </div>
-                  </div> */}
+                  <KpiCard
+                    label={t.grossProfit}
+                    value={formatPrice(periodTotals.profit)}
+                    icon={Coins}
+                  >
+                    <GrowthChip value={profitGrowth} />
+                    <span className="tabular">
+                      {profitMargin.toFixed(1)}% {t.marginLabel}
+                    </span>
+                  </KpiCard>
 
-                  {/* Total Customers */}
-                  {/* <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalCustomers}
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {stats.totalCustomers}
-                        </p>
-                      </div>
-                    </div>
-                  </div> */}
+                  <KpiCard
+                    label={t.netProfit}
+                    value={formatPrice(netProfit)}
+                    icon={Wallet}
+                    valueClassName={netProfit < 0 ? "text-red-600" : "text-gray-900"}
+                  >
+                    <span className="tabular">
+                      {t.expenses}: {formatPrice(periodExpenses)}
+                    </span>
+                  </KpiCard>
+
+                  <KpiCard
+                    label={t.paidOrders}
+                    value={periodTotals.orders.toLocaleString()}
+                    icon={Receipt}
+                  >
+                    <GrowthChip value={ordersGrowth} />
+                    <span className="tabular">
+                      {t.avgOrderValue}: {formatPrice(averageOrder)}
+                    </span>
+                  </KpiCard>
                 </div>
 
-                {/* <div>
-                  <hr className="text-gray-300 p-3"></hr>
-                </div> */}
-
-                {/* Currency Specific Totals */}
-                {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalSalesThb}
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {formatPrice(stats.totalRevenueTHB || 0)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalExpenseThb}
-                        </p>
-                        <p className="text-2xl font-bold text-red-600">
-                          {formatPrice(stats.totalExpenseTHB || 0)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalSalesMmk}
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {SettingsService.formatPrice(
-                            stats.totalRevenueMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalExpenseMmk}
-                        </p>
-                        <p className="text-2xl font-bold text-red-600">
-                          {SettingsService.formatPrice(
-                            stats.totalExpenseMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div> */}
-
-                {/* <div>
-                  <hr className="text-gray-300 p-3"></hr>
-                </div> */}
-
-                {/* Advanced Financial Metrics */}
-                {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 mb-4">
-                        Remaining Stock Value (Unit Price)
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <p className="text-2xl font-bold text-gray-900">
-                          {formatPrice(
-                            stats.remainingStockValueUnitPriceTHB || 0,
-                          )}
-                        </p>
-                        <p className="text-xl font-semibold text-gray-700">
-                          {SettingsService.formatPrice(
-                            stats.remainingStockValueUnitPriceMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 mb-4">
-                        Remaining Stock Value (Original Price)
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <p className="text-2xl font-bold text-gray-900">
-                          {formatPrice(
-                            stats.remainingStockValueOriginalPriceTHB || 0,
-                          )}
-                        </p>
-                        <p className="text-xl font-semibold text-gray-700">
-                          {SettingsService.formatPrice(
-                            stats.remainingStockValueOriginalPriceMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-6 shadow-sm border border-gray-200">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500 mb-4">
-                        Total Net Profit
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <p className="text-2xl font-bold text-green-600">
-                          {formatPrice(stats.netProfitTHB || 0)}
-                        </p>
-                        <p className="text-xl font-semibold text-green-600">
-                          {SettingsService.formatPrice(
-                            stats.netProfitMMK || 0,
-                            "MMK",
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div> */}
-
-                {/* <div>
-                  <hr className="text-gray-300 p-3"></hr>
-                </div> */}
-
-                {/* Secondary Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {/* Average Order Value */}
-                  {/* <div className="bg-white p-6  shadow-sm border border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.avgOrderValue}
-                        </p>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {formatPrice(stats.averageOrderValue)}
-                        </p>
-                      </div>
-                      <BarChart3 className="h-6 w-6 text-gray-400" />
-                    </div>
-                  </div> */}
-
-                  {/* Items Sold */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.itemsSold}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-gray-900">
-                          {stats.totalItemsSold}
-                        </p>
-                      </div>
-                      <div className="h-11 w-11 rounded-2xl bg-cyan-50 text-blue-700 flex items-center justify-center shrink-0">
-                        <Package className="h-5 w-5" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Total Products */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.totalProducts}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-gray-900">
-                          {stats.totalProducts}
-                        </p>
-                      </div>
-                      <div className="h-11 w-11 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
-                        <Store className="h-5 w-5" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Low Stock Alert */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.lowStockItems}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-orange-600">
-                          {stats.lowStockProducts}
-                        </p>
-                      </div>
-                      <div className="h-11 w-11 rounded-2xl bg-orange-50 text-orange-700 flex items-center justify-center shrink-0">
-                        <AlertCircle className="h-5 w-5" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* <div>
-                  <hr className="text-gray-300 p-3"></hr>
-                </div> */}
-
-                {/* Order Status Breakdown */}
-                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    {t.orderStatusDistribution}
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.completed}
-                        </p>
-                        <p className="text-2xl font-bold text-green-600">
-                          {stats.completedOrders}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalOrders > 0
-                            ? (
-                                (stats.completedOrders / stats.totalOrders) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
-                      </div>
-                      <CheckCircle className="h-8 w-8 text-green-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.pending}
-                        </p>
-                        <p className="text-2xl font-bold text-yellow-600">
-                          {stats.pendingOrders}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalOrders > 0
-                            ? (
-                                (stats.pendingOrders / stats.totalOrders) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
-                      </div>
-                      <Clock className="h-8 w-8 text-yellow-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.cancelled}
-                        </p>
-                        <p className="text-2xl font-bold text-red-600">
-                          {stats.cancelledOrders}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalOrders > 0
-                            ? (
-                                (stats.cancelledOrders / stats.totalOrders) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
-                      </div>
-                      <XCircle className="h-8 w-8 text-red-600" />
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.refundPayments}
-                        </p>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {stats.refundPayments}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalOrders > 0
-                            ? (
-                                (stats.refundPayments / stats.totalOrders) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
-                      </div>
-                      <AlertCircle className="h-8 w-8 text-purple-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.partialRefunds}
-                        </p>
-                        <p className="text-2xl font-bold text-indigo-600">
-                          {stats.partialRefunds}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalOrders > 0
-                            ? (
-                                (stats.partialRefunds / stats.totalOrders) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
-                      </div>
-                      <XCircle className="h-8 w-8 text-indigo-600" />
-                    </div>
-                  </div>
-                </div> */}
-
-                {/* Revenue by Payment Method */}
-                {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    {t.paymentMethodDistribution}
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.cash}
-                        </p>
-                        <p className="text-xl font-bold text-gray-900">
-                          {formatPrice(revenueByMethod.cash)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalRevenue > 0
-                            ? (
-                                (revenueByMethod.cash / stats.totalRevenue) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total sale
-                        </p>
-                      </div>
-                      <DollarSign className="h-6 w-6 text-gray-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.scan}
-                        </p>
-                        <p className="text-xl font-bold text-gray-900">
-                          {formatPrice(revenueByMethod.scan)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalRevenue > 0
-                            ? (
-                                (revenueByMethod.scan / stats.totalRevenue) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total sale
-                        </p>
-                      </div>
-                      <ShoppingCart className="h-6 w-6 text-gray-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.wallet}
-                        </p>
-                        <p className="text-xl font-bold text-gray-900">
-                          {formatPrice(revenueByMethod.wallet)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalRevenue > 0
-                            ? (
-                                (revenueByMethod.wallet / stats.totalRevenue) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total sale
-                        </p>
-                      </div>
-                      <Package className="h-6 w-6 text-gray-600" />
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">
-                          {t.cod}
-                        </p>
-                        <p className="text-xl font-bold text-gray-900">
-                          {formatPrice(revenueByMethod.cod)}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {stats.totalRevenue > 0
-                            ? (
-                                (revenueByMethod.cod / stats.totalRevenue) *
-                                100
-                              ).toFixed(1)
-                            : 0}
-                          % of total sale
-                        </p>
-                      </div>
-                      <Calendar className="h-6 w-6 text-gray-600" />
-                    </div>
-                  </div>
-                </div> */}
-
-                {/* Data Visualization Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  {/* Revenue & Profit Trend Chart */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {t.totalSaleProfitTrend}
-                      </h2>
-                      <div className="flex items-center gap-2">
-                        {/* Which bucket size the series is aggregated to. Without
-                            this, a range change that flips daily totals to
-                            quarterly ones reads as a sudden revenue jump. */}
-                        <span className="text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-full px-2.5 py-1">
+                {/* ================= Trend & order status ================= */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <Panel
+                    title={t.totalSaleProfitTrend}
+                    className="lg:col-span-2"
+                    aside={
+                      <div className="flex items-center gap-3 text-xs font-medium text-gray-500">
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
+                          {t.totalSales}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                          {t.profit}
+                        </span>
+                        {/* Bucket size, so a switch from daily to monthly totals
+                            is not mistaken for a jump in sales. */}
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
                           {grainLabel(timeGrain)}
                         </span>
-                        <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
-                          {dateRange === "custom"
-                            ? `${startDate} — ${endDate}`
-                            : dateRange.toUpperCase()}
-                        </span>
                       </div>
-                    </div>
-                    {dailyRevenueData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={320}>
+                    }
+                  >
+                    {hasSales ? (
+                      <ResponsiveContainer width="100%" height={280}>
                         <AreaChart
                           data={dailyRevenueData}
-                          margin={{ top: 8, right: 8, bottom: 8 }}
+                          margin={{ top: 4, right: 4, bottom: 0, left: -8 }}
                         >
                           <defs>
-                            <linearGradient
-                              id="colorRevenue"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor="#3b82f6"
-                                stopOpacity={0.8}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor="#3b82f6"
-                                stopOpacity={0.1}
-                              />
+                            <linearGradient id="dashSales" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.28} />
+                              <stop offset="100%" stopColor="#f43f5e" stopOpacity={0} />
                             </linearGradient>
-                            <linearGradient
-                              id="colorProfit"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor="#10b981"
-                                stopOpacity={0.8}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor="#10b981"
-                                stopOpacity={0.1}
-                              />
+                            <linearGradient id="dashProfit" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#10b981" stopOpacity={0.22} />
+                              <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e5e7eb"
-                          />
+                          <CartesianGrid vertical={false} stroke="#f1f1f4" />
                           <XAxis
                             dataKey="date"
                             {...timeAxisProps(dailyRevenueData.length)}
+                            stroke="#9ca3af"
+                            axisLine={false}
+                            tickLine={false}
                           />
                           <YAxis
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
-                            tickFormatter={(value) => `${value}`}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#fff",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "8px",
-                            }}
-                            formatter={(value: number | undefined) =>
-                              value !== undefined ? formatPrice(value) : "N/A"
-                            }
-                          />
-                          <Legend />
-                          <Area
-                            type="monotone"
-                            dataKey="revenue"
-                            stroke="#3b82f6"
-                            fillOpacity={1}
-                            fill="url(#colorRevenue)"
-                            name={t.totalSales}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="profit"
-                            stroke="#10b981"
-                            fillOpacity={1}
-                            fill="url(#colorProfit)"
-                            name={t.profit}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-16">
-                        <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noRevenueData}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Revenue earned per promoted product */}
-                  <PromotionRevenueByProductChart data={promotedProducts} />
-                </div>
-
-                {/* Additional Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  {/* Order Status Distribution Bar Chart */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.orderStatusDistribution}
-                    </h2>
-                    {stats.totalOrders > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart
-                          data={orderStatusChartRows}
-                          margin={{ top: 8, right: 8, bottom: 8 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e5e7eb"
-                          />
-                          <XAxis
-                            dataKey="name"
-                            interval={0}
-                            angle={-20}
-                            height={60}
-                            textAnchor="end"
                             tick={{ fontSize: 11 }}
-                            stroke="#6b7280"
-                          />
-                          {/* Counts are whole orders, so a fractional tick like
-                              1.5 would be meaningless. */}
-                          <YAxis
-                            allowDecimals={false}
-                            tick={{ fontSize: 12 }}
-                            stroke="#6b7280"
+                            stroke="#9ca3af"
+                            axisLine={false}
+                            tickLine={false}
+                            width={52}
+                            tickFormatter={(value: number) => compactNumber(value)}
                           />
                           <Tooltip
-                            content={({ active, payload }) => {
+                            cursor={{ stroke: "#fda4af", strokeDasharray: "4 4" }}
+                            content={({ active, payload, label }) => {
                               if (!active || !payload?.length) return null;
-                              const row = payload[0].payload as OrderStatusChart & {
-                                name: string;
-                              };
+                              const row = payload[0].payload as RevenueSeriesPoint;
                               return (
-                                <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 text-xs">
-                                  <p className="font-semibold text-gray-900 mb-1">
-                                    {row.name}
+                                <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-lg">
+                                  <p className="mb-1.5 font-semibold text-gray-900">{label}</p>
+                                  <p className="flex justify-between gap-6 text-gray-600">
+                                    <span>{t.totalSales}</span>
+                                    <span className="font-semibold text-rose-600 tabular">{formatPrice(row.revenue)}</span>
                                   </p>
-                                  <p className="text-gray-700">
-                                    {row.value} {t.orders}
+                                  <p className="flex justify-between gap-6 text-gray-600">
+                                    <span>{t.profit}</span>
+                                    <span className="font-semibold text-emerald-600 tabular">{formatPrice(row.profit)}</span>
                                   </p>
-                                  <p className="text-gray-500">
-                                    {row.percentage.toFixed(1)}%
+                                  <p className="flex justify-between gap-6 text-gray-600">
+                                    <span>{t.paidOrders}</span>
+                                    <span className="font-semibold text-gray-900 tabular">{row.orders}</span>
                                   </p>
                                 </div>
                               );
                             }}
                           />
-                          <Legend />
-                          <Bar
-                            dataKey="value"
-                            name={t.orders}
-                            radius={[4, 4, 0, 0]}
-                            barSize={38}
-                          >
-                            {orderStatusChartRows.map((entry) => (
-                              <Cell
-                                key={entry.key}
-                                fill={STATUS_COLORS[entry.key]}
+                          <Area
+                            type="monotone"
+                            dataKey="revenue"
+                            stroke="#f43f5e"
+                            strokeWidth={2}
+                            fill="url(#dashSales)"
+                            name={t.totalSales}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="profit"
+                            stroke="#10b981"
+                            strokeWidth={2}
+                            fill="url(#dashProfit)"
+                            name={t.profit}
+                            activeDot={{ r: 4 }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-[280px] flex-col items-center justify-center text-center">
+                        <BarChart3 className="mb-2 h-10 w-10 text-gray-300" aria-hidden="true" />
+                        <p className="text-sm text-gray-500">{t.noRevenueData}</p>
+                      </div>
+                    )}
+                  </Panel>
+
+                  <Panel
+                    title={t.orderStatusDistribution}
+                    aside={
+                      <span className="text-xs font-medium text-gray-500 tabular">
+                        {stats.totalOrders} {t.orders}
+                      </span>
+                    }
+                  >
+                    {stats.totalOrders > 0 ? (
+                      <>
+                        {/* One stacked bar reads faster than five columns. */}
+                        <div className="mb-5 flex h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                          {orderStatusChartRows
+                            .filter((row) => row.value > 0)
+                            .map((row) => (
+                              <div
+                                key={row.key}
+                                title={`${row.name}: ${row.value}`}
+                                style={{
+                                  width: `${row.percentage}%`,
+                                  backgroundColor: STATUS_COLORS[row.key],
+                                }}
                               />
                             ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-16">
-                        <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noOrderData}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Daily Orders Trend Line Chart */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.dailyOrdersTrend}
-                    </h2>
-                    {dailyRevenueData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={320}>
-                        <LineChart
-                          data={dailyRevenueData}
-                          margin={{ top: 8, right: 8, bottom: 8 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#e5e7eb"
-                          />
-                          <XAxis
-                            dataKey="date"
-                            {...timeAxisProps(dailyRevenueData.length)}
-                          />
-                          <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#fff",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "8px",
-                            }}
-                            formatter={(value?: number) =>
-                              value !== undefined
-                                ? [`${value} ${t.orders}`, t.orders]
-                                : ["N/A", t.orders]
-                            }
-                          />
-                          <Legend />
-                          <Line
-                            type="monotone"
-                            dataKey="orders"
-                            stroke="#8b5cf6"
-                            strokeWidth={2}
-                            // Per-point dots turn into a solid smear once the
-                            // series is long; drop them and keep the hover dot.
-                            dot={
-                              dailyRevenueData.length <= 40
-                                ? { fill: "#8b5cf6", r: 4 }
-                                : false
-                            }
-                            activeDot={{ r: 6 }}
-                            name={t.dailyOrders}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-16">
-                        <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noOrderData}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Retail analytics: margin and channel */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  <NetMarginChart data={netMarginData} />
-                  <ChannelSplitChart data={channelSplit} />
-                </div>
-
-                {/* Retail analytics: size performance */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  <SellThroughBySizeChart data={sizeSellThrough} />
-                  <ReturnRateBySizeChart data={returnRateBySize} />
-                </div>
-
-                {/* Retail analytics: staff attribution */}
-                <div className="mb-8">
-                  <StaffPerformanceChart data={staffPerformance} />
-                </div>
-
-                {/* Charts and Tables */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                  {/* Top Selling Products */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.topSellingProducts}
-                    </h2>
-                    {topProducts.length > 0 ? (
-                      <div className="space-y-4">
-                        {topProducts.map((product, index) => (
-                          <div
-                            key={product.id}
-                            className="flex items-center justify-between p-4 bg-gray-50/70 hover:bg-gray-50 rounded-xl transition-colors"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <span className="flex items-center justify-center w-8 h-8 text-gray-900 bg-white border border-gray-200 rounded-full text-sm font-semibold shadow-sm">
-                                #{index + 1}
+                        </div>
+                        <ul className="space-y-3">
+                          {orderStatusChartRows.map((row) => (
+                            <li key={row.key} className="flex items-center gap-3 text-sm">
+                              <span
+                                className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                                style={{ backgroundColor: STATUS_COLORS[row.key] }}
+                                aria-hidden="true"
+                              />
+                              <span className="flex-1 text-gray-600">{row.name}</span>
+                              <span className="font-semibold text-gray-900 tabular">{row.value}</span>
+                              <span className="w-12 text-right text-xs text-gray-400 tabular">
+                                {row.percentage.toFixed(0)}%
                               </span>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {product.name}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {product.category}
-                                </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <div className="flex h-[240px] flex-col items-center justify-center text-center">
+                        <ShoppingCart className="mb-2 h-10 w-10 text-gray-300" aria-hidden="true" />
+                        <p className="text-sm text-gray-500">{t.noOrderData}</p>
+                      </div>
+                    )}
+                  </Panel>
+                </div>
+
+                {/* ================= Payments, products, activity ================= */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                  <Panel title={t.paymentMethodsBreakdown}>
+                    {paymentTotal > 0 ? (
+                      <ul className="space-y-4">
+                        {paymentRows.map((row) => {
+                          const share = (row.value / paymentTotal) * 100;
+                          const Icon = row.icon;
+                          return (
+                            <li key={row.key}>
+                              <div className="mb-1.5 flex items-center gap-2.5 text-sm">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                                  <Icon className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                                <span className="flex-1 font-medium text-gray-700">{row.label}</span>
+                                <span className="font-semibold text-gray-900 tabular">
+                                  {formatPrice(row.value)}
+                                </span>
+                                <span className="w-10 text-right text-xs text-gray-400 tabular">
+                                  {share.toFixed(0)}%
+                                </span>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-bold text-gray-900">
-                                {formatPrice(product.revenue)}
+                              <div className="ml-[38px] h-1.5 overflow-hidden rounded-full bg-gray-100">
+                                <div
+                                  className="h-full rounded-full bg-brand"
+                                  style={{ width: `${share}%` }}
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="py-10 text-center text-sm text-gray-500">{t.noSalesData}</p>
+                    )}
+                  </Panel>
+
+                  <Panel
+                    title={t.topSellingProducts}
+                    aside={
+                      <span className="text-xs font-medium text-gray-500 tabular">
+                        {stats.totalItemsSold} {t.itemsSold}
+                      </span>
+                    }
+                  >
+                    {topProducts.length > 0 ? (
+                      <ol className="space-y-1">
+                        {topProducts.slice(0, 5).map((product, index) => (
+                          <li
+                            key={product.id}
+                            className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-gray-50"
+                          >
+                            <span
+                              className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                                index === 0
+                                  ? "bg-brand text-white"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}
+                            >
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-gray-900" title={product.name}>
+                                {product.name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 tabular">
                                 {product.quantitySold} {t.sold}
                               </p>
-                              <p className="text-xs text-green-600">
-                                {t.profit}: {formatPrice(product.profit)}
-                              </p>
                             </div>
-                          </div>
+                            <span className="text-sm font-semibold text-gray-900 tabular">
+                              {formatPrice(product.revenue)}
+                            </span>
+                          </li>
                         ))}
-                      </div>
+                      </ol>
                     ) : (
-                      <div className="text-center py-8">
-                        <Package className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noSalesData}</p>
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <Package className="mb-2 h-10 w-10 text-gray-300" aria-hidden="true" />
+                        <p className="text-sm text-gray-500">{t.noSalesData}</p>
                       </div>
                     )}
-                  </div>
+                  </Panel>
 
-                  {/* Recent Activity */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                      {t.recentActivity}
-                    </h2>
+                  <Panel title={t.recentActivity}>
                     {recentActivity.length > 0 ? (
-                      <div className="divide-y divide-gray-100">
-                        {recentActivity.map((activity) => (
-                          <div
-                            key={activity.id}
-                            className="flex items-start gap-3 py-4"
+                      <ul className="space-y-1">
+                        {recentActivity.slice(0, 6).map((activity) => (
+                          <li
+                            key={`${activity.type}-${activity.id}`}
+                            className="flex items-center gap-3 rounded-xl px-2 py-2"
                           >
-                            <div className="flex-shrink-0 mt-1">
-                              <div className="h-9 w-9 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
-                                {getActivityIcon(
-                                  activity.type,
-                                  activity.status,
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">
+                            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50">
+                              {getActivityIcon(activity.type, activity.status)}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm text-gray-800" title={activity.description}>
                                 {activity.description}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-400">
                                 {formatTimeAgo(activity.timestamp)}
                               </p>
                             </div>
-                            {activity.amount && (
-                              <div className="flex-shrink-0">
-                                <p className="text-sm font-medium text-gray-900">
-                                  {formatPrice(activity.amount)}
-                                </p>
-                              </div>
+                            {activity.amount !== undefined && (
+                              <span className="text-sm font-semibold text-gray-900 tabular">
+                                {formatPrice(activity.amount)}
+                              </span>
                             )}
-                          </div>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     ) : (
-                      <div className="text-center py-8">
-                        <Clock className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">{t.noRecentActivity}</p>
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <Clock className="mb-2 h-10 w-10 text-gray-300" aria-hidden="true" />
+                        <p className="text-sm text-gray-500">{t.noRecentActivity}</p>
                       </div>
                     )}
-                  </div>
+                  </Panel>
                 </div>
-              </>
+
+                {/* ================= Detailed analytics (on demand) ================= */}
+                <section className="rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setShowInsights((open) => !open)}
+                    aria-expanded={showInsights}
+                    aria-controls="dashboard-insights"
+                    className="flex w-full items-center justify-between gap-4 rounded-2xl px-5 py-4 text-left hover:bg-gray-50/60"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+                        <BarChart3 className="h-[18px] w-[18px]" aria-hidden="true" />
+                      </span>
+                      <span>
+                        <span className="block text-base font-semibold text-gray-900">
+                          {t.detailedAnalytics}
+                        </span>
+                        <span className="block text-xs text-gray-500">
+                          {t.detailedAnalyticsHint}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1 text-sm font-semibold text-rose-600">
+                      {showInsights ? t.hideDetails : t.showDetails}
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${showInsights ? "rotate-180" : ""}`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </button>
+                </section>
+
+                {showInsights && (
+                  <div id="dashboard-insights" className="space-y-6">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                      <NetMarginChart data={netMarginData} />
+                      <ChannelSplitChart data={channelSplit} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                      <PromotionRevenueByProductChart data={promotedProducts} />
+                      <ChartCard
+                        title={t.dailyOrdersTrend}
+                        isEmpty={!hasSales}
+                        emptyIcon={<Calendar className="h-12 w-12" />}
+                        emptyMessage={t.noOrderData}
+                      >
+                        <ResponsiveContainer width="100%" height={320}>
+                          <LineChart
+                            data={dailyRevenueData}
+                            margin={{ top: 8, right: 8, bottom: 8 }}
+                          >
+                            <CartesianGrid vertical={false} stroke="#f1f1f4" />
+                            <XAxis
+                              dataKey="date"
+                              {...timeAxisProps(dailyRevenueData.length)}
+                            />
+                            <YAxis
+                              allowDecimals={false}
+                              tick={{ fontSize: 12 }}
+                              stroke="#6b7280"
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: "#fff",
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "8px",
+                              }}
+                              formatter={(value?: number) =>
+                                value !== undefined
+                                  ? [`${value} ${t.orders}`, t.dailyOrders]
+                                  : ["N/A", t.dailyOrders]
+                              }
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="orders"
+                              stroke="#ec4899"
+                              strokeWidth={2}
+                              dot={
+                                dailyRevenueData.length <= 40
+                                  ? { fill: "#ec4899", r: 3 }
+                                  : false
+                              }
+                              activeDot={{ r: 5 }}
+                              name={t.dailyOrders}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </ChartCard>
+                    </div>
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                      <SellThroughBySizeChart data={sizeSellThrough} />
+                      <ReturnRateBySizeChart data={returnRateBySize} />
+                    </div>
+                    <StaffPerformanceChart data={staffPerformance} />
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </main>

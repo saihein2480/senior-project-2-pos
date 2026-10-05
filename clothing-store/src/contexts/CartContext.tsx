@@ -16,7 +16,12 @@ import {
   AppliedCoupon,
 } from "@/types/cart";
 import type { ColorVariant } from "@/types/stock";
-import { doc, onSnapshot, type DocumentSnapshot } from "firebase/firestore";
+import {
+  doc,
+  getDocFromServer,
+  onSnapshot,
+  type DocumentSnapshot,
+} from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase";
 import { cartSignature } from "@/lib/cartSignature";
 import { useAuth } from "@/contexts/AuthContext";
@@ -617,6 +622,13 @@ export function CartProvider({ children }: CartProviderProps) {
    * Empty the cart after a sale. recordSale already took the stock, so the
    * sold products are re-read and passed to subscribeToStockReads listeners
    * (the till shows the new numbers without a reload).
+   *
+   * The re-read goes to the server, not through the local cache. Every sold
+   * product has a live shelf listener while it is in the cart, and a plain
+   * getDoc answers from that listener's copy, which right after the commit
+   * usually still holds the pre-sale shelf (the change reaches the listener
+   * a moment later). Emptying the cart then tears the listener down before
+   * that change lands, so the till kept showing the old stock.
    */
   const completePurchase = () => {
     const soldStockIds = Array.from(
@@ -632,14 +644,28 @@ export function CartProvider({ children }: CartProviderProps) {
       appliedCoupon: null,
     });
 
+    const firestore = db;
     soldStockIds.forEach((stockId) => {
-      StockService.getStockById(stockId)
-        .then((stock) => {
-          if (stock) notifyStockRead(stockId, stock.colorVariants || []);
-        })
-        .catch((error) => {
-          console.error("Could not refresh stock after the sale:", error);
-        });
+      const fresh = firestore
+        ? getDocFromServer(doc(firestore, "stocks", stockId)).then((snap) => {
+            if (!snap.exists()) return;
+            const raw = (snap.data() as { colorVariants?: unknown }).colorVariants;
+            notifyStockRead(stockId, Array.isArray(raw) ? (raw as ColorVariant[]) : []);
+          })
+        : Promise.reject(new Error("Firestore is not initialized"));
+
+      fresh.catch((serverError) => {
+        // Offline or the server read failed: fall back to the normal read,
+        // which is at worst the cached shelf.
+        console.warn("Server read after the sale failed, using a cached read:", serverError);
+        StockService.getStockById(stockId)
+          .then((stock) => {
+            if (stock) notifyStockRead(stockId, stock.colorVariants || []);
+          })
+          .catch((error) => {
+            console.error("Could not refresh stock after the sale:", error);
+          });
+      });
     });
   };
 

@@ -9,6 +9,7 @@ import {
   updateCustomerSchema,
 } from "@/server/customersAdmin";
 import { parseJson } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 
 // Access:
 //   GET / PUT - every POS role (Doc: "Edit Customer Info"). PUT only accepts
@@ -84,6 +85,16 @@ export async function PUT(
 
     const updatedCustomer = await updateCustomer(id, body);
 
+    await auditCaller(auth.caller, {
+      action: "customer.update",
+      targetCollection: "customers",
+      targetId: id,
+      details: {
+        name: updatedCustomer.displayName || updatedCustomer.email || null,
+        fields: Object.keys(body ?? {}),
+      },
+    });
+
     const response: CustomerResponse = {
       success: true,
       data: updatedCustomer,
@@ -119,7 +130,17 @@ export async function DELETE(
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Read the name first: after the delete there is nothing left to show.
+    const existing = await getCustomerById(id).catch(() => null);
+
     await deleteCustomer(id);
+
+    await auditCaller(auth.caller, {
+      action: "customer.delete",
+      targetCollection: "customers",
+      targetId: id,
+      details: { name: existing?.displayName || existing?.email || null },
+    });
 
     const response: CustomerResponse = {
       success: true,

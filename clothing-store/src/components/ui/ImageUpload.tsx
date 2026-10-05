@@ -121,7 +121,7 @@ export function ImageUpload({
         {value ? (
           <div className="flex flex-col items-center w-full">
             <div className="relative w-full">
-              <div className="relative w-full aspect-[6/5] rounded-xl overflow-hidden border-2 border-gray-200 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 hover:border-blue-300 transition-colors group">
+              <div className="relative w-full aspect-[6/5] rounded-xl overflow-hidden border-2 border-gray-200 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 hover:border-rose-300 transition-colors group">
                 <img
                   src={value}
                   alt="Uploaded image"
@@ -169,10 +169,10 @@ export function ImageUpload({
               disabled={disabled || isUploading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
             />
-            <div className="w-full aspect-[6/5] border border-gray-300 rounded-xl flex flex-col items-center justify-center hover:border-blue-400 hover:bg-cyan-50/30 transition-all bg-gray-50 p-2 text-center">
+            <div className="w-full aspect-[6/5] border border-gray-300 rounded-xl flex flex-col items-center justify-center hover:border-rose-400 hover:bg-rose-50/30 transition-all bg-gray-50 p-2 text-center">
               {isUploading ? (
                 <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                  <Loader2 className="h-6 w-6 text-rose-500 animate-spin" />
                   <p className="text-xs text-gray-500 font-medium">Uploading...</p>
                 </div>
               ) : (

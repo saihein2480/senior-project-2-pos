@@ -33,12 +33,10 @@ const TONE: Record<Tone, { soft: string; text: string; ring: string; solid: stri
 // ---------------------------------------------------------------------------
 
 export function RequestPageHeader({
-  icon: Icon,
   title,
   description,
   actions,
 }: {
-  icon: LucideIcon;
   title: string;
   description?: string;
   /** Right-hand side: e.g. a live indicator or a refresh button. */
@@ -46,14 +44,9 @@ export function RequestPageHeader({
 }) {
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/20">
-          <Icon className="h-6 w-6" aria-hidden="true" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{title}</h1>
-          {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{title}</h1>
+        {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </header>

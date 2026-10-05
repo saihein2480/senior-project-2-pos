@@ -644,7 +644,7 @@ function OwnerSettingsContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar

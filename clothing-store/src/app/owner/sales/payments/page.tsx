@@ -542,7 +542,7 @@ function PaymentsPageContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="payments"
@@ -600,7 +600,7 @@ function PaymentsPageContent() {
                       {paymentStats.totalCount} transactions
                     </p>
                   </div>
-                  <div className="h-10 w-10 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-200 flex items-center justify-center shrink-0">
+                  <div className="h-10 w-10 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shrink-0">
                     <DollarSign className="h-5 w-5" />
                   </div>
                 </div>
@@ -1023,7 +1023,7 @@ function PaymentsPageContent() {
               {loading ? (
                 <div className="p-12 text-center">
                   <div className="flex justify-center mb-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-rose-200 border-t-rose-500"></div>
                   </div>
                   <p className="text-gray-600 text-lg font-medium">{t.loading}</p>
                 </div>

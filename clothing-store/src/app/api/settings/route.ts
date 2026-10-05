@@ -19,6 +19,7 @@ import {
   saveBusinessSettings,
 } from "@/server/settingsAdmin";
 import { parseJson, parseQuery } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 import { roundMoney } from "@/lib/money";
 
 // Access:
@@ -327,7 +328,24 @@ export async function POST(request: NextRequest) {
       currentBranch: body.currentBranch || "Main Branch",
     };
 
+    // What it was before, only to say which settings changed in the log.
+    const previous = (await getBusinessSettings().catch(() => null)) as
+      | Record<string, unknown>
+      | null;
+
     const savedSettings = await saveBusinessSettings(settingsData);
+
+    const changedFields = Object.keys(settingsData).filter(
+      (key) =>
+        JSON.stringify(previous?.[key] ?? null) !==
+        JSON.stringify((settingsData as Record<string, unknown>)[key] ?? null),
+    );
+    await auditCaller(auth.caller, {
+      action: "settings.update",
+      targetCollection: "settings",
+      targetId: "main",
+      details: { fields: changedFields.slice(0, 25) },
+    });
 
     const response: SettingsResponse = {
       success: true,
@@ -354,6 +372,12 @@ export async function PUT(request: NextRequest) {
     parseQuery(request, settingsActionSchema);
 
     const resetSettings = await resetBusinessSettings();
+
+    await auditCaller(auth.caller, {
+      action: "settings.reset",
+      targetCollection: "settings",
+      targetId: "main",
+    });
 
     const response: SettingsResponse = {
       success: true,
@@ -394,6 +418,19 @@ export async function PATCH(request: NextRequest) {
       ...rest,
       currentBranch: body.currentBranch,
     });
+
+    if (current.currentBranch !== body.currentBranch) {
+      await auditCaller(auth.caller, {
+        action: "settings.defaultBranch",
+        targetCollection: "settings",
+        targetId: "main",
+        details: {
+          name: body.currentBranch,
+          previous: current.currentBranch ?? null,
+        },
+      });
+    }
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     return handleRouteError(

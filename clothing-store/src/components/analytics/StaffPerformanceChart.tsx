@@ -97,7 +97,7 @@ export function StaffPerformanceChart({ data }: StaffPerformanceChartProps) {
             {data.map((row) => (
               <Cell
                 key={row.name}
-                fill={row.isUnattributed ? "#d1d5db" : "#3b82f6"}
+                fill={row.isUnattributed ? "#d1d5db" : "#f43f5e"}
               />
             ))}
           </Bar>

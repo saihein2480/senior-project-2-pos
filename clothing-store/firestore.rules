@@ -191,7 +191,9 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Written by the order actions (Admin SDK) with the verified caller.
+    // Written only by the server (Admin SDK) with the verified caller: order
+    // actions, the CRUD API routes and /api/activity. The owner's Activity
+    // page reads it through GET /api/activity, not from the browser.
     match /auditLog/{entryId} {
       allow read: if isManagement();
       allow write: if false;

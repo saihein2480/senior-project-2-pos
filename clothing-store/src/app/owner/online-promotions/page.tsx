@@ -336,7 +336,7 @@ function OnlinePromotionsContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="online-promotions"

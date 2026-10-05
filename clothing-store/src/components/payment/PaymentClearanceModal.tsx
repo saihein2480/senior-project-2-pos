@@ -1324,9 +1324,9 @@ export function PaymentClearanceModal({
 
     return (
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-3 md:p-4 lg:p-6">
-        <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col border-2 border-pink-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full h-full max-w-[95vw] sm:max-w-xl md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl max-h-[96vh] md:max-h-[94vh] lg:max-h-[92vh] flex flex-col border border-gray-200">
           {/* Receipt Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 bg-brand flex-shrink-0 rounded-t-2xl">
             <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">
               {t.paymentComplete}
             </h2>
@@ -1347,7 +1347,7 @@ export function PaymentClearanceModal({
           {/* Receipt Preview */}
           <div className="p-3 sm:p-4 lg:p-6 flex-1 flex flex-col overflow-hidden bg-white/50">
             {/* Thermal Receipt Preview */}
-            <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl shadow-md flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
+            <div className="bg-rose-50/60 border border-gray-200 rounded-xl shadow-md flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4">
               <div
                 className={`mx-auto bg-white ${getReceiptWidth(receiptSize)} p-3 sm:p-4 lg:p-5 xl:p-6 text-black`}
                 style={{
@@ -1502,7 +1502,7 @@ export function PaymentClearanceModal({
               <button
                 onClick={handlePrintReceipt}
                 disabled={isProcessing}
-                className="flex-1 bg-gradient-to-r from-rose-500 to-pink-500 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:from-rose-600 hover:to-pink-600 transition-all text-sm lg:text-base font-bold shadow-md hover:shadow-lg"
+                className="flex-1 bg-brand text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-brand-strong transition-all text-sm lg:text-base font-bold shadow-md hover:shadow-lg"
               >
                 <span className="text-white">{t.printReceipt}</span>
               </button>
@@ -1514,7 +1514,7 @@ export function PaymentClearanceModal({
                   if (transactionId) router.push("/owner/home");
                 }}
                 disabled={isProcessing}
-                className="flex-1 bg-white text-gray-700 border-2 border-pink-300 px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-pink-50 transition-all text-sm lg:text-base font-bold shadow-sm hover:shadow-md"
+                className="flex-1 bg-white text-gray-700 border border-gray-200 px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 lg:py-3 rounded-xl hover:bg-rose-50 transition-all text-sm lg:text-base font-bold shadow-sm hover:shadow-md"
               >
                 <span>{t.skipPrint}</span>
               </button>
@@ -1527,9 +1527,9 @@ export function PaymentClearanceModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 md:p-4">
-      <div className="bg-gradient-to-br from-white to-pink-50 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border-2 border-pink-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 md:p-4 border-b-2 border-pink-200 bg-gradient-to-r from-rose-500 to-pink-500 flex-shrink-0 rounded-t-2xl">
+        <div className="flex items-center justify-between p-3 md:p-4 bg-brand flex-shrink-0 rounded-t-2xl">
           <div className="flex items-center space-x-2 md:space-x-3">
             <h2 className="text-lg md:text-xl font-bold text-white">
               {t.paymentClearance}
@@ -1555,10 +1555,10 @@ export function PaymentClearanceModal({
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
           {/* Left Side - Customer Info & Payment Summary */}
-          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-pink-200 overflow-y-auto bg-white/50">
+          <div className="w-full md:w-3/5 p-3 md:p-4 md:border-r-2 border-gray-200 overflow-y-auto bg-white/50">
             {/* Customer Information */}
-            <div className="flex items-center space-x-2 md:space-x-3 mb-3 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
-              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
+            <div className="flex items-center space-x-2 md:space-x-3 mb-3 bg-white rounded-xl p-3 border border-gray-200 shadow-sm">
+              <div className="h-7 w-7 md:h-8 md:w-8 rounded-full bg-brand flex items-center justify-center shadow-sm">
                 {customer?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1587,7 +1587,7 @@ export function PaymentClearanceModal({
             </div>
 
             {/* Items Summary */}
-            <div className="mb-4 bg-white rounded-xl p-3 border border-pink-200 shadow-sm">
+            <div className="mb-4 bg-white rounded-xl p-3 border border-gray-200 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-rose-600" />
                 {t.items} ({items.length})
@@ -1623,7 +1623,7 @@ export function PaymentClearanceModal({
             </div>
 
             {/* Payment Summary */}
-            <div className="space-y-2 mb-4 bg-gradient-to-br from-rose-50 to-pink-100 rounded-xl p-3 border-2 border-pink-300 shadow-md">
+            <div className="space-y-2 mb-4 bg-rose-50/60 rounded-xl p-3 border border-gray-200 shadow-md">
               {/* Subtotal */}
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-700 font-medium">{t.subtotal}</span>
@@ -1734,7 +1734,7 @@ export function PaymentClearanceModal({
 
               {/* Tax */}
               {tax > 0 && (
-                <div className="flex justify-between items-center text-xs pt-1 border-t border-pink-300">
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-rose-100">
                   <span className="text-gray-700 font-medium">{t.tax}</span>
                   <span className="text-gray-900 font-semibold">
                     +{formatPrice(tax)}
@@ -1744,7 +1744,7 @@ export function PaymentClearanceModal({
 
               {/* Delivery fee (COD only, from Settings) */}
               {selectedPaymentMethod === "cod" && (
-                <div className="flex justify-between items-center text-xs pt-1 border-t border-pink-300">
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-rose-100">
                   <span className="text-gray-700 font-medium flex items-center gap-1">
                     <Truck className="h-3 w-3" aria-hidden="true" />
                     {t.deliveryFeeLabel}
@@ -1756,7 +1756,7 @@ export function PaymentClearanceModal({
               )}
 
               {/* Total */}
-              <div className="flex justify-between items-center py-2 border-t-2 border-pink-300">
+              <div className="flex justify-between items-center py-2 border-t border-gray-200">
                 <span className="text-sm font-bold text-gray-900">
                   {t.total}
                 </span>
@@ -1801,8 +1801,8 @@ export function PaymentClearanceModal({
                   onClick={() => setSelectedPaymentMethod("cash")}
                   className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center space-y-1 shadow-sm hover:shadow-md ${
                     selectedPaymentMethod === "cash"
-                      ? "border-rose-500 bg-gradient-to-br from-rose-50 to-pink-100 text-rose-700"
-                      : "border-pink-200 hover:border-pink-300 text-gray-700 bg-white"
+                      ? "border-rose-500 bg-rose-50/60 text-rose-700"
+                      : "border-gray-200 hover:border-rose-200 text-gray-700 bg-white"
                   }`}
                 >
                   <CreditCard className="h-5 w-5" />
@@ -1814,8 +1814,8 @@ export function PaymentClearanceModal({
                   onClick={() => setSelectedPaymentMethod("cod")}
                   className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center space-y-1 shadow-sm hover:shadow-md ${
                     selectedPaymentMethod === "cod"
-                      ? "border-rose-500 bg-gradient-to-br from-rose-50 to-pink-100 text-rose-700"
-                      : "border-pink-200 hover:border-pink-300 text-gray-700 bg-white"
+                      ? "border-rose-500 bg-rose-50/60 text-rose-700"
+                      : "border-gray-200 hover:border-rose-200 text-gray-700 bg-white"
                   }`}
                 >
                   <Truck className="h-5 w-5" />
@@ -1828,7 +1828,7 @@ export function PaymentClearanceModal({
           {/* Right Side - Calculator */}
           <div className="w-2/5 p-3 overflow-y-auto bg-white/50">
             {/* Amount Display */}
-            <div className="bg-gradient-to-br from-rose-50 to-pink-100 border-2 border-pink-300 rounded-xl p-3 mb-3 shadow-sm">
+            <div className="bg-rose-50/60 border border-gray-200 rounded-xl p-3 mb-3 shadow-sm">
               <input
                 type="number"
                 value={calculatorDisplay === "0" ? "" : calculatorDisplay}
@@ -1931,7 +1931,7 @@ export function PaymentClearanceModal({
               className={`w-full p-3 rounded-xl font-black text-white transition-all shadow-md hover:shadow-lg ${
                 isProcessing || isCashShort
                   ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600"
+                  : "bg-brand hover:bg-brand-strong"
               }`}
             >
               {isProcessing ? t.processing : t.payNow}

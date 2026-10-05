@@ -10,6 +10,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useViewMode } from "@/contexts/ViewModeContext";
 import { type BranchRef, NO_BRANCH_NAME } from "@/lib/branch";
+import { OPEN_POS_CART_EVENT } from "@/lib/posCartEvents";
 import { toast } from "react-hot-toast";
 import { RoleViewSwitcher } from "./RoleViewSwitcher";
 import {
@@ -17,12 +18,10 @@ import {
   ChevronDown,
   ShoppingCart,
   Store,
-  User,
   Menu,
   Bell,
   Clock,
   Check,
-  Trash2,
   XCircle,
   RotateCcw,
   AlertCircle,
@@ -41,6 +40,95 @@ interface TopNavBarProps {
   onMenuToggle?: () => void;
 }
 
+/**
+ * Live time and date for the till.
+ *
+ * Rendered only after mount: the server's clock (and time zone) would not
+ * match the browser's, which would otherwise trip a hydration mismatch.
+ */
+function LiveClock() {
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!now) return <div className="h-10 w-40" aria-hidden="true" />;
+
+  const time = now.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const date = now.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
+        <Clock className="w-5 h-5" aria-hidden="true" />
+      </div>
+      <div className="leading-tight">
+        <p className="text-sm font-semibold text-gray-900 tabular">{time}</p>
+        <p className="text-xs text-gray-500 whitespace-nowrap">{date}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Two-to-three option switch; one tap instead of opening a menu. */
+function SegmentedControl<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  fullWidth = false,
+}: {
+  label: string;
+  options: { value: T; label: string; title?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  fullWidth?: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={`items-center rounded-xl bg-gray-100 p-1 ${
+        fullWidth ? "flex w-full" : "inline-flex"
+      }`}
+    >
+      {options.map((option) => {
+        const isActive = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            title={option.title}
+            onClick={() => onChange(option.value)}
+            className={`h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              fullWidth ? "flex-1" : ""
+            } ${
+              isActive
+                ? "bg-white text-rose-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TopNavBar({
   onCartModalStateChange,
   onMenuToggle,
@@ -49,12 +137,7 @@ export function TopNavBar({
   // Paired with the Home menu entry in the Sidebar - one owner setting drives both.
   const { isPosSurfaceVisible } = usePosSurfaceVisibility();
   const { getCartItemCount } = useCart();
-  const {
-    selectedCurrency,
-    setSelectedCurrency,
-    defaultCurrency,
-    getCurrencySymbol,
-  } = useCurrency();
+  const { selectedCurrency, setSelectedCurrency } = useCurrency();
   const {
     branch: currentBranch,
     branches: shops,
@@ -64,13 +147,9 @@ export function TopNavBar({
   const isLoadingShops = !branchesLoaded;
   const { language, setLanguage, t } = useLanguage();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
-  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
-  const languageDropdownRef = useRef<HTMLDivElement>(null);
-  const currencyDropdownRef = useRef<HTMLDivElement>(null);
   const branchDropdownRef = useRef<HTMLDivElement>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
   const notificationDropdownRef = useRef<HTMLDivElement>(null);
@@ -84,28 +163,38 @@ export function TopNavBar({
   );
 
   // Get view mode context for role switching
-  const { viewAsRole, setViewAsRole, isViewingAsOtherRole } = useViewMode();
+  const { viewAsRole, setViewAsRole } = useViewMode();
 
-  const languages = [
-    { name: "English", flag: "🇺🇸", code: "EN", value: "en" as const },
-    { name: "Burmese", flag: "🇲🇲", code: "MM", value: "my" as const },
+  const languageOptions = [
+    { value: "en" as const, label: "EN", title: "English" },
+    { value: "my" as const, label: "မြန်မာ", title: "Burmese" },
   ];
 
-  const currencies = [
-    { code: "MMK", name: "Myanmar Kyat", symbol: "Ks" },
-    { code: "THB", name: "Thai Baht", symbol: "฿" },
+  const currencyOptions = [
+    { value: "MMK" as const, label: "Ks MMK", title: "Myanmar Kyat" },
+    { value: "THB" as const, label: "฿ THB", title: "Thai Baht" },
   ];
-
-  const handleLanguageChange = (langValue: "en" | "my") => {
-    setLanguage(langValue);
-    setIsLanguageDropdownOpen(false);
-  };
 
   const handleCurrencyChange = (currency: "THB" | "MMK") => {
     setSelectedCurrency(currency);
-    setIsCurrencyDropdownOpen(false);
-    console.log("Currency changed to:", currency);
   };
+
+  const openCart = () => {
+    setIsCartModalOpen(true);
+    onCartModalStateChange?.(true);
+  };
+
+  // Other parts of the page (the POS terminal's order panel) open this one
+  // checkout instance instead of mounting their own.
+  useEffect(() => {
+    const handleOpenRequest = () => {
+      setIsCartModalOpen(true);
+      onCartModalStateChange?.(true);
+    };
+    window.addEventListener(OPEN_POS_CART_EVENT, handleOpenRequest);
+    return () =>
+      window.removeEventListener(OPEN_POS_CART_EVENT, handleOpenRequest);
+  }, [onCartModalStateChange]);
 
   /**
    * Switch the working branch.
@@ -158,18 +247,6 @@ export function TopNavBar({
         setIsProfileDropdownOpen(false);
       }
       if (
-        languageDropdownRef.current &&
-        !languageDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsLanguageDropdownOpen(false);
-      }
-      if (
-        currencyDropdownRef.current &&
-        !currencyDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsCurrencyDropdownOpen(false);
-      }
-      if (
         branchDropdownRef.current &&
         !branchDropdownRef.current.contains(event.target as Node)
       ) {
@@ -187,333 +264,309 @@ export function TopNavBar({
     };
   }, []);
 
+  const branchLabel =
+    currentBranch.name === NO_BRANCH_NAME ? t.noBranch : currentBranch.name;
+
+  // Display only (who is signed in); access is gated elsewhere.
+  const roleLabels: Record<string, string> = {
+    owner: t.owner,
+    manager: t.manager,
+    staff: t.staff_role,
+  };
+  const roleLabel = roleLabels[user?.role ?? "staff"] ?? t.staff;
+  const displayName =
+    user?.displayName || user?.email?.split("@")[0] || roleLabel;
+  const initials =
+    displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "U";
+
+  const cartCount = getCartItemCount();
+
   // The sticky bar sits at z-30: above in-page content such as product card
   // badges (z-10/z-20), but below the mobile sidebar overlay (z-40) and drawer
   // (z-50) so those can still cover it.
   return (
-    <header className="sticky top-0 z-30 bg-white shadow-md border-b border-gray-200">
-      <div className="px-2 sm:px-4">
-        <div className="flex justify-between items-center h-16 px-2 sm:px-4">
-          <div className="flex items-center">
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200/80">
+      <div className="h-16 px-3 sm:px-5 flex items-center justify-between gap-3">
+        {/* Left: menu, clock, branch */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={() => onMenuToggle?.()}
+            className="h-10 w-10 inline-flex items-center justify-center rounded-xl text-gray-700 hover:bg-gray-100 lg:hidden flex-shrink-0"
+            aria-label="Toggle menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          <div className="hidden md:block">
+            <LiveClock />
+          </div>
+
+          <span className="hidden md:block h-8 w-px bg-gray-200" aria-hidden="true" />
+
+          {/* Branch Selector */}
+          <div className="relative min-w-0" ref={branchDropdownRef}>
             <button
-              onClick={() => onMenuToggle?.()}
-              className="mr-2 sm:mr-3 p-2 rounded-md hover:bg-gray-100 lg:hidden"
-              aria-label="Toggle menu"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsBranchDropdownOpen(!isBranchDropdownOpen);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={isBranchDropdownOpen}
+              className="flex items-center gap-2 h-10 pl-2 pr-2.5 max-w-full bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 transition-colors"
+              title={t.clickToChangeBranch}
             >
-              <Menu className="w-6 h-6 text-gray-900" />
+              <span className="h-7 w-7 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
+                <Store className="w-4 h-4" aria-hidden="true" />
+              </span>
+              <span className="text-sm font-semibold text-gray-900 truncate max-w-[88px] sm:max-w-[160px]">
+                {branchLabel}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${
+                  isBranchDropdownOpen ? "rotate-180" : ""
+                }`}
+                aria-hidden="true"
+              />
             </button>
 
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 hidden xl:block">
-              {user?.displayName || user?.email || "Owner"}
-            </h1>
-          </div>
-          <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6">
-            {/* Branch Selector */}
-            <div className="relative" ref={branchDropdownRef}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsBranchDropdownOpen(!isBranchDropdownOpen);
-                }}
-                aria-haspopup="menu"
-                aria-expanded={isBranchDropdownOpen}
-                className="hidden sm:flex items-center space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 backdrop-blur-sm border border-gray-200 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 transition-all"
-                title={t.clickToChangeBranch}
+            {isBranchDropdownOpen && (
+              <div
+                role="menu"
+                aria-orientation="vertical"
+                className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 p-1.5 z-[9999]"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.preventDefault()}
               >
-                <Store className="w-4 h-4 text-gray-900" />
-                <span className="text-xs sm:text-sm font-medium text-gray-900 max-w-[80px] sm:max-w-none truncate">
-                  {currentBranch.name === NO_BRANCH_NAME
-                    ? t.noBranch
-                    : currentBranch.name}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-900 transition-transform ${
-                    isBranchDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isBranchDropdownOpen && (
-                <div
-                  role="menu"
-                  aria-orientation="vertical"
-                  className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-2xl border border-gray-300 py-1 z-[9999]"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  {isLoadingShops ? (
-                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
-                      {t.loadingBranches}
-                    </div>
-                  ) : shops.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-gray-500 text-center">
-                      {t.noBranchesAvailable}
-                    </div>
-                  ) : (
-                    <>
-                      {shops.map((shop) => {
-                        const isSelected = currentBranch.id === shop.id;
-                        return (
-                          <button
-                            key={shop.id}
-                            role="menuitem"
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleBranchChange(shop);
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors cursor-pointer ${
-                              isSelected
-                                ? "bg-pink-100 text-gray-900 font-medium"
-                                : "text-gray-700 hover:bg-gray-100"
+                <p className="px-3 pt-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  {t.branch}
+                </p>
+                {isLoadingShops ? (
+                  <div className="px-3 py-3 text-sm text-gray-500 text-center">
+                    {t.loadingBranches}
+                  </div>
+                ) : shops.length === 0 ? (
+                  <div className="px-3 py-3 text-sm text-gray-500 text-center">
+                    {t.noBranchesAvailable}
+                  </div>
+                ) : (
+                  shops.map((shop) => {
+                    const isSelected = currentBranch.id === shop.id;
+                    return (
+                      <button
+                        key={shop.id}
+                        role="menuitem"
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleBranchChange(shop);
+                        }}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm rounded-xl transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-rose-50 text-rose-700 font-semibold"
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Store
+                            className={`w-4 h-4 flex-shrink-0 ${
+                              isSelected ? "text-rose-500" : "text-gray-400"
                             }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Store className="w-4 h-4" />
-                              <span>{shop.name}</span>
-                            </div>
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-pink-600" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Date Display */}
-            <div className="hidden lg:block text-sm text-gray-900 font-medium">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "short",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-
-            {/* Main Currency Title */}
-            {/* <div className="hidden md:flex items-center space-x-1 px-3 py-2 bg-white flex-shrink-0">
-              <span className="text-sm text-gray-600 whitespace-nowrap">
-                {t.mainCurrency} {getCurrencySymbol(defaultCurrency)}{" "}
-                {defaultCurrency}
-              </span>
-            </div> */}
-
-            {/* Currency Selector (clean pill + simple dropdown) */}
-            <div className="relative" ref={currencyDropdownRef}>
-              <button
-                onClick={() =>
-                  setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)
-                }
-                aria-haspopup="menu"
-                aria-expanded={isCurrencyDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded-lg transition-all"
-              >
-                <span className="text-sm font-semibold text-gray-900">
-                  {currencies.find((c) => c.code === selectedCurrency)?.symbol}
-                </span>
-                <span className="text-xs text-gray-900 font-medium">
-                  {selectedCurrency}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-900 transition-transform ${
-                    isCurrencyDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isCurrencyDropdownOpen && (
-                <div
-                  role="menu"
-                  aria-orientation="vertical"
-                  className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
-                >
-                  {currencies.map((currency) => {
-                    const isSelected = selectedCurrency === currency.code;
-                    return (
-                      <button
-                        key={currency.code}
-                        role="menuitem"
-                        onClick={() =>
-                          handleCurrencyChange(currency.code as "THB" | "MMK")
-                        }
-                        className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                          isSelected
-                            ? "bg-pink-50 text-gray-700"
-                            : "text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex flex-col text-left">
-                          <span className="font-medium">{currency.code}</span>
-                          <span className="text-xs text-gray-500">
-                            {currency.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{currency.symbol}</span>
-                          {/* {isSelected && (
-                            <span className="text-cyan-600">✓</span>
-                          )} */}
-                        </div>
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{shop.name}</span>
+                        </span>
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-rose-600 flex-shrink-0" aria-hidden="true" />
+                        )}
                       </button>
                     );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Language Selector (compact pill + dropdown) */}
-            <div className="relative" ref={languageDropdownRef}>
-              <button
-                title={t.language}
-                onClick={() =>
-                  setIsLanguageDropdownOpen(!isLanguageDropdownOpen)
-                }
-                aria-haspopup="menu"
-                aria-expanded={isLanguageDropdownOpen}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 backdrop-blur-sm border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded-lg transition-all"
-              >
-                <span className="text-sm font-medium text-gray-900">
-                  {languages.find((l) => l.value === language)?.name}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-900 transition-transform ${
-                    isLanguageDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isLanguageDropdownOpen && (
-                <div
-                  role="menu"
-                  aria-orientation="vertical"
-                  className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
-                >
-                  {languages.map((lang) => {
-                    const isSelected = language === lang.value;
-                    return (
-                      <button
-                        key={lang.code}
-                        role="menuitem"
-                        onClick={() => handleLanguageChange(lang.value)}
-                        className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm transition-colors ${
-                          isSelected
-                            ? "bg-pink-50 text-gray-700"
-                            : "text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{lang.flag}</span>
-                          <div className="text-left">
-                            <div className="font-medium">{lang.name}</div>
-                            <div className="text-xs text-gray-500">
-                              {lang.code}
-                            </div>
-                          </div>
-                        </div>
-                        {/* {isSelected && <span className="text-cyan-600">✓</span>} */}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Role View Switcher (Owner only) */}
-            <RoleViewSwitcher
-              currentView={viewAsRole}
-              onViewChange={setViewAsRole}
-            />
-
-            {/* Shopping Cart. Hidden together with the Home menu entry when the
-                owner has turned off the walk-in POS in Settings. */}
-            {isPosSurfaceVisible && (
-              <button
-                type="button"
-                className="relative cursor-pointer focus:outline-none focus:ring-2 focus:ring-pink-300 rounded"
-                aria-label={`Shopping cart, ${getCartItemCount()} item(s)`}
-                onClick={() => {
-                  setIsCartModalOpen(true);
-                  onCartModalStateChange?.(true);
-                }}
-              >
-                <ShoppingCart className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                  {getCartItemCount()}
-                </span>
-              </button>
-            )}
-
-            {/* Notifications */}
-            <div className="relative" ref={notificationDropdownRef}>
-              <button
-                onClick={() => {
-                  const opening = !showNotificationDropdown;
-                  setShowNotificationDropdown(opening);
-                  // Clear the badge on open only, so closing the dropdown
-                  // cannot re-acknowledge anything that arrived while it was up.
-                  if (opening) markAllSeen();
-                }}
-                className="relative cursor-pointer focus:outline-none flex items-center"
-                aria-label={
-                  unseenCount > 0
-                    ? `${t.notifications} (${unseenCount})`
-                    : t.notifications
-                }
-                aria-haspopup="menu"
-                aria-expanded={showNotificationDropdown}
-              >
-                <Bell className="h-6 w-6 text-gray-900 hover:text-gray-800 transition-colors" />
-                {unseenCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {unseenCount > 99 ? "99+" : unseenCount}
-                  </span>
+                  })
                 )}
-              </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-              {/* Notification Dropdown */}
-              {showNotificationDropdown && (
-                <NotificationDropdown 
-                  onClose={() => setShowNotificationDropdown(false)} 
-                  triggerRef={notificationDropdownRef}
-                />
+        {/* Right: preferences, cart, notifications, profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+          <div className="hidden lg:block">
+            <SegmentedControl
+              label={t.currency}
+              options={currencyOptions}
+              value={selectedCurrency as "THB" | "MMK"}
+              onChange={handleCurrencyChange}
+            />
+          </div>
+
+          <div className="hidden xl:block">
+            <SegmentedControl
+              label={t.language}
+              options={languageOptions}
+              value={language}
+              onChange={setLanguage}
+            />
+          </div>
+
+          {/* Role View Switcher (Owner only) */}
+          <RoleViewSwitcher
+            currentView={viewAsRole}
+            onViewChange={setViewAsRole}
+          />
+
+          {/* Shopping Cart. Hidden together with the Home menu entry when the
+              owner has turned off the walk-in POS in Settings. */}
+          {isPosSurfaceVisible && (
+            <button
+              type="button"
+              className="relative inline-flex h-10 items-center gap-2 rounded-xl bg-brand hover:bg-brand-strong px-3 text-white shadow-brand transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 focus-visible:ring-offset-2"
+              aria-label={`Shopping cart, ${cartCount} item(s)`}
+              onClick={openCart}
+            >
+              <ShoppingCart className="h-5 w-5" aria-hidden="true" />
+              <span className="hidden sm:inline text-sm font-semibold">
+                {t.cartLabel}
+              </span>
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-bold text-rose-600 tabular">
+                {cartCount}
+              </span>
+            </button>
+          )}
+
+          {/* Notifications */}
+          <div className="relative" ref={notificationDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                const opening = !showNotificationDropdown;
+                setShowNotificationDropdown(opening);
+                // Clear the badge on open only, so closing the dropdown
+                // cannot re-acknowledge anything that arrived while it was up.
+                if (opening) markAllSeen();
+              }}
+              className={`relative inline-flex h-10 w-10 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 ${
+                showNotificationDropdown
+                  ? "bg-rose-50 text-rose-600"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              }`}
+              aria-label={
+                unseenCount > 0
+                  ? `${t.notifications} (${unseenCount})`
+                  : t.notifications
+              }
+              aria-haspopup="menu"
+              aria-expanded={showNotificationDropdown}
+            >
+              <Bell className="h-5 w-5" />
+              {unseenCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white tabular">
+                  {unseenCount > 99 ? "99+" : unseenCount}
+                </span>
               )}
-            </div>
+            </button>
 
-            {/* User Profile Dropdown */}
-            <div className="relative" ref={profileDropdownRef}>
-              <button
-                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="flex items-center space-x-2 focus:outline-none"
-                aria-label="User menu"
+            {/* Notification Dropdown */}
+            {showNotificationDropdown && (
+              <NotificationDropdown
+                onClose={() => setShowNotificationDropdown(false)}
+                triggerRef={notificationDropdownRef}
+              />
+            )}
+          </div>
+
+          {/* User Profile Dropdown */}
+          <div className="relative" ref={profileDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+              className="flex items-center gap-2 rounded-xl p-1 pr-1 xl:pr-2 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+              aria-label="User menu"
+              aria-haspopup="menu"
+              aria-expanded={isProfileDropdownOpen}
+            >
+              <span className="h-8 w-8 rounded-full bg-brand text-white flex items-center justify-center text-xs font-bold">
+                {initials}
+              </span>
+              <span className="hidden xl:block text-left leading-tight max-w-[120px]">
+                <span className="block text-sm font-semibold text-gray-900 truncate">
+                  {displayName}
+                </span>
+                <span className="block text-[11px] text-gray-500 truncate">
+                  {roleLabel}
+                </span>
+              </span>
+              <ChevronDown className="hidden xl:block w-4 h-4 text-gray-400" aria-hidden="true" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isProfileDropdownOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-50"
               >
-                <div className="w-11 h-11 rounded-full border-2 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-900">
-                  <User className="w-5 h-5" />
-                </div>
-              </button>
-
-              {/* Dropdown Menu */}
-              {isProfileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
-                  <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-sm font-medium text-gray-900">
+                <div className="px-4 py-3.5 bg-brand-soft border-b border-rose-100 flex items-center gap-3">
+                  <span className="h-10 w-10 rounded-full bg-brand text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {initials}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
                       {user?.displayName || "User"}
                     </p>
-                    <p className="text-xs text-gray-500">{user?.email}</p>
+                    <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                    <span className="mt-1 inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-rose-600 ring-1 ring-inset ring-rose-200">
+                      {roleLabel}
+                    </span>
                   </div>
+                </div>
+
+                {/* Preferences that don't fit in the bar on smaller screens */}
+                <div className="xl:hidden p-3 space-y-3 border-b border-gray-100">
+                  <div className="lg:hidden">
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      {t.currency}
+                    </p>
+                    <SegmentedControl
+                      label={t.currency}
+                      options={currencyOptions}
+                      value={selectedCurrency as "THB" | "MMK"}
+                      onChange={handleCurrencyChange}
+                      fullWidth
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      {t.language}
+                    </p>
+                    <SegmentedControl
+                      label={t.language}
+                      options={languageOptions}
+                      value={language}
+                      onChange={setLanguage}
+                      fullWidth
+                    />
+                  </div>
+                </div>
+
+                <div className="p-1.5">
                   <button
+                    type="button"
+                    role="menuitem"
                     onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-gray-700 rounded-xl hover:bg-rose-50 hover:text-rose-700 transition-colors"
                   >
-                    <LogOut className="h-4 w-4 mr-2" />
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
                     {t.logout}
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -529,7 +582,6 @@ export function TopNavBar({
     </header>
   );
 }
-
 
 
 // Notification Dropdown Component
@@ -675,7 +727,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
   const getNotificationIcon = (type: Notification["type"]) => {
     switch (type) {
       case "online_order":
-        return <ShoppingCart className="w-4 h-4 text-blue-600" />;
+        return <ShoppingCart className="w-4 h-4 text-rose-600" />;
       case "cancellation_request":
         return <XCircle className="w-4 h-4 text-orange-600" />;
       case "refund_request":
@@ -707,7 +759,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
   const dropdownContent = (
     <div 
       ref={dropdownRef}
-      className="fixed w-96 bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden"
+      className="fixed w-[min(24rem,calc(100vw-1rem))] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
       style={{ 
         top: `${position.top}px`, 
         right: `${position.right}px`,
@@ -715,14 +767,20 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
       }}
     >
       {/* Header */}
-      <div className="bg-gradient-to-r from-rose-500 to-pink-500 px-4 py-3 flex items-center justify-between">
-        <h3 className="text-white font-semibold text-lg">{t.notifications}</h3>
+      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <span className="h-8 w-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center">
+            <Bell className="w-4 h-4" aria-hidden="true" />
+          </span>
+          <h3 className="text-gray-900 font-semibold text-base">{t.notifications}</h3>
+        </div>
         <button
+          type="button"
           onClick={() => {
             onClose();
             window.location.href = "/owner/notifications";
           }}
-          className="text-white text-sm hover:underline cursor-pointer bg-transparent border-none"
+          className="text-rose-600 hover:text-rose-700 text-sm font-semibold px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
         >
           {t.viewAll}
         </button>
@@ -732,11 +790,13 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
       <div className="max-h-[400px] overflow-y-auto">
         {loading ? (
           <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-[3px] border-rose-100 border-t-rose-500"></div>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="py-8 text-center">
-            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <div className="py-10 text-center">
+            <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-gray-50 flex items-center justify-center">
+              <Bell className="w-6 h-6 text-gray-300" />
+            </div>
             <p className="text-gray-500 text-sm">{t.noNotificationsYet}</p>
           </div>
         ) : (
@@ -745,7 +805,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
               <div
                 key={notification.id}
                 className={`px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  !notification.read ? "bg-blue-50" : ""
+                  !notification.read ? "bg-rose-50/50" : ""
                 }`}
                 onClick={() => {
                   if (!notification.read) {
@@ -772,7 +832,7 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
                         </p>
                       </div>
                       {!notification.read && (
-                        <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></div>
+                        <div className="w-2 h-2 bg-rose-500 rounded-full flex-shrink-0 mt-1"></div>
                       )}
                     </div>
                     <div className="flex items-center gap-1 mt-1">
@@ -791,13 +851,14 @@ function NotificationDropdown({ onClose, triggerRef }: NotificationDropdownProps
 
       {/* Footer */}
       {notifications.length > 0 && (
-        <div className="border-t border-gray-200 px-4 py-2 bg-gray-50">
+        <div className="border-t border-gray-100 px-4 py-2.5 bg-gray-50/70">
           <button
+            type="button"
             onClick={() => {
               onClose();
               window.location.href = "/owner/notifications";
             }}
-            className="text-sm text-pink-600 hover:text-pink-700 font-medium block text-center w-full cursor-pointer bg-transparent border-none"
+            className="text-sm text-rose-600 hover:text-rose-700 font-semibold block text-center w-full cursor-pointer bg-transparent border-none"
           >
             {t.seeAllNotifications} →
           </button>

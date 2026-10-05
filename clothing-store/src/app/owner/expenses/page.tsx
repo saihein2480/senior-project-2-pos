@@ -384,7 +384,7 @@ function ExpensesContent() {
   }, [filterCategory, filterCurrency, filterDateFrom, filterDateTo]);
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="min-h-screen bg-canvas flex">
       {/* Desktop sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -729,7 +729,7 @@ function ExpensesContent() {
                                   paginatedExpenses.length
                               }
                               onChange={toggleSelectAll}
-                              className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
+                              className="h-4 w-4 text-rose-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
                               aria-label="Select all expenses"
                             />
                           </th>
@@ -780,7 +780,7 @@ function ExpensesContent() {
                                   type="checkbox"
                                   checked={selectedExpenses.includes(expense.id)}
                                   onChange={() => toggleSelectExpense(expense.id)}
-                                  className="h-4 w-4 text-cyan-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
+                                  className="h-4 w-4 text-rose-600 focus:ring-pink-300 border-gray-300 rounded cursor-pointer"
                                   aria-label={`Select expense ${expense.id}`}
                                 />
                               </td>

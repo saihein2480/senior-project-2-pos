@@ -33,6 +33,14 @@ export function WholesalePricingTiers({
   // Sort tiers by minimum quantity for better display
   const sortedTiers = [...wholesaleTiers].sort((a, b) => a.minQuantity - b.minQuantity);
 
+  // Checkout (ShoppingCartModal) charges `price` for `minQuantity` items, so
+  // the per-item price is the tier price divided by its quantity.
+  const perItemOf = (tier: WholesaleTier) =>
+    tier.minQuantity > 0 ? tier.price / tier.minQuantity : tier.price;
+  const perItemPrices = sortedTiers.map(perItemOf);
+  const bestTier = sortedTiers[perItemPrices.indexOf(Math.min(...perItemPrices))];
+  const regularTier = sortedTiers[perItemPrices.indexOf(Math.max(...perItemPrices))];
+
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
       {/* Header with toggle button */}
@@ -44,7 +52,7 @@ export function WholesalePricingTiers({
               {title ?? t.wholesalePricingTiers}
             </h3>
             {wholesaleTiers.length > 0 && (
-              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-blue-800">
+              <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
                 {wholesaleTiers.length} {t.tiersSuffix}
               </span>
             )}
@@ -107,33 +115,35 @@ export function WholesalePricingTiers({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-semibold text-green-600">
+                    <div className="text-lg font-semibold text-gray-900">
                       {formatPrice(tier.price)}
                     </div>
-                    <div className="text-sm text-gray-500">{t.perItem}</div>
+                    <div className="text-sm text-gray-500">
+                      {formatPrice(perItemOf(tier))} {t.perItem}
+                    </div>
                   </div>
                 </div>
               ))}
               
               {/* Summary information */}
               {sortedTiers.length > 1 && (
-                <div className="mt-6 p-4 bg-cyan-50 rounded-lg">
+                <div className="mt-6 p-4 bg-rose-50 rounded-lg">
                   <div className="flex items-start">
                     <div className="flex-shrink-0">
-                      <DollarSign className="h-5 w-5 text-blue-400 mt-0.5" />
+                      <DollarSign className="h-5 w-5 text-rose-400 mt-0.5" />
                     </div>
                     <div className="ml-3">
-                      <h4 className="text-sm font-medium text-blue-900">
+                      <h4 className="text-sm font-medium text-rose-900">
                         {t.pricingSummary}
                       </h4>
-                      <div className="mt-2 text-sm text-blue-700">
+                      <div className="mt-2 text-sm text-rose-700">
                         <p>
-                          {t.bestPrice}: <span className="font-semibold">{formatPrice(Math.min(...sortedTiers.map(item => item.price)))}</span> 
-                          {" "}({sortedTiers.find(item => item.price === Math.min(...sortedTiers.map(tier => tier.price)))?.minQuantity} {t.minItemsSuffix})
+                          {t.bestPrice}: <span className="font-semibold">{formatPrice(perItemOf(bestTier))}</span>{" "}
+                          {t.perItem} ({bestTier.minQuantity} {t.minItemsSuffix})
                         </p>
                         <p>
-                          {t.regularPrice}: <span className="font-semibold">{formatPrice(Math.max(...sortedTiers.map(item => item.price)))}</span>
-                          {" "}({sortedTiers.find(item => item.price === Math.max(...sortedTiers.map(tier => tier.price)))?.minQuantity} {t.minItemsSuffix})
+                          {t.regularPrice}: <span className="font-semibold">{formatPrice(perItemOf(regularTier))}</span>{" "}
+                          {t.perItem} ({regularTier.minQuantity} {t.minItemsSuffix})
                         </p>
                       </div>
                     </div>

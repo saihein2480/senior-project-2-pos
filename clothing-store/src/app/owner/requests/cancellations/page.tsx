@@ -264,7 +264,7 @@ function CancellationRequestsContent() {
     selectedRequest?.paymentMethod === "scan" ? selectedCancelReq?.qrCodeImage : undefined;
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -297,7 +297,6 @@ function CancellationRequestsContent() {
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
             <RequestPageHeader
-              icon={XCircle}
               title="Cancellation Requests"
               description="Review customer cancellations. Approving cancels the order and restores stock."
               actions={<LiveIndicator />}

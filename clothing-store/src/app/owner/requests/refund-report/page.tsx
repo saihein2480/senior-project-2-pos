@@ -20,6 +20,7 @@ import { collection, onSnapshot, query, orderBy, getDocs } from "firebase/firest
 import { db } from "@/lib/firebase";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { usePermissions } from "@/hooks/usePermissions";
+import { PaymentMethodLabel } from "@/components/ui/PaymentMethodLabel";
 
 /** One line of a refund, resolved back to the order it came from. */
 type RefundedLine = {
@@ -645,7 +646,7 @@ function RefundReportContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1088,9 +1089,14 @@ function RefundReportContent() {
                               </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 capitalize">
-                              {paymentMethod === "scan" ? "QR Scan" : 
-                               paymentMethod === "cod" ? "COD" :
-                               paymentMethod.replace("_", " ")}
+                              <PaymentMethodLabel
+                                method={item.transaction.paymentMethod}
+                                label={
+                                  paymentMethod === "scan" || paymentMethod === "wallet" ? "QR Scan" :
+                                  paymentMethod === "cod" ? "COD" :
+                                  paymentMethod.replace("_", " ")
+                                }
+                              />
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                               {getRefundMethodLabel(item)}

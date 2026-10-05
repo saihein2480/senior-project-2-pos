@@ -162,7 +162,7 @@ function ReportsPageContent() {
     { id: "totalExpenseMMK", label: "Total Expense (Ks)" },
     { id: "wholesaleTHB", label: "Wholesale Sales (THB)" },
     { id: "wholesaleMMK", label: "Wholesale Sales (MMK)" },
-    { id: "stockValueUnit", label: "Remaining Stock Value (Unit Price)" },
+    { id: "stockValueUnit", label: "Remaining Stock Value (Selling Price)" },
     {
       id: "stockValueOriginal",
       label: "Remaining Stock Value (Original Price)",
@@ -1263,7 +1263,7 @@ function ReportsPageContent() {
 
   if (loading) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-canvas">
         <div className="hidden lg:block">
           <Sidebar
             activeItem="reports"
@@ -1293,7 +1293,7 @@ function ReportsPageContent() {
 
           <main className="flex-1 overflow-y-auto flex items-center justify-center px-4 sm:px-6 lg:px-8 py-6">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading reports...</p>
             </div>
           </main>
@@ -1303,7 +1303,7 @@ function ReportsPageContent() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <div className="flex h-screen bg-canvas">
       <div className="hidden lg:block">
         <Sidebar
           activeItem="reports"
@@ -1389,7 +1389,7 @@ function ReportsPageContent() {
                       className={`p-3 rounded-xl border transition-colors text-sm font-medium text-left ${
                         isMetricHidden(metric.id)
                           ? "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
-                          : "border-blue-200 bg-cyan-50 text-blue-800 hover:bg-cyan-100"
+                          : "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1461,11 +1461,11 @@ function ReportsPageContent() {
                 )}
 
                 {/* Store Volume Card */}
-                <div className="lg:col-span-3 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
+                <div className="lg:col-span-3 bg-gradient-to-br from-rose-500 to-rose-600 rounded-xl p-4 shadow-md text-white relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
                   <div className="relative">
                     <div className="flex items-start justify-between mb-2">
-                      <p className="text-xs font-medium text-cyan-100">
+                      <p className="text-xs font-medium text-rose-100">
                         Store Volume
                       </p>
                       <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -1475,13 +1475,13 @@ function ReportsPageContent() {
                     <div className="grid grid-cols-2 gap-3">
                       {!isMetricHidden("totalTransactions") && (
                         <div>
-                          <p className="text-[10px] text-cyan-100 mb-0.5">Total Transactions:</p>
+                          <p className="text-[10px] text-rose-100 mb-0.5">Total Transactions:</p>
                           <p className="text-xl font-bold">{reportData?.totalTransactions || 0}</p>
                         </div>
                       )}
                       {!isMetricHidden("totalCustomers") && (
                         <div>
-                          <p className="text-[10px] text-cyan-100 mb-0.5">Total Customers:</p>
+                          <p className="text-[10px] text-rose-100 mb-0.5">Total Customers:</p>
                           <p className="text-xl font-bold">{reportData?.totalCustomers || 0}</p>
                         </div>
                       )}
@@ -1656,7 +1656,7 @@ function ReportsPageContent() {
                 <div className="space-y-4">
                   {!isMetricHidden("stockValueUnit") && (
                     <div className="bg-white rounded-xl p-4">
-                      <p className="text-xs text-gray-600 mb-1">Stock Value (Unit Price)</p>
+                      <p className="text-xs text-gray-600 mb-1">Stock Value (Selling Price)</p>
                       <p className="text-xl font-bold text-gray-900">
                         {formatPrice(reportData?.totalStockSellValueTHB || 0)}
                       </p>
@@ -2808,8 +2808,8 @@ function ReportsPageContent() {
                             const soldBy = resolveSoldBy(transaction);
                             return (
                               <div className="flex items-center">
-                                <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center mr-2">
-                                  <span className="text-xs font-medium text-blue-800">
+                                <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center mr-2">
+                                  <span className="text-xs font-medium text-rose-800">
                                     {soldBy.charAt(0).toUpperCase()}
                                   </span>
                                 </div>
@@ -2829,7 +2829,7 @@ function ReportsPageContent() {
                                     ? "bg-red-100 text-gray-800"
                                     : transaction.status === "refunded"
                                       ? "bg-gray-100 text-gray-800"
-                                      : "bg-cyan-100 text-blue-800"
+                                      : "bg-rose-100 text-rose-800"
                             }`}
                           >
                             {transaction.status === "completed"

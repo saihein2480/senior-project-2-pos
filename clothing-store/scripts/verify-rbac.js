@@ -28,6 +28,7 @@ const protectedPages = [
   { path: 'src/app/owner/shops/manage/page.tsx', requiredRole: '"owner"', name: 'Manage Shops' },
   { path: 'src/app/owner/shops/reports/page.tsx', requiredRole: '"owner"', name: 'Shop Reports' },
   { path: 'src/app/owner/staff/page.tsx', requiredRole: '"owner"', name: 'Staff Management' },
+  { path: 'src/app/owner/activity/page.tsx', requiredRole: '"owner"', name: 'Activity Log' },
   { path: 'src/app/owner/settings/page.tsx', requiredRole: '["owner", "manager", "staff"]', name: 'Settings' },
   { path: 'src/app/owner/membership/page.tsx', requiredRole: '["owner", "manager"]', name: 'Membership' },
   { path: 'src/app/owner/online-promotions/page.tsx', requiredRole: '["owner", "manager"]', name: 'Online Promotions' },

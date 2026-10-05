@@ -117,10 +117,19 @@ export function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div
+        role="status"
+        aria-live="polite"
+        className="min-h-screen flex items-center justify-center bg-canvas"
+      >
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand shadow-brand">
+            <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <div className="animate-spin rounded-full h-8 w-8 border-[3px] border-rose-100 border-t-rose-500 mx-auto" aria-hidden="true"></div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Loading...</p>
         </div>
       </div>
     );
@@ -142,12 +151,12 @@ export function ProtectedRoute({
           aria-live="polite"
           className="min-h-screen flex items-center justify-center bg-gray-50 px-4"
         >
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-amber-200 p-8 text-center">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
-              <Eye className="h-7 w-7 text-amber-600" aria-hidden="true" />
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-rose-200 p-8 text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-rose-50">
+              <Eye className="h-7 w-7 text-rose-500" aria-hidden="true" />
             </div>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">
               Previewing as {ROLE_LABELS[effectiveRole]}
             </span>
 

@@ -31,9 +31,9 @@ const COLLECTION_NAME = "stocks";
 // ---- Request validation (POST /api/stocks, PUT /api/stocks/[id]) --------
 
 const MISSING_STOCK_FIELDS =
-  "Missing required fields: groupName, unitPrice, originalPrice";
+  "Missing required fields: product name, selling price, original price";
 const INVALID_STOCK_PRICES =
-  "unitPrice and originalPrice must be non-negative numbers";
+  "Selling price and original price must be non-negative numbers";
 
 /** Parse a price field: a finite number >= 0, or null if invalid. */
 function parsePrice(value: unknown): number | null {

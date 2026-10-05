@@ -13,6 +13,7 @@ import {
   updateStaff,
 } from "@/server/staffAdmin";
 import { parseJson, parseQuery } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 
 // Doc: every Staff Management action (view list, add, edit, change role,
 // delete) is Owner only.
@@ -91,6 +92,18 @@ export async function POST(request: NextRequest) {
 
     const staffMember = await createStaff(input, auth.caller.uid);
 
+    // Never the password: only who was added and as what.
+    await auditCaller(auth.caller, {
+      action: "staff.create",
+      targetCollection: "users",
+      targetId: staffMember.id,
+      details: {
+        name: input.displayName,
+        email: input.email,
+        role: input.role,
+      },
+    });
+
     return NextResponse.json({ success: true, data: staffMember });
   } catch (error) {
     return handleRouteError(
@@ -112,6 +125,27 @@ export async function PUT(request: NextRequest) {
     // updateStaff applies the same whitelist and answers "No editable
     // fields provided" when nothing above was sent.
     const updated = await updateStaff(id, body);
+
+    await auditCaller(auth.caller, {
+      // Turning an account on or off is the change an owner looks for, so it
+      // gets its own action rather than a generic edit.
+      action:
+        body.isActive === true
+          ? "staff.activate"
+          : body.isActive === false
+            ? "staff.deactivate"
+            : "staff.update",
+      targetCollection: "users",
+      targetId: id,
+      details: {
+        name: updated?.displayName || updated?.email || body.displayName || null,
+        role: body.role ?? null,
+        fields: Object.keys(body).filter(
+          (key) => (body as Record<string, unknown>)[key] !== undefined,
+        ),
+      },
+    });
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     return handleRouteError(error, "PUT /api/staff", "Failed to update staff");
@@ -130,8 +164,23 @@ export async function DELETE(request: NextRequest) {
       return jsonError(400, "ID is required");
     }
 
+    // Read the name first: the delete removes the users doc.
+    const existing = (await listStaff().catch(() => [])).find(
+      (member) => member.id === id,
+    );
+
     // Removes the users doc and the Firebase Auth account.
     await deleteStaff(id, auth.caller.uid);
+
+    await auditCaller(auth.caller, {
+      action: "staff.delete",
+      targetCollection: "users",
+      targetId: id,
+      details: {
+        name: existing?.displayName || existing?.email || null,
+        role: existing?.role ?? null,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

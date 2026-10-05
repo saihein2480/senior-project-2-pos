@@ -722,7 +722,7 @@ function RefundRequestsContent() {
   const closeDetailsModal = useCallback(() => setShowDetailsModal(false), []);
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -755,7 +755,6 @@ function RefundRequestsContent() {
         <main className="flex-1 overflow-y-auto px-3 sm:px-4 lg:px-6 py-5">
           <div className="max-w-6xl mx-auto">
             <RequestPageHeader
-              icon={RotateCcw}
               title="Refund & Return Requests"
               description="Approve returns, receive and inspect items, then hand over to refund payout."
               actions={<LiveIndicator />}

@@ -150,7 +150,7 @@ function PrintSettingsContent() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-canvas">
         <Sidebar
           activeItem={activeMenuItem}
           onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -162,7 +162,7 @@ function PrintSettingsContent() {
           <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading settings...</p>
             </div>
           </div>
@@ -172,7 +172,7 @@ function PrintSettingsContent() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-canvas">
       <Sidebar
         activeItem={activeMenuItem}
         onItemClick={(item) => setActiveMenuItem(item.id)}
@@ -201,7 +201,7 @@ function PrintSettingsContent() {
               <Button
                 onClick={saveSettings}
                 disabled={isSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-brand hover:bg-brand-strong text-white"
               >
                 {isSaving ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -233,7 +233,7 @@ function PrintSettingsContent() {
 
           <div className="space-y-6 max-w-5xl mx-auto">
             {/* Quick Link to Label Print */}
-            <div className="bg-gradient-to-r from-blue-50 to-blue-50 rounded-lg border border-blue-200 p-4">
+            <div className="bg-gradient-to-r from-pink-50 to-pink-50 rounded-lg border border-rose-200 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div>
@@ -247,7 +247,7 @@ function PrintSettingsContent() {
                 </div>
                 <Button
                   onClick={() => router.push("/owner/barcode/label-print")}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-brand hover:bg-brand-strong text-white"
                 >
                   Print Labels
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -443,7 +443,7 @@ function PrintSettingsContent() {
                         showCompany: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-gray-300 border-gray-300 rounded"
+                    className="h-4 w-4 accent-rose-500 focus:ring-gray-300 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">
@@ -464,7 +464,7 @@ function PrintSettingsContent() {
                         showDates: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-cyan-400 border-gray-300 rounded"
+                    className="h-4 w-4 accent-rose-500 focus:ring-rose-400 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">
@@ -485,7 +485,7 @@ function PrintSettingsContent() {
                         showPrice: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 accent-blue-600 focus:ring-cyan-400 border-gray-300 rounded"
+                    className="h-4 w-4 accent-rose-500 focus:ring-rose-400 border-gray-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">

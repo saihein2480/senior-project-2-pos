@@ -519,7 +519,7 @@ function CustomerPageContent() {
     if (isOnline) {
       return {
         label: "Online Customer",
-        className: "bg-cyan-100 text-cyan-800 border-cyan-200"
+        className: "bg-rose-100 text-rose-800 border-rose-200"
       };
     }
     
@@ -537,7 +537,7 @@ function CustomerPageContent() {
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-canvas">
         <div className="hidden lg:block">
           <Sidebar activeItem="customers" onItemClick={() => {}} />
         </div>
@@ -728,8 +728,8 @@ function CustomerPageContent() {
                         {stats.totalCustomers}
                       </p>
                     </div>
-                    <div className="p-3 bg-cyan-100 rounded-xl">
-                      <Users className="h-6 w-6 text-cyan-600" />
+                    <div className="p-3 bg-rose-100 rounded-xl">
+                      <Users className="h-6 w-6 text-rose-600" />
                     </div>
                   </div>
                 </div>
@@ -840,7 +840,7 @@ function CustomerPageContent() {
                       setIndividualPage(1);
                       setUnassignedPage(1);
                     }}
-                    className="pl-12 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-cyan-400 focus:border-transparent text-base"
+                    className="pl-12 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-rose-400 focus:border-transparent text-base"
                   />
                 </div>
               </div>
@@ -849,7 +849,7 @@ function CustomerPageContent() {
               {isLoading ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16">
                   <div className="flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
                     <span className="ml-3 text-gray-600 font-medium">
                       Loading customers...
                     </span>
@@ -915,10 +915,10 @@ function CustomerPageContent() {
                   {/* Online Customers Section */}
                   {(selectedCustomerType === null || selectedCustomerType === "online") && onlineCustomers.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-cyan-100 px-6 py-4">
+                      <div className="bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-100 px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2.5 bg-white rounded-xl shadow-sm">
-                            <Users className="h-5 w-5 text-cyan-600" />
+                            <Users className="h-5 w-5 text-rose-600" />
                           </div>
                           <div>
                             <h2 className="text-lg font-bold text-gray-900">Online Customers</h2>
@@ -952,13 +952,13 @@ function CustomerPageContent() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {onlinePageCustomers.map((customer) => (
-                              <tr key={customer.uid} className="hover:bg-cyan-50/30 transition-colors">
+                              <tr key={customer.uid} className="hover:bg-rose-50/30 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-3">
                                     <div className="flex-shrink-0 h-10 w-10">
                                       {customer.customerImage ? (
                                         <img
-                                          className="h-10 w-10 rounded-lg object-cover border-2 border-cyan-100"
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-rose-100"
                                           src={customer.customerImage}
                                           alt={customer.displayName || customer.email}
                                           onError={(e) => {
@@ -969,7 +969,7 @@ function CustomerPageContent() {
                                         />
                                       ) : null}
                                       <div
-                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center ${
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center ${
                                           customer.customerImage ? "hidden" : ""
                                         }`}
                                       >
@@ -1110,10 +1110,10 @@ function CustomerPageContent() {
                   {/* Retailer Customers Section */}
                   {(selectedCustomerType === null || selectedCustomerType === "retailer") && retailerCustomers.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-blue-100 px-6 py-4">
+                      <div className="bg-gradient-to-r from-pink-50 to-rose-50 border-b border-rose-100 px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2.5 bg-white rounded-xl shadow-sm">
-                            <Store className="h-5 w-5 text-blue-600" />
+                            <Store className="h-5 w-5 text-rose-600" />
                           </div>
                           <div>
                             <h2 className="text-lg font-bold text-gray-900">Retailer Customers</h2>
@@ -1147,13 +1147,13 @@ function CustomerPageContent() {
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {retailerPageCustomers.map((customer) => (
-                              <tr key={customer.uid} className="hover:bg-blue-50/30 transition-colors">
+                              <tr key={customer.uid} className="hover:bg-rose-50/30 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center gap-3">
                                     <div className="flex-shrink-0 h-10 w-10">
                                       {customer.customerImage ? (
                                         <img
-                                          className="h-10 w-10 rounded-lg object-cover border-2 border-blue-100"
+                                          className="h-10 w-10 rounded-lg object-cover border-2 border-rose-100"
                                           src={customer.customerImage}
                                           alt={customer.displayName || customer.email}
                                           onError={(e) => {
@@ -1164,7 +1164,7 @@ function CustomerPageContent() {
                                         />
                                       ) : null}
                                       <div
-                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center ${
+                                        className={`h-10 w-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center ${
                                           customer.customerImage ? "hidden" : ""
                                         }`}
                                       >

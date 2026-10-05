@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MANAGEMENT, OWNER_ONLY } from "@/config/rolePermissions";
 import { handleRouteError, requireRole } from "@/lib/server/apiAuth";
 import { parseJson, parseQuery, validate } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 import {
   addExpense,
   getExpenses,
@@ -155,6 +156,12 @@ export async function POST(request: NextRequest) {
         namedEntrySchema("Category name is required"),
       );
       const category = await addExpenseCategory(name);
+      await auditCaller(auth.caller, {
+        action: "expenseCategory.create",
+        targetCollection: "expenseCategories",
+        targetId: category.id,
+        details: { name },
+      });
       return NextResponse.json({ success: true, data: category });
     } else if (body.type === "spendingMenu") {
       const { name } = validate(
@@ -162,6 +169,12 @@ export async function POST(request: NextRequest) {
         namedEntrySchema("Spending menu name is required"),
       );
       const spendingMenu = await addSpendingMenu(name);
+      await auditCaller(auth.caller, {
+        action: "spendingMenu.create",
+        targetCollection: "spendingMenus",
+        targetId: spendingMenu.id,
+        details: { name },
+      });
       return NextResponse.json({ success: true, data: spendingMenu });
     } else {
       const input = validate(body, createExpenseSchema);
@@ -174,6 +187,18 @@ export async function POST(request: NextRequest) {
         date: input.date,
         amount: input.amount,
         currency: input.currency,
+      });
+
+      await auditCaller(auth.caller, {
+        action: "expense.create",
+        targetCollection: "expenses",
+        targetId: expense.id,
+        details: {
+          name: expense.categoryName || null,
+          amount: input.amount,
+          currency: input.currency,
+          note: input.note || null,
+        },
       });
 
       return NextResponse.json({ success: true, data: expense });
@@ -204,6 +229,22 @@ export async function DELETE(request: NextRequest) {
       await deleteExpense(id);
     }
 
+    await auditCaller(auth.caller, {
+      action:
+        type === "category"
+          ? "expenseCategory.delete"
+          : type === "spendingMenu"
+            ? "spendingMenu.delete"
+            : "expense.delete",
+      targetCollection:
+        type === "category"
+          ? "expenseCategories"
+          : type === "spendingMenu"
+            ? "spendingMenus"
+            : "expenses",
+      targetId: id,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return handleRouteError(error, "DELETE /api/expenses", "Failed to delete data");
@@ -226,6 +267,16 @@ export async function PUT(request: NextRequest) {
       date: body.date,
       amount: body.amount,
       currency: body.currency,
+    });
+
+    await auditCaller(auth.caller, {
+      action: "expense.update",
+      targetCollection: "expenses",
+      targetId: id,
+      details: {
+        amount: body.amount ?? null,
+        currency: body.currency ?? null,
+      },
     });
 
     return NextResponse.json({ success: true });

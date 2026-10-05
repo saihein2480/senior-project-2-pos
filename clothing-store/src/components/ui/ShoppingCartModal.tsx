@@ -1044,20 +1044,27 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
       {/* Full Screen Cart - Combined View */}
       <div className="absolute inset-0 bg-white shadow-xl flex flex-col">
         {/* Single Top Header spanning full width */}
-        <div className="flex items-center justify-between border-b border-pink-200 px-3 md:px-6 py-4 bg-gradient-to-r from-rose-500 to-pink-500 shadow-md">
-          <div className="flex items-center space-x-2 md:space-x-3">
-            <ShoppingCart className="h-6 w-6 text-white" />
-            <h2 className="text-lg md:text-xl font-bold text-white">
-              {t.shoppingCart}
-            </h2>
-            <span className="bg-white text-rose-600 text-xs md:text-sm font-bold px-2 md:px-2.5 py-0.5 rounded-full shadow-sm">
+        <div className="flex h-16 items-center justify-between border-b border-gray-200 px-3 md:px-6 bg-white flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand shadow-brand">
+              <ShoppingCart className="h-5 w-5 text-white" aria-hidden="true" />
+            </div>
+            <div className="leading-tight">
+              <h2 className="text-base md:text-lg font-bold text-gray-900">
+                {t.shoppingCart}
+              </h2>
+              <p className="text-xs text-gray-500">{t.checkout}</p>
+            </div>
+            <span className="bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 text-xs font-bold px-2.5 py-1 rounded-full tabular">
               {cart.totalItems} {t.items}
             </span>
           </div>
           <button
+            type="button"
             title={t.closeCart}
+            aria-label={t.closeCart}
             onClick={onClose}
-            className="rounded-full p-2 text-white hover:bg-white/20 transition-colors"
+            className="rounded-xl p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -1065,7 +1072,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left Side - Cart Items */}
-          <div className="flex-1 flex flex-col md:border-r border-pink-200">
+          <div className="flex-1 flex flex-col md:border-r border-gray-200 bg-canvas">
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6">
             {cart.items.length === 0 ? (
@@ -1083,12 +1090,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                   return sortedItems.map((item, index) => (
                     <div
                       key={item.id}
-                      className="bg-gradient-to-br from-white to-pink-50 border-2 border-pink-200 rounded-xl p-3 md:p-4 shadow-md hover:shadow-lg hover:border-rose-300 transition-all duration-200"
+                      className="bg-white border border-gray-200 rounded-xl p-3 md:p-4 hover:border-rose-200 hover:shadow-sm transition-all duration-200"
                     >
                       <div className="flex items-center gap-4">
                         {/* Product Image */}
                         <div className="flex-shrink-0">
-                          <div className="w-25 h-30 bg-gradient-to-br from-pink-100 to-rose-100 rounded-xl overflow-hidden shadow-sm border-2 border-pink-200">
+                          <div className="w-25 h-30 bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-200">
                             {item.image ? (
                               <Image
                                 src={item.image}
@@ -1098,7 +1105,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-gray-100 to-pink-100 flex items-center justify-center">
+                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                                 <span className="text-gray-400 text-xs">
                                   {t.noImage}
                                 </span>
@@ -1121,7 +1128,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             <button
                               title={t.removeFromCart}
                               onClick={() => removeFromCart(item.id)}
-                              className="text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 p-1.5 rounded-full transition-all ml-2 shadow-sm"
+                              className="text-gray-400 hover:text-white hover:bg-brand p-1.5 rounded-full transition-all ml-2 shadow-sm"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1244,7 +1251,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Group Discount Badge (percentage or fixed amount) */}
                               {item.groupDiscount && item.groupDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
+                                  <span className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
                                     {t.groupLabel}: {item.groupDiscount}%{" "}
                                     {t.offLabel}
                                   </span>
@@ -1259,7 +1266,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                               ) : groupFixedDiscounts[item.groupName] ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
+                                  <span className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200 shadow-sm">
                                     {t.groupLabel}:{" "}
                                     {SettingsService.formatPrice(
                                       groupFixedDiscounts[item.groupName],
@@ -1284,7 +1291,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {item.variantDiscount &&
                               item.variantDiscount > 0 ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
+                                  <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
                                     {t.variantLabel}: {item.variantDiscount}%{" "}
                                     {t.offLabel}
                                   </span>
@@ -1299,7 +1306,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 </div>
                               ) : variantFixedDiscounts[item.id] ? (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
+                                  <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200 shadow-sm">
                                     {t.variantLabel}:{" "}
                                     {SettingsService.formatPrice(
                                       variantFixedDiscounts[item.id],
@@ -1321,7 +1328,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               {/* Wholesale Pricing Badge */}
                               {item.isWholesalePricing && (
                                 <div className="flex items-center space-x-2">
-                                  <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200 shadow-sm">
+                                  <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200 shadow-sm">
                                     {t.wholesalePricingBadge}
                                   </span>
                                   <button
@@ -1525,7 +1532,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                 <span className="text-xs font-medium text-gray-700">
                                   {t.quantity}:
                                 </span>
-                                <div className="flex items-center space-x-2 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg p-1.5 border border-pink-200 shadow-sm">
+                                <div className="flex items-center space-x-2 bg-rose-50/60 rounded-lg p-1.5 border border-gray-200 shadow-sm">
                                   <button
                                     onClick={() =>
                                       updateQuantity(
@@ -1533,7 +1540,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                         Math.max(1, item.quantity - 1),
                                       )
                                     }
-                                    className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
+                                    className="p-1 text-gray-900 hover:bg-brand hover:text-white rounded-md transition-all"
                                     title={t.decreaseQuantity}
                                   >
                                     <Minus className="h-3 w-3" />
@@ -1545,7 +1552,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     onClick={() =>
                                       updateQuantity(item.id, item.quantity + 1)
                                     }
-                                    className="p-1 text-gray-900 hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:text-white rounded-md transition-all"
+                                    className="p-1 text-gray-900 hover:bg-brand hover:text-white rounded-md transition-all"
                                     title={t.increaseQuantity}
                                   >
                                     <Plus className="h-3 w-3" />
@@ -1554,7 +1561,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                               </div>
 
                               {/* Item Subtotal */}
-                              <div className="mt-2 p-2 bg-gradient-to-r from-rose-50 to-pink-100 rounded-lg border border-pink-200 shadow-sm">
+                              <div className="mt-2 p-2 bg-rose-50/60 rounded-lg border border-gray-200 shadow-sm">
                                 <div className="text-xs font-medium  text-gray-700 mb-1">
                                   {t.itemTotal}:
                                 </div>
@@ -1624,12 +1631,12 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
         </div>
 
         {/* Right Side - Shopping Cart Summary */}
-        <div className="w-full md:max-w-md lg:max-w-lg flex flex-col border-t md:border-t-0 md:border-l border-pink-200 bg-gradient-to-br from-white to-pink-50">
+        <div className="w-full md:max-w-md lg:max-w-lg flex flex-col border-t md:border-t-0 md:border-l border-gray-200 bg-white">
 
           {/* Customer Info */}
-          <div className="border-b border-pink-200 px-3 md:px-6 py-3 md:py-4 bg-white/50">
+          <div className="border-b border-gray-200 px-3 md:px-6 py-3 md:py-4 bg-white/50">
             <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 flex items-center justify-center shadow-sm">
+              <div className="h-8 w-8 rounded-full bg-brand flex items-center justify-center shadow-sm">
                 {getSelectedCustomer()?.customerImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1677,7 +1684,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
 
             {/* Loyalty coupons for the selected customer */}
             {getSelectedCustomer() && (
-              <div className="mt-2 rounded-xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 p-3 shadow-sm">
+              <div className="mt-2 rounded-xl border-2 border-purple-300 bg-purple-50 p-3 shadow-sm">
                 {cart.appliedCoupon ? (
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -1723,7 +1730,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     </div>
                     <button
                       onClick={() => setIsRewardModalOpen(true)}
-                      className="shrink-0 px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 text-white text-xs font-bold hover:from-rose-600 hover:to-pink-600 shadow-sm"
+                      className="shrink-0 px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-bold hover:bg-brand-strong shadow-sm"
                     >
                       {t.viewRewards}
                     </button>
@@ -1744,9 +1751,9 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
             <div className="flex-1 border-t border-gray-200 overflow-y-auto">
               <div className="px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
                 {/* Discount section */}
-                <div className="p-3 bg-gradient-to-br from-rose-50 to-pink-100 rounded-xl border-2 border-pink-300 shadow-sm">
+                <div className="p-3 bg-rose-50/60 rounded-xl border border-gray-200 shadow-sm">
                   <div className="flex items-center space-x-2 text-rose-700 mb-3">
-                    <div className="w-7 h-7 bg-gradient-to-r from-rose-500 to-pink-500 rounded-full flex items-center justify-center border border-rose-300 shadow-sm">
+                    <div className="w-7 h-7 bg-brand rounded-full flex items-center justify-center border border-rose-300 shadow-sm">
                       <span className="text-sm font-bold text-white">%</span>
                     </div>
                     <span className="text-sm font-bold text-rose-800">
@@ -1760,8 +1767,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("cart")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "cart"
-                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
-                          : "bg-white text-pink-600 border border-pink-300"
+                          ? "bg-brand text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-gray-200"
                       }`}
                     >
                       {t.cartLabel}
@@ -1770,8 +1777,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("group")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "group"
-                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
-                          : "bg-white text-pink-600 border border-pink-300"
+                          ? "bg-brand text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-gray-200"
                       }`}
                     >
                       {t.groupLabel}
@@ -1780,8 +1787,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       onClick={() => setDiscountMode("variant")}
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         discountMode === "variant"
-                          ? "bg-gradient-to-r from-rose-500 to-pink-500 text-white border-0 shadow-md"
-                          : "bg-white text-pink-600 border border-pink-300"
+                          ? "bg-brand text-white border-0 shadow-md"
+                          : "bg-white text-pink-600 border border-gray-200"
                       }`}
                     >
                       {t.variantLabel}
@@ -1801,7 +1808,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           }
                           value={discountAmount}
                           onChange={(e) => setDiscountAmount(e.target.value)}
-                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                           min="0"
                           max={
                             discountType === "percentage" ? "100" : undefined
@@ -1830,7 +1837,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyDiscount}
-                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
+                          className="px-4 py-2 bg-brand hover:bg-brand-strong text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           {t.apply}
                         </button>
@@ -1851,7 +1858,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             setShowGroupDropdown(true);
                           }}
                           onFocus={() => setShowGroupDropdown(true)}
-                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                         />
                         {showGroupDropdown && filteredGroups.length > 0 && (
                           <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -1863,7 +1870,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                   setGroupSearchTerm(group);
                                   setShowGroupDropdown(false);
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-pink-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
+                                className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-rose-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
                               >
                                 {group}
                               </button>
@@ -1883,7 +1890,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setGroupDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                           min="0"
                           max={
                             groupDiscountType === "percentage"
@@ -1914,7 +1921,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyGroupDiscount}
-                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
+                          className="px-4 py-2 bg-brand hover:bg-brand-strong text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           {t.apply}
                         </button>
@@ -1935,7 +1942,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             setShowVariantDropdown(true);
                           }}
                           onFocus={() => setShowVariantDropdown(true)}
-                          className="w-full px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-pink-500 focus:ring-2 focus:ring-pink-200"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                         />
                         {showVariantDropdown && filteredVariants.length > 0 && (
                           <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -1951,7 +1958,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                                     );
                                     setShowVariantDropdown(false);
                                   }}
-                                  className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-pink-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
+                                  className="w-full text-left px-3 py-2 text-sm text-gray-900 font-medium hover:bg-rose-50 focus:bg-pink-50 border-b border-gray-100 last:border-b-0"
                                 >
                                   {item.groupName} - {colorLabel} /{" "}
                                   {item.selectedSize}
@@ -1973,7 +1980,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                           onChange={(e) =>
                             setVariantDiscountAmount(e.target.value)
                           }
-                          className="flex-1 px-3 py-2 border-2 border-pink-300 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 bg-white focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                           min="0"
                           max={
                             variantDiscountType === "percentage"
@@ -2004,7 +2011,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                         </button>
                         <button
                           onClick={handleApplyVariantDiscount}
-                          className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg border-0 shadow-md"
+                          className="px-4 py-2 bg-brand hover:bg-brand-strong text-white text-sm font-medium rounded-lg border-0 shadow-md"
                         >
                           {t.apply}
                         </button>
@@ -2014,7 +2021,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 </div>
 
                 {/* Totals */}
-                <div className="border-t-2 border-pink-200 pt-4 space-y-2 bg-gradient-to-br from-rose-50 to-pink-50 p-4 rounded-xl shadow-sm">
+                <div className="border-t-2 border-gray-200 pt-4 space-y-2 bg-rose-50/60 p-4 rounded-xl shadow-sm">
                   <div className="flex justify-between text-sm font-medium text-gray-800">
                     <span>{t.originalSubtotal}:</span>
                     <span className="font-bold text-gray-900">
@@ -2027,7 +2034,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>{t.wholesalePricingLabel}:</span>
-                        <span className="text-xs bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                        <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
                           {t.wholeSale}
                         </span>
                       </span>
@@ -2045,7 +2052,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>{t.groupDiscountLabel}:</span>
-                        <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
+                        <span className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
                           {t.groupLabel}
                         </span>
                       </span>
@@ -2063,7 +2070,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>{t.groupFixedDiscountLabel}:</span>
-                        <span className="text-xs bg-gradient-to-r from-rose-100 to-pink-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
+                        <span className="text-xs bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-200">
                           {t.groupLabel}
                         </span>
                       </span>
@@ -2081,7 +2088,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>{t.variantDiscountLabel}:</span>
-                        <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
+                        <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
                           {t.variantLabel}
                         </span>
                       </span>
@@ -2099,7 +2106,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                     <div className="flex justify-between text-sm font-medium text-gray-800">
                       <span className="flex items-center space-x-1">
                         <span>{t.variantFixedDiscountLabel}:</span>
-                        <span className="text-xs bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
+                        <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-semibold border border-purple-200">
                           {t.variantLabel}
                         </span>
                       </span>
@@ -2123,7 +2130,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                             : ""}
                           :
                         </span>
-                        <span className="text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 px-2 py-0.5 rounded-full font-semibold border border-green-200">
+                        <span className="text-xs bg-emerald-50 text-green-700 px-2 py-0.5 rounded-full font-semibold border border-green-200">
                           {t.cartLabel}
                         </span>
                       </span>
@@ -2176,8 +2183,8 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                       )}
                     </span>
                   </div>
-                  <div className="border-t-2 border-pink-300 pt-2 mt-2">
-                    <div className="flex justify-between items-center bg-gradient-to-r from-rose-500 to-pink-500 p-3 rounded-xl shadow-md">
+                  <div className="border-t border-gray-200 pt-2 mt-2">
+                    <div className="flex justify-between items-center bg-brand p-3 rounded-xl shadow-md">
                       <span className="font-bold text-lg text-white">
                         {t.grandTotal}:
                       </span>
@@ -2199,7 +2206,7 @@ export function ShoppingCartModal({ isOpen, onClose }: ShoppingCartModalProps) {
                 {/* Checkout button */}
                 <button
                   onClick={handleCheckout}
-                  className="w-full bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-medium py-3 rounded-lg transition-colors border-0 shadow-md"
+                  className="w-full bg-brand hover:bg-brand-strong text-white font-medium py-3 rounded-lg transition-colors border-0 shadow-md"
                 >
                   {t.proceedToCheckout}
                 </button>

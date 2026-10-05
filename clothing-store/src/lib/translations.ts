@@ -1000,6 +1000,82 @@ export interface Translations {
   allCaughtUp: string;
   notificationsWillAppearHere: string;
   markAsRead: string;
+  // POS terminal & navigation (UI redesign)
+  posTerminal: string;
+  currentOrder: string;
+  charge: string;
+  searchProductsPlaceholder: string;
+  allProducts: string;
+  chooseColorAndSize: string;
+  addToOrder: string;
+  leftInStock: string;
+  emptyOrderTitle: string;
+  emptyOrderHint: string;
+  checkoutHint: string;
+  productsLabel: string;
+  viewOrder: string;
+  noProductsFound: string;
+  tryDifferentSearchOrCategory: string;
+  noColorOptions: string;
+  selectColorToSeeSizes: string;
+  failedToLoadProducts: string;
+  tryAgain: string;
+  addedToOrder: string;
+  inThisOrder: string;
+  productsPerPage: string;
+  /** Label of the "jump to page" box under the POS product grid. */
+  goToPage: string;
+  /** "{start}", "{end}" and "{total}" are replaced. */
+  showingProducts: string;
+  page: string;
+  navPointOfSale: string;
+  navCatalog: string;
+  navMarketing: string;
+  navBusiness: string;
+  navSystem: string;
+  exitPreview: string;
+  previewBadge: string;
+  // Dashboard (simplified)
+  dashboardSubtitle: string;
+  vsPreviousPeriod: string;
+  marginLabel: string;
+  paidOrders: string;
+  lowStockAlertSuffix: string;
+  viewStock: string;
+  detailedAnalytics: string;
+  detailedAnalyticsHint: string;
+  showDetails: string;
+  hideDetails: string;
+  // Activity log
+  activityLog: string;
+  activitySubtitle: string;
+  activitySearchPlaceholder: string;
+  everyone: string;
+  yesterday: string;
+  loadMore: string;
+  noActivityTitle: string;
+  noActivityHint: string;
+  noActivityMatch: string;
+  activityCatOrders: string;
+  activityCatTeam: string;
+  activityCatAccess: string;
+  activityLoadFailed: string;
+  actionsLabel: string;
+  peopleLabel: string;
+  activityCoverageNote: string;
+  onlineQrPayment: string;
+  // Stock details panel
+  totalStock: string;
+  stockValueLabel: string;
+  variantsAndStock: string;
+  buyLabel: string;
+  bundlePrice: string;
+  eachLabel: string;
+  savesLabel: string;
+  wholesaleExactNote: string;
+  noVariantsYet: string;
+  editProduct: string;
+  unitsLabel: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -1090,7 +1166,7 @@ export const translations: Record<Language, Translations> = {
     sellingPrice: "Selling Price",
     wholesalePrice: "Wholesale Price",
     retailPrice: "Retail Price",
-    costPrice: "Cost Price",
+    costPrice: "Original Price",
     profit: "Profit",
     profitMargin: "Profit Margin",
     inStock: "In Stock",
@@ -1325,7 +1401,7 @@ export const translations: Record<Language, Translations> = {
     inventoryAgingHint:
       "Days on sale against sell-through, sized by cash tied up. Bottom-right is the markdown list.",
     inventoryAgingFootnote:
-      "Bubble size is unsold units × cost price. Age runs from release date, falling back to creation date. Dead = 90+ days on sale with under 25% sold; slow = under 25% sold; new = under 30 days.",
+      "Bubble size is unsold units × original price. Age runs from release date, falling back to creation date. Dead = 90+ days on sale with under 25% sold; slow = under 25% sold; new = under 30 days.",
     daysOnSale: "Days On Sale",
     capitalTied: "Capital Tied Up",
     deadStockCapital: "Dead stock",
@@ -1421,7 +1497,7 @@ export const translations: Record<Language, Translations> = {
     searchTransactions: "Search transactions...",
 
     // Reports
-    remainingStockValueUnit: "Remaining Stock Value (Unit Price)",
+    remainingStockValueUnit: "Remaining Stock Value (Selling Price)",
     remainingStockValueOriginal: "Remaining Stock Value (Original Price)",
     totalNetProfit: "Total Net Profit",
     avgTransactionValue: "Avg Transaction Value",
@@ -1942,7 +2018,7 @@ export const translations: Record<Language, Translations> = {
     selectSuffix: "- select",
     product: "Product",
     stockInfo: "Stock Info",
-    unitPrice: "Unit Price",
+    unitPrice: "Selling Price",
     colorsSuffix: "colors",
     expand: "Expand",
     collapse: "Collapse",
@@ -2017,6 +2093,80 @@ export const translations: Record<Language, Translations> = {
     notificationsWillAppearHere:
       "You'll see notifications here when there are new activities.",
     markAsRead: "Mark as read",
+    // POS terminal & navigation (UI redesign)
+    posTerminal: "POS Terminal",
+    currentOrder: "Current Order",
+    charge: "Charge",
+    searchProductsPlaceholder: "Search products...",
+    allProducts: "All Products",
+    chooseColorAndSize: "Choose a color and size",
+    addToOrder: "Add to order",
+    leftInStock: "left",
+    emptyOrderTitle: "No items yet",
+    emptyOrderHint: "Tap a product to start a sale.",
+    checkoutHint: "Customer, discounts, rewards and payment are handled at checkout.",
+    productsLabel: "products",
+    viewOrder: "View order",
+    noProductsFound: "No products found",
+    tryDifferentSearchOrCategory: "Try a different search or category.",
+    noColorOptions: "No color options available",
+    selectColorToSeeSizes: "Select a color to see sizes",
+    failedToLoadProducts: "Couldn't load products",
+    tryAgain: "Try again",
+    addedToOrder: "Added to order",
+    inThisOrder: "In this order",
+    productsPerPage: "Products per page",
+    goToPage: "Go to",
+    showingProducts: "Showing {start}–{end} of {total} products",
+    page: "Page",
+    navPointOfSale: "Point of Sale",
+    navCatalog: "Catalog & Customers",
+    navMarketing: "Marketing",
+    navBusiness: "Business",
+    navSystem: "System",
+    exitPreview: "Exit preview",
+    previewBadge: "Preview",
+    dashboardSubtitle: "Your store at a glance ·",
+    vsPreviousPeriod: "vs previous period",
+    marginLabel: "margin",
+    paidOrders: "Paid Orders",
+    lowStockAlertSuffix: "product variants are running low (10 or fewer left).",
+    viewStock: "View stock",
+    detailedAnalytics: "Detailed analytics",
+    detailedAnalyticsHint:
+      "Net margin, sales channels, promotions, sizes and staff performance.",
+    showDetails: "Show",
+    hideDetails: "Hide",
+    activityLog: "Activity",
+    activitySubtitle: "Everything done on the POS, by every account.",
+    activitySearchPlaceholder: "Search by name, receipt or item...",
+    everyone: "Everyone",
+    yesterday: "Yesterday",
+    loadMore: "Load more",
+    noActivityTitle: "No activity yet",
+    noActivityHint: "Actions taken on the POS will show up here.",
+    noActivityMatch: "Nothing matches these filters.",
+    activityCatOrders: "Orders & refunds",
+    activityCatTeam: "Staff & branches",
+    activityCatAccess: "Sign-ins",
+    activityLoadFailed: "Couldn't load activity",
+    actionsLabel: "actions",
+    peopleLabel: "people",
+    activityCoverageNote:
+      "Records sign-ins, sales, order changes and edits to stock, customers, expenses, staff, branches and settings.",
+    onlineQrPayment: "Online QR Payment",
+    totalStock: "Total stock",
+    stockValueLabel: "Stock value",
+    variantsAndStock: "Variants & stock",
+    buyLabel: "Buy",
+    bundlePrice: "Bundle price",
+    eachLabel: "each",
+    savesLabel: "Saves",
+    wholesaleExactNote:
+      "Offered at checkout when the order has exactly this many of this product.",
+    noVariantsYet: "No color or size variants yet.",
+    editProduct: "Edit product",
+    unitsLabel: "units",
   },
   my: {
     // TopNavBar
@@ -2105,7 +2255,7 @@ export const translations: Record<Language, Translations> = {
     sellingPrice: "ရောင်းစျေးနှုန်း",
     wholesalePrice: "လက်ကားစျေးနှုန်း",
     retailPrice: "လက်လီစျေးနှုန်း",
-    costPrice: "ဝယ်စျေးနှုန်း",
+    costPrice: "မူလစျေးနှုန်း",
     profit: "အမြတ်",
     profitMargin: "အမြတ်နှုန်း",
     inStock: "စတော့ရှိ",
@@ -2341,7 +2491,7 @@ export const translations: Record<Language, Translations> = {
     inventoryAgingHint:
       "ရောင်းချသည့်ရက်နှင့် ရောင်းအားနှုန်း နှိုင်းယှဉ်မှု၊ ပမာဏသည် ထိုင်နေသောရင်းနှီးမြှုပ်နှံမှု။ အောက်ယာဘက်သည် လျှော့ရောင်းသင့်သည့်စာရင်း။",
     inventoryAgingFootnote:
-      "အဝိုင်းအရွယ်အစားသည် လက်ကျန် × အရင်းနှုန်း။ သက်တမ်းကို ထုတ်ရောင်းသည့်ရက်မှ တွက်သည်။ ရောင်းမရ = ရက် ၉၀ အထက်နှင့် ၂၅% အောက်ရောင်းရ၊ နှေး = ၂၅% အောက်၊ အသစ် = ရက် ၃၀ အောက်။",
+      "အဝိုင်းအရွယ်အစားသည် လက်ကျန် × မူလစျေးနှုန်း။ သက်တမ်းကို ထုတ်ရောင်းသည့်ရက်မှ တွက်သည်။ ရောင်းမရ = ရက် ၉၀ အထက်နှင့် ၂၅% အောက်ရောင်းရ၊ နှေး = ၂၅% အောက်၊ အသစ် = ရက် ၃၀ အောက်။",
     daysOnSale: "ရောင်းချသည့်ရက်",
     capitalTied: "ထိုင်နေသောရင်းနှီးမြှုပ်နှံမှု",
     deadStockCapital: "ရောင်းမရကုန်",
@@ -2436,7 +2586,7 @@ export const translations: Record<Language, Translations> = {
     searchTransactions: "ငွေလွှဲရှာဖွေရန်...",
 
     // Reports
-    remainingStockValueUnit: "ကျန်ရှိစတော့တန်ဖိုး (ယူနစ်စျေးနှုန်း)",
+    remainingStockValueUnit: "ကျန်ရှိစတော့တန်ဖိုး (ရောင်းစျေးနှုန်း)",
     remainingStockValueOriginal: "ကျန်ရှိစတော့တန်ဖိုး (မူလစျေးနှုန်း)",
     totalNetProfit: "စုစုပေါင်းသန့်အမြတ်",
     avgTransactionValue: "ပျမ်းမျှငွေလွှဲတန်ဖိုး",
@@ -2957,7 +3107,7 @@ export const translations: Record<Language, Translations> = {
     selectSuffix: "ကို ရွေးရန်",
     product: "ကုန်ပစ္စည်း",
     stockInfo: "စတော့ခ် အချက်အလက်",
-    unitPrice: "တစ်ယူနစ် စျေးနှုန်း",
+    unitPrice: "ရောင်းစျေးနှုန်း",
     colorsSuffix: "အရောင်",
     expand: "ဖြန့်ပြရန်",
     collapse: "ခေါက်သိမ်းရန်",
@@ -3034,5 +3184,81 @@ export const translations: Record<Language, Translations> = {
     notificationsWillAppearHere:
       "လုပ်ဆောင်ချက် အသစ်များ ရှိလာသည့်အခါ အသိပေးချက်များကို ဒီတွင် တွေ့ရပါမည်။",
     markAsRead: "ဖတ်ပြီးအဖြစ် မှတ်ရန်",
+    // POS terminal & navigation (UI redesign)
+    posTerminal: "အရောင်းကောင်တာ",
+    currentOrder: "လက်ရှိအော်ဒါ",
+    charge: "ငွေရှင်းရန်",
+    searchProductsPlaceholder: "ပစ္စည်းများ ရှာရန်...",
+    allProducts: "ပစ္စည်းအားလုံး",
+    chooseColorAndSize: "အရောင်နှင့် အရွယ်အစား ရွေးပါ",
+    addToOrder: "အော်ဒါထဲ ထည့်ရန်",
+    leftInStock: "ကျန်",
+    emptyOrderTitle: "ပစ္စည်း မရှိသေးပါ",
+    emptyOrderHint: "ရောင်းချမှု စတင်ရန် ပစ္စည်းတစ်ခုကို နှိပ်ပါ။",
+    checkoutHint:
+      "ဖောက်သည်၊ လျှော့စျေး၊ ဆုလာဘ်နှင့် ငွေပေးချေမှုကို ငွေရှင်းချိန်တွင် ဆောင်ရွက်ပါမည်။",
+    productsLabel: "ပစ္စည်း",
+    viewOrder: "အော်ဒါ ကြည့်ရန်",
+    noProductsFound: "ပစ္စည်း မတွေ့ပါ",
+    tryDifferentSearchOrCategory: "အခြား ရှာဖွေမှု သို့မဟုတ် အမျိုးအစားကို စမ်းကြည့်ပါ။",
+    noColorOptions: "ရွေးချယ်ရန် အရောင် မရှိပါ",
+    selectColorToSeeSizes: "အရွယ်အစားများ ကြည့်ရန် အရောင်ရွေးပါ",
+    failedToLoadProducts: "ပစ္စည်းများ ဖွင့်၍ မရပါ",
+    tryAgain: "ထပ်စမ်းကြည့်ရန်",
+    addedToOrder: "အော်ဒါထဲ ထည့်ပြီးပါပြီ",
+    inThisOrder: "ဤအော်ဒါထဲတွင်",
+    productsPerPage: "စာမျက်နှာတစ်ခုလျှင် ပစ္စည်းအရေအတွက်",
+    goToPage: "သွားရန်",
+    showingProducts: "{start}–{end} မှ {total} ပစ္စည်းများ",
+    page: "စာမျက်နှာ",
+    navPointOfSale: "အရောင်းကောင်တာ",
+    navCatalog: "ကုန်ပစ္စည်းနှင့် ဖောက်သည်",
+    navMarketing: "စျေးကွက်မြှင့်တင်ရေး",
+    navBusiness: "လုပ်ငန်း",
+    navSystem: "စနစ်",
+    exitPreview: "စမ်းကြည့်မှုမှ ထွက်ရန်",
+    previewBadge: "စမ်းကြည့်ခြင်း",
+    dashboardSubtitle: "သင့်ဆိုင်၏ အခြေအနေ အကျဉ်းချုပ် ·",
+    vsPreviousPeriod: "ယခင်ကာလနှင့် နှိုင်းယှဉ်",
+    marginLabel: "အမြတ်နှုန်း",
+    paidOrders: "ငွေချေပြီး အော်ဒါများ",
+    lowStockAlertSuffix:
+      "မျိုး လက်ကျန်နည်းနေပါသည် (၁၀ ခု သို့မဟုတ် ထို့အောက်)။",
+    viewStock: "စတော့ ကြည့်ရန်",
+    detailedAnalytics: "အသေးစိတ် ခွဲခြမ်းစိတ်ဖြာမှု",
+    detailedAnalyticsHint:
+      "အသားတင်အမြတ်၊ အရောင်းလမ်းကြောင်း၊ ပရိုမိုးရှင်း၊ အရွယ်အစားနှင့် ဝန်ထမ်း စွမ်းဆောင်ရည်။",
+    showDetails: "ပြရန်",
+    hideDetails: "ဖျောက်ရန်",
+    activityLog: "လုပ်ဆောင်ချက်မှတ်တမ်း",
+    activitySubtitle: "POS ပေါ်ရှိ အကောင့်အားလုံး၏ လုပ်ဆောင်ချက်များ။",
+    activitySearchPlaceholder: "အမည်၊ ပြေစာ သို့မဟုတ် ပစ္စည်းဖြင့် ရှာရန်...",
+    everyone: "လူအားလုံး",
+    yesterday: "မနေ့က",
+    loadMore: "ထပ်ကြည့်ရန်",
+    noActivityTitle: "လုပ်ဆောင်ချက် မရှိသေးပါ",
+    noActivityHint: "POS ပေါ်တွင် ပြုလုပ်သည့် လုပ်ဆောင်ချက်များကို ဒီမှာ တွေ့ရပါမည်။",
+    noActivityMatch: "ဤစစ်ထုတ်မှုနှင့် ကိုက်ညီသည့် လုပ်ဆောင်ချက် မရှိပါ။",
+    activityCatOrders: "အော်ဒါနှင့် ငွေပြန်အမ်း",
+    activityCatTeam: "ဝန်ထမ်းနှင့် ဆိုင်ခွဲ",
+    activityCatAccess: "ဝင်/ထွက်",
+    activityLoadFailed: "လုပ်ဆောင်ချက်များ ဖွင့်၍ မရပါ",
+    actionsLabel: "ခု",
+    peopleLabel: "ဦး",
+    onlineQrPayment: "အွန်လိုင်း QR ငွေပေးချေမှု",
+    totalStock: "စုစုပေါင်း လက်ကျန်",
+    stockValueLabel: "လက်ကျန်တန်ဖိုး",
+    variantsAndStock: "အမျိုးကွဲနှင့် လက်ကျန်",
+    buyLabel: "ဝယ်ယူ",
+    bundlePrice: "အစုလိုက်ဈေး",
+    eachLabel: "တစ်ခုလျှင်",
+    savesLabel: "သက်သာ",
+    wholesaleExactNote:
+      "ဤပစ္စည်းကို ဤအရေအတွက် အတိအကျ ဝယ်သည့်အခါ ငွေရှင်းချိန်တွင် ပေးပါသည်။",
+    noVariantsYet: "အရောင် သို့မဟုတ် အရွယ်အစား အမျိုးကွဲ မရှိသေးပါ။",
+    editProduct: "ပစ္စည်း ပြင်ဆင်ရန်",
+    unitsLabel: "ခု",
+    activityCoverageNote:
+      "ဝင်/ထွက်ခြင်း၊ အရောင်း၊ အော်ဒါ ပြောင်းလဲမှုနှင့် စတော့၊ ဖောက်သည်၊ ကုန်ကျစရိတ်၊ ဝန်ထမ်း၊ ဆိုင်ခွဲ၊ ဆက်တင် ပြင်ဆင်မှုများကို မှတ်တမ်းတင်ပါသည်။",
   },
 };

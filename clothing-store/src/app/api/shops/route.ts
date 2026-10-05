@@ -18,6 +18,7 @@ import {
   getShopsWithFilters,
 } from "@/server/shopsAdmin";
 import { parseJson } from "@/server/validation";
+import { auditCaller } from "@/server/auditLog";
 
 // Access:
 //   GET  - public. Branch names/addresses are shown to customers; the
@@ -136,6 +137,13 @@ export async function POST(request: NextRequest) {
     );
 
     const shop = await createShop(shopData, auth.caller.uid);
+
+    await auditCaller(auth.caller, {
+      action: "shop.create",
+      targetCollection: "shops",
+      targetId: shop.id,
+      details: { name: shop.name },
+    });
 
     const response: ShopResponse = {
       success: true,

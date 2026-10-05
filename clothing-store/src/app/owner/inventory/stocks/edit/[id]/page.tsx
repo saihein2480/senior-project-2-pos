@@ -26,6 +26,7 @@ import {
 import { Shop, ShopListResponse } from "@/types/shop";
 import { CategoryService } from "@/services/categoryService";
 import { CurrencyPriceInput } from "@/components/ui/CurrencyPriceInput";
+import { WholesaleTierRow } from "@/components/inventory/WholesaleTierRow";
 import { usePriceEntryCurrency } from "@/hooks/usePriceEntryCurrency";
 import { detectColorName, extractColorsFromImage } from "@/lib/colorUtils";
 import { authFetch } from "@/lib/authFetch";
@@ -243,15 +244,10 @@ function EditStockContent() {
     setWholesaleTiers([...wholesaleTiers, newTier]);
   };
 
-  const updateWholesaleTier = (
-    id: string,
-    field: keyof WholesaleTier,
-    value: number,
-  ) => {
+  /** Quantity and total change together (WholesaleTierRow), so swap the tier. */
+  const replaceWholesaleTier = (next: WholesaleTier) => {
     setWholesaleTiers((tiers) =>
-      tiers.map((tier) =>
-        tier.id === id ? { ...tier, [field]: value } : tier,
-      ),
+      tiers.map((tier) => (tier.id === next.id ? next : tier)),
     );
   };
 
@@ -775,7 +771,7 @@ function EditStockContent() {
     }
 
     if (!unitPrice || parseFloat(unitPrice) <= 0) {
-      setError("Valid unit price is required");
+      setError("Valid selling price is required");
       return;
     }
 
@@ -951,7 +947,7 @@ function EditStockContent() {
 
   if (isLoadingStock) {
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-canvas">
         <Sidebar
           activeItem={activeItem}
           onItemClick={(item) => setActiveItem(item.id)}
@@ -963,7 +959,7 @@ function EditStockContent() {
           <TopNavBar onCartModalStateChange={setIsCartModalOpen} />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading stock data...</p>
             </div>
           </div>
@@ -973,7 +969,7 @@ function EditStockContent() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="flex min-h-screen bg-canvas">
       <Sidebar
         activeItem={activeItem}
         onItemClick={(item) => setActiveItem(item.id)}
@@ -1048,7 +1044,7 @@ function EditStockContent() {
                           value={groupName}
                           onChange={(e) => setGroupName(e.target.value)}
                           placeholder="Enter group name"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
@@ -1060,7 +1056,7 @@ function EditStockContent() {
                             title="category"
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                           >
                             <option value="">Select category</option>
                             {categories.map((cat) => (
@@ -1080,15 +1076,15 @@ function EditStockContent() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Unit Price ({entrySymbol})
+                          Selling Price ({entrySymbol})
                         </label>
                         <CurrencyPriceInput
                           value={unitPrice === "" ? null : parseFloat(unitPrice)}
                           onChange={(v) =>
                             setUnitPrice(v === null ? "" : String(v))
                           }
-                          placeholder="Enter unit price"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                          placeholder="Enter selling price"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
@@ -1103,7 +1099,7 @@ function EditStockContent() {
                             setOriginalPrice(v === null ? "" : String(v))
                           }
                           placeholder="Enter original price"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                         />
                       </div>
                       {(entryCurrency !== defaultCurrency || rateMissing) && (
@@ -1122,14 +1118,14 @@ function EditStockContent() {
                           type="date"
                           value={releaseDate}
                           onChange={(e) => setReleaseDate(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Shops ({selectedShops.length} selected)
                         </label>
-                        <div className="w-full px-3 py-2 border border-gray-300 rounded-md focus-within:ring-blue-500 focus-within:border-blue-500 bg-white min-h-[42px] max-h-40 overflow-y-auto">
+                        <div className="w-full px-3 py-2 border border-gray-300 rounded-md focus-within:ring-rose-500 focus-within:border-rose-400 bg-white min-h-[42px] max-h-40 overflow-y-auto">
                           {isLoadingShops ? (
                             <div className="text-gray-500 text-sm">
                               Loading shops...
@@ -1156,7 +1152,7 @@ function EditStockContent() {
                                         );
                                       }
                                     }}
-                                    className="rounded border-gray-300 text-cyan-600 focus:ring-cyan-400 mr-2"
+                                    className="rounded border-gray-300 text-rose-600 focus:ring-rose-400 mr-2"
                                   />
                                   <span className="text-sm text-gray-900">
                                     {shop.name}
@@ -1203,53 +1199,13 @@ function EditStockContent() {
                 ) : (
                   <div className="space-y-4">
                     {wholesaleTiers.map((tier) => (
-                      <div
+                      <WholesaleTierRow
                         key={tier.id}
-                        className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Min Quantity
-                          </label>
-                          <input
-                            aria-label="Enter minimum quantity"
-                            type="number"
-                            value={
-                              tier.minQuantity === 0 ? "" : tier.minQuantity
-                            }
-                            onChange={(e) =>
-                              updateWholesaleTier(
-                                tier.id,
-                                "minQuantity",
-                                e.target.value === ""
-                                  ? 0
-                                  : parseInt(e.target.value, 10),
-                              )
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Price ({entrySymbol})
-                          </label>
-                          <CurrencyPriceInput
-                            aria-label="Enter price"
-                            value={tier.price === 0 ? null : tier.price}
-                            onChange={(v) =>
-                              updateWholesaleTier(tier.id, "price", v ?? 0)
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
-                          />
-                        </div>
-                        <button
-                          title="Remove wholesale tier"
-                          onClick={() => removeWholesaleTier(tier.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-md"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
+                        tier={tier}
+                        onChange={replaceWholesaleTier}
+                        onRemove={() => removeWholesaleTier(tier.id)}
+                        unitPrice={unitPrice === "" ? null : parseFloat(unitPrice)}
+                      />
                     ))}
                   </div>
                 )}
@@ -1600,7 +1556,7 @@ function EditStockContent() {
                 >
                   {isUploadingMultiple ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-500 mr-2"></div>
                       {uploadProgress.total > 0
                         ? `Uploading ${uploadProgress.current}/${uploadProgress.total}`
                         : "Uploading..."}
@@ -1717,7 +1673,7 @@ function EditStockContent() {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-cyan-400 focus:border-blue-500 text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-400 focus:border-rose-400 text-gray-900 bg-white"
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     if (

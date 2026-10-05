@@ -1423,7 +1423,7 @@ function TransactionsPageContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex h-screen bg-canvas">
       {/* Desktop sidebar (hidden on small screens) */}
       <div className="hidden lg:block">
         <Sidebar
@@ -1773,7 +1773,7 @@ function TransactionsPageContent() {
                     {permissions.canCancelTransactions && (
                       <button
                         onClick={handleBulkCancel}
-                        className="flex items-center px-4 py-2.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium rounded-xl shadow-sm"
+                        className="flex items-center px-4 py-2.5 bg-brand text-white hover:bg-brand-strong transition-colors text-sm font-medium rounded-xl shadow-sm"
                       >
                         <X className="h-4 w-4 mr-2" />
                         Cancel Checkout 
@@ -1814,7 +1814,7 @@ function TransactionsPageContent() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
                 <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500 mx-auto"></div>
                   <p className="mt-2 text-gray-600">Loading transactions...</p>
                 </div>
               ) : filteredTransactions.length === 0 ? (
@@ -2909,14 +2909,14 @@ function TransactionsPageContent() {
                                   key: "groupPercent",
                                   label: "Group Discount",
                                   badge: "GROUP",
-                                  badgeClasses: "bg-cyan-100 text-blue-800",
+                                  badgeClasses: "bg-rose-100 text-rose-800",
                                   amount: breakdown.groupPercentSavings,
                                 },
                                 {
                                   key: "groupFixed",
                                   label: "Group Fixed Discount",
                                   badge: "GROUP",
-                                  badgeClasses: "bg-cyan-100 text-blue-800",
+                                  badgeClasses: "bg-rose-100 text-rose-800",
                                   amount: breakdown.groupFixedTotal,
                                 },
                                 {
@@ -2948,8 +2948,8 @@ function TransactionsPageContent() {
                               if (summaryItems.length === 0) return null;
 
                               return (
-                                <div className="bg-cyan-50 border border-blue-100 rounded-lg p-3 space-y-2">
-                                  <div className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
+                                <div className="bg-rose-50 border border-rose-100 rounded-lg p-3 space-y-2">
+                                  <div className="text-xs font-semibold text-rose-900 uppercase tracking-wide">
                                     Discount Details
                                   </div>
                                   {summaryItems.map((item) => (
@@ -3323,7 +3323,7 @@ function TransactionsPageContent() {
                         return (
                           <>
                             <div className="border-t border-gray-100 my-1"></div>
-                            <div className="px-4 py-2 text-xs font-semibold text-blue-600 uppercase">
+                            <div className="px-4 py-2 text-xs font-semibold text-rose-600 uppercase">
                               Refund Request
                             </div>
                             <button
@@ -3490,7 +3490,7 @@ function TransactionsPageContent() {
                                   toast.error("Failed to confirm order");
                                 }
                               }}
-                              className="flex items-center w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors"
+                              className="flex items-center w-full px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
                             >
                               <CheckCircle className="h-4 w-4 mr-3" />
                               Confirm Order
